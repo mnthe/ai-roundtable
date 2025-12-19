@@ -98,17 +98,37 @@ export class GeminiAgent extends BaseAgent {
         });
 
         // Extract citations from search results
-        if (functionCall.name === 'search_web' && toolResult && typeof toolResult === 'object') {
-          const searchResult = toolResult as {
-            results?: Array<{ title: string; url: string; snippet?: string }>;
+        // search_web returns: { success: boolean, data: { results: SearchResult[] } }
+        // perplexity_search returns: { success: boolean, data: { answer: string, citations?: Citation[], ... } }
+        if (toolResult && typeof toolResult === 'object') {
+          const result = toolResult as {
+            success?: boolean;
+            data?: {
+              results?: Array<{ title: string; url: string; snippet?: string }>;
+              citations?: Array<{ title: string; url: string; snippet?: string }>;
+            };
           };
-          if (searchResult.results) {
-            for (const item of searchResult.results) {
-              citations.push({
-                title: item.title,
-                url: item.url,
-                snippet: item.snippet,
-              });
+
+          if (result.success && result.data) {
+            // Handle search_web format
+            if (functionCall.name === 'search_web' && result.data.results) {
+              for (const item of result.data.results) {
+                citations.push({
+                  title: item.title,
+                  url: item.url,
+                  snippet: item.snippet,
+                });
+              }
+            }
+            // Handle perplexity_search format
+            else if (functionCall.name === 'perplexity_search' && result.data.citations) {
+              for (const item of result.data.citations) {
+                citations.push({
+                  title: item.title,
+                  url: item.url,
+                  snippet: item.snippet,
+                });
+              }
             }
           }
         }
