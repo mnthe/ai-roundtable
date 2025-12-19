@@ -20,6 +20,16 @@ Multi-AI debate platform that enables structured discussions between different A
 
 ### Installation
 
+**Option 1: npx (Recommended)**
+
+Run directly from GitHub without installation:
+
+```bash
+npx github:mnthe/ai-roundtable
+```
+
+**Option 2: Clone and Build**
+
 ```bash
 # Clone the repository
 git clone https://github.com/mnthe/ai-roundtable.git
@@ -52,6 +62,27 @@ Add to your Claude Desktop MCP configuration:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+**Option 1: Using npx (Recommended)**
+
+```json
+{
+  "mcpServers": {
+    "ai-roundtable": {
+      "command": "npx",
+      "args": ["github:mnthe/ai-roundtable"],
+      "env": {
+        "ANTHROPIC_API_KEY": "your-key",
+        "OPENAI_API_KEY": "your-key",
+        "GOOGLE_AI_API_KEY": "your-key",
+        "PERPLEXITY_API_KEY": "your-key"
+      }
+    }
+  }
+}
+```
+
+**Option 2: Using local build**
 
 ```json
 {
