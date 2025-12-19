@@ -164,6 +164,39 @@ export const ControlSessionInputSchema = z.object({
   action: z.enum(['pause', 'resume', 'stop']),
 });
 
+export const GetRoundDetailsInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  roundNumber: z.number().int().positive().min(1, 'Round number must be at least 1'),
+});
+
+export const GetResponseDetailInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  agentId: z.string().min(1, 'Agent ID is required'),
+  roundNumber: z.number().int().positive().min(1).optional(),
+});
+
+export const GetCitationsInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  roundNumber: z.number().int().positive().min(1).optional(),
+  agentId: z.string().min(1).optional(),
+});
+
+export const SynthesizeDebateInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  synthesizer: z.string().optional(),
+});
+
+export const SynthesisResultSchema = z.object({
+  commonGround: z.array(z.string()),
+  keyDifferences: z.array(z.string()),
+  evolutionSummary: z.string(),
+  conclusion: z.string(),
+  recommendation: z.string(),
+  confidence: z.number().min(0).max(1),
+  synthesizerId: z.string(),
+  timestamp: z.coerce.date(),
+});
+
 // ============================================
 // Type Inference Helpers
 // ============================================
@@ -177,3 +210,7 @@ export type ContinueRoundtableInputType = z.infer<typeof ContinueRoundtableInput
 export type GetThoughtsInputType = z.infer<typeof GetThoughtsInputSchema>;
 export type ExportSessionInputType = z.infer<typeof ExportSessionInputSchema>;
 export type ControlSessionInputType = z.infer<typeof ControlSessionInputSchema>;
+export type GetRoundDetailsInputType = z.infer<typeof GetRoundDetailsInputSchema>;
+export type GetResponseDetailInputType = z.infer<typeof GetResponseDetailInputSchema>;
+export type GetCitationsInputType = z.infer<typeof GetCitationsInputSchema>;
+export type SynthesizeDebateInputType = z.infer<typeof SynthesizeDebateInputSchema>;

@@ -22,6 +22,9 @@ import {
   GetThoughtsInputSchema,
   ExportSessionInputSchema,
   ControlSessionInputSchema,
+  GetRoundDetailsInputSchema,
+  GetResponseDetailInputSchema,
+  GetCitationsInputSchema,
 } from '../../../src/types/schemas.js';
 
 describe('MCP Tools', () => {
@@ -158,6 +161,94 @@ describe('MCP Tools', () => {
       const result = ControlSessionInputSchema.safeParse(invalidInput);
       expect(result.success).toBe(false);
     });
+
+    it('should validate get_round_details input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 2,
+      };
+
+      const result = GetRoundDetailsInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject get_round_details without required fields', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+      };
+
+      const result = GetRoundDetailsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_round_details with invalid round number', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 0,
+      };
+
+      const result = GetRoundDetailsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate get_response_detail input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        agentId: 'test-agent-id',
+        roundNumber: 1,
+      };
+
+      const result = GetResponseDetailInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate get_response_detail without optional roundNumber', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        agentId: 'test-agent-id',
+      };
+
+      const result = GetResponseDetailInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject get_response_detail without required fields', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+      };
+
+      const result = GetResponseDetailInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate get_citations input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 1,
+        agentId: 'test-agent-id',
+      };
+
+      const result = GetCitationsInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should validate get_citations with only sessionId', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+      };
+
+      const result = GetCitationsInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject get_citations without sessionId', () => {
+      const invalidInput = {
+        roundNumber: 1,
+      };
+
+      const result = GetCitationsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('Tool Definitions', () => {
@@ -172,7 +263,11 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('get_thoughts');
       expect(toolNames).toContain('export_session');
       expect(toolNames).toContain('control_session');
-      expect(tools.length).toBe(8);
+      expect(toolNames).toContain('get_round_details');
+      expect(toolNames).toContain('get_response_detail');
+      expect(toolNames).toContain('get_citations');
+      expect(toolNames).toContain('synthesize_debate');
+      expect(tools.length).toBe(12);
     });
 
     it('should have proper schemas for each tool', () => {
@@ -212,6 +307,17 @@ describe('MCP Tools', () => {
       const controlTool = tools.find((t) => t.name === 'control_session');
       expect(controlTool?.inputSchema.required).toContain('sessionId');
       expect(controlTool?.inputSchema.required).toContain('action');
+
+      const roundDetailsTool = tools.find((t) => t.name === 'get_round_details');
+      expect(roundDetailsTool?.inputSchema.required).toContain('sessionId');
+      expect(roundDetailsTool?.inputSchema.required).toContain('roundNumber');
+
+      const responseDetailTool = tools.find((t) => t.name === 'get_response_detail');
+      expect(responseDetailTool?.inputSchema.required).toContain('sessionId');
+      expect(responseDetailTool?.inputSchema.required).toContain('agentId');
+
+      const citationsTool = tools.find((t) => t.name === 'get_citations');
+      expect(citationsTool?.inputSchema.required).toContain('sessionId');
     });
   });
 

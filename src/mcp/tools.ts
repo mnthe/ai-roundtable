@@ -234,6 +234,117 @@ export const controlSessionTool: Tool = {
 };
 
 /**
+ * Tool: get_round_details
+ *
+ * Get detailed responses for a specific round
+ */
+export const getRoundDetailsTool: Tool = {
+  name: 'get_round_details',
+  description:
+    'Retrieve all agent responses and consensus analysis for a specific round in a debate session. Returns full position statements, reasoning, citations, and tool calls.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to query',
+      },
+      roundNumber: {
+        type: 'number',
+        description: 'The round number to retrieve (1-based index)',
+        minimum: 1,
+      },
+    },
+    required: ['sessionId', 'roundNumber'],
+  },
+};
+
+/**
+ * Tool: get_response_detail
+ *
+ * Get detailed response from a specific agent
+ */
+export const getResponseDetailTool: Tool = {
+  name: 'get_response_detail',
+  description:
+    'Retrieve detailed response from a specific agent in a debate session. If roundNumber is provided, returns the response for that round only. Otherwise, returns all responses from the agent across all rounds.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to query',
+      },
+      agentId: {
+        type: 'string',
+        description: 'The agent ID whose response to retrieve',
+      },
+      roundNumber: {
+        type: 'number',
+        description: 'Optional: specific round number (1-based index)',
+        minimum: 1,
+      },
+    },
+    required: ['sessionId', 'agentId'],
+  },
+};
+
+/**
+ * Tool: get_citations
+ *
+ * Get citations from the debate
+ */
+export const getCitationsTool: Tool = {
+  name: 'get_citations',
+  description:
+    'Retrieve all citations used in a debate session. Can be filtered by round number and/or agent ID. Returns citation title, URL, and optional snippet.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to query',
+      },
+      roundNumber: {
+        type: 'number',
+        description: 'Optional: filter citations by round number (1-based index)',
+        minimum: 1,
+      },
+      agentId: {
+        type: 'string',
+        description: 'Optional: filter citations by agent ID',
+      },
+    },
+    required: ['sessionId'],
+  },
+};
+
+/**
+ * Tool: synthesize_debate
+ *
+ * AI-powered synthesis of the entire debate
+ */
+export const synthesizeDebateTool: Tool = {
+  name: 'synthesize_debate',
+  description:
+    'AI를 이용해 토론 전체를 분석하고 요약합니다. 토론 완료 후 사용하세요.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to synthesize',
+      },
+      synthesizer: {
+        type: 'string',
+        description: 'Optional: Agent ID to use for synthesis (defaults to first active agent)',
+      },
+    },
+    required: ['sessionId'],
+  },
+};
+
+/**
  * All available tools
  */
 export const tools: Tool[] = [
@@ -245,6 +356,10 @@ export const tools: Tool[] = [
   getThoughtsTool,
   exportSessionTool,
   controlSessionTool,
+  getRoundDetailsTool,
+  getResponseDetailTool,
+  getCitationsTool,
+  synthesizeDebateTool,
 ];
 
 /**
@@ -259,6 +374,10 @@ export interface ToolHandlers {
   get_thoughts: (args: unknown) => Promise<ToolResponse>;
   export_session: (args: unknown) => Promise<ToolResponse>;
   control_session: (args: unknown) => Promise<ToolResponse>;
+  get_round_details: (args: unknown) => Promise<ToolResponse>;
+  get_response_detail: (args: unknown) => Promise<ToolResponse>;
+  get_citations: (args: unknown) => Promise<ToolResponse>;
+  synthesize_debate: (args: unknown) => Promise<ToolResponse>;
 }
 
 /**

@@ -124,6 +124,21 @@ export interface ConsensusResult {
 }
 
 // ============================================
+// Synthesis Types
+// ============================================
+
+export interface SynthesisResult {
+  commonGround: string[];
+  keyDifferences: string[];
+  evolutionSummary: string;
+  conclusion: string;
+  recommendation: string;
+  confidence: number;
+  synthesizerId: string;
+  timestamp: Date;
+}
+
+// ============================================
 // Tool Types
 // ============================================
 
@@ -183,4 +198,9 @@ export type SessionAction = 'pause' | 'resume' | 'stop';
 export interface ControlSessionInput {
   sessionId: string;
   action: SessionAction;
+}
+
+export interface SynthesizeDebateInput {
+  sessionId: string;
+  synthesizer?: string;
 }

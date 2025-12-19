@@ -23,13 +23,21 @@ import {
   GetThoughtsInputSchema,
   ExportSessionInputSchema,
   ControlSessionInputSchema,
+  GetRoundDetailsInputSchema,
+  GetResponseDetailInputSchema,
+  GetCitationsInputSchema,
+  SynthesizeDebateInputSchema,
   type StartRoundtableInputType,
   type ContinueRoundtableInputType,
   type GetThoughtsInputType,
   type ExportSessionInputType,
   type ControlSessionInputType,
+  type GetRoundDetailsInputType,
+  type GetResponseDetailInputType,
+  type GetCitationsInputType,
+  type SynthesizeDebateInputType,
 } from '../types/schemas.js';
-import type { DebateConfig } from '../types/index.js';
+import type { DebateConfig, SynthesisResult, DebateContext } from '../types/index.js';
 
 const logger = createLogger('MCPServer');
 
@@ -139,6 +147,22 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           result = await handleControlSession(args, sessionManager);
           break;
 
+        case 'get_round_details':
+          result = await handleGetRoundDetails(args, sessionManager, debateEngine);
+          break;
+
+        case 'get_response_detail':
+          result = await handleGetResponseDetail(args, sessionManager);
+          break;
+
+        case 'get_citations':
+          result = await handleGetCitations(args, sessionManager);
+          break;
+
+        case 'synthesize_debate':
+          result = await handleSynthesizeDebate(args, sessionManager, agentRegistry);
+          break;
+
         default:
           result = createErrorResponse(`Unknown tool: ${name}`);
       }
@@ -213,17 +237,21 @@ async function handleStartRoundtable(
       }
     }
 
-    // Get updated session
-    const updatedSession = await sessionManager.getSession(session.id);
+    // Create summary response (less verbose)
+    const agentSummaries = roundResults[0].responses.map((response) => ({
+      agentId: response.agentId,
+      agentName: response.agentName,
+      positionSummary: response.position.substring(0, 150) + (response.position.length > 150 ? '...' : ''),
+    }));
 
     return createSuccessResponse({
       sessionId: session.id,
       topic: session.topic,
       mode: session.mode,
-      currentRound: 1,
+      roundNumber: 1,
       totalRounds: session.totalRounds,
-      round: roundResults[0],
-      session: updatedSession,
+      agentSummaries,
+      consensusLevel: roundResults[0].consensus.agreementLevel,
     });
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -275,19 +303,25 @@ async function handleContinueRoundtable(
     }
 
     // Mark as completed if we've reached total rounds
-    if (session.currentRound >= session.totalRounds) {
+    const newRound = session.currentRound + numRounds;
+    if (newRound >= session.totalRounds) {
       await sessionManager.updateSessionStatus(session.id, 'completed');
     }
 
-    // Get updated session
-    const updatedSession = await sessionManager.getSession(session.id);
+    // Create summary response (less verbose) - only latest round
+    const latestRound = roundResults[roundResults.length - 1];
+    const agentSummaries = latestRound.responses.map((response) => ({
+      agentId: response.agentId,
+      agentName: response.agentName,
+      positionSummary: response.position.substring(0, 150) + (response.position.length > 150 ? '...' : ''),
+    }));
 
     return createSuccessResponse({
       sessionId: session.id,
-      currentRound: session.currentRound,
+      roundNumber: latestRound.roundNumber,
       totalRounds: session.totalRounds,
-      rounds: roundResults,
-      session: updatedSession,
+      agentSummaries,
+      consensusLevel: latestRound.consensus.agreementLevel,
     });
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -694,4 +728,385 @@ async function handleControlSession(
   } catch (error) {
     return createErrorResponse(error as Error);
   }
+}
+
+/**
+ * Handler: get_round_details
+ */
+async function handleGetRoundDetails(
+  args: unknown,
+  sessionManager: SessionManager,
+  debateEngine: DebateEngine
+): Promise<ToolResponse> {
+  try {
+    // Validate input
+    const input = GetRoundDetailsInputSchema.parse(args) as GetRoundDetailsInputType;
+
+    // Get session
+    const session = await sessionManager.getSession(input.sessionId);
+    if (!session) {
+      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    }
+
+    // Validate round number
+    if (input.roundNumber > session.currentRound) {
+      return createErrorResponse(
+        `Round ${input.roundNumber} has not been executed yet. Current round: ${session.currentRound}`
+      );
+    }
+
+    // Get responses for this round
+    const responses = await sessionManager.getResponsesForRound(input.sessionId, input.roundNumber);
+
+    if (responses.length === 0) {
+      return createErrorResponse(`No responses found for round ${input.roundNumber}`);
+    }
+
+    // Analyze consensus for this round
+    const consensus = debateEngine.analyzeConsensus(responses);
+
+    return createSuccessResponse({
+      sessionId: input.sessionId,
+      roundNumber: input.roundNumber,
+      responses: responses.map((r) => ({
+        agentId: r.agentId,
+        agentName: r.agentName,
+        position: r.position,
+        reasoning: r.reasoning,
+        confidence: r.confidence,
+        citations: r.citations,
+        toolCalls: r.toolCalls?.map((tc) => ({
+          toolName: tc.toolName,
+          timestamp: tc.timestamp,
+        })),
+        timestamp: r.timestamp,
+      })),
+      consensus,
+    });
+  } catch (error) {
+    return createErrorResponse(error as Error);
+  }
+}
+
+/**
+ * Handler: get_response_detail
+ */
+async function handleGetResponseDetail(
+  args: unknown,
+  sessionManager: SessionManager
+): Promise<ToolResponse> {
+  try {
+    // Validate input
+    const input = GetResponseDetailInputSchema.parse(args) as GetResponseDetailInputType;
+
+    // Get session
+    const session = await sessionManager.getSession(input.sessionId);
+    if (!session) {
+      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    }
+
+    // Verify agent participated in this session
+    if (!session.agentIds.includes(input.agentId)) {
+      return createErrorResponse(
+        `Agent "${input.agentId}" did not participate in session "${input.sessionId}"`
+      );
+    }
+
+    // Get all responses
+    const allResponses = await sessionManager.getResponses(input.sessionId);
+    let agentResponses = allResponses.filter((r) => r.agentId === input.agentId);
+
+    if (agentResponses.length === 0) {
+      return createErrorResponse(`No responses found for agent "${input.agentId}" in this session`);
+    }
+
+    // Filter by round if specified
+    if (input.roundNumber !== undefined) {
+      const roundResponses = await sessionManager.getResponsesForRound(
+        input.sessionId,
+        input.roundNumber
+      );
+      agentResponses = roundResponses.filter((r) => r.agentId === input.agentId);
+
+      if (agentResponses.length === 0) {
+        return createErrorResponse(
+          `No responses found for agent "${input.agentId}" in round ${input.roundNumber}`
+        );
+      }
+    }
+
+    return createSuccessResponse({
+      sessionId: input.sessionId,
+      agentId: input.agentId,
+      agentName: agentResponses[0]!.agentName,
+      roundNumber: input.roundNumber,
+      responses: agentResponses.map((r) => ({
+        position: r.position,
+        reasoning: r.reasoning,
+        confidence: r.confidence,
+        citations: r.citations,
+        toolCalls: r.toolCalls?.map((tc) => ({
+          toolName: tc.toolName,
+          timestamp: tc.timestamp,
+        })),
+        timestamp: r.timestamp,
+      })),
+    });
+  } catch (error) {
+    return createErrorResponse(error as Error);
+  }
+}
+
+/**
+ * Handler: get_citations
+ */
+async function handleGetCitations(
+  args: unknown,
+  sessionManager: SessionManager
+): Promise<ToolResponse> {
+  try {
+    // Validate input
+    const input = GetCitationsInputSchema.parse(args) as GetCitationsInputType;
+
+    // Get session
+    const session = await sessionManager.getSession(input.sessionId);
+    if (!session) {
+      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    }
+
+    // Get responses based on filters
+    let responses = await sessionManager.getResponses(input.sessionId);
+
+    // Filter by round if specified
+    if (input.roundNumber !== undefined) {
+      responses = await sessionManager.getResponsesForRound(input.sessionId, input.roundNumber);
+    }
+
+    // Filter by agent if specified
+    if (input.agentId !== undefined) {
+      responses = responses.filter((r) => r.agentId === input.agentId);
+    }
+
+    // Extract all citations
+    const citations = responses
+      .flatMap((r) => {
+        if (!r.citations || r.citations.length === 0) return [];
+        return r.citations.map((c) => ({
+          ...c,
+          agentId: r.agentId,
+          agentName: r.agentName,
+          timestamp: r.timestamp,
+        }));
+      })
+      .filter((c) => c !== null);
+
+    // Remove duplicate citations (same URL)
+    const uniqueCitations = citations.reduce((acc, citation) => {
+      const existing = acc.find((c) => c.url === citation.url);
+      if (!existing) {
+        acc.push(citation);
+      }
+      return acc;
+    }, [] as typeof citations);
+
+    return createSuccessResponse({
+      sessionId: input.sessionId,
+      roundNumber: input.roundNumber,
+      agentId: input.agentId,
+      citations: uniqueCitations,
+      totalCitations: uniqueCitations.length,
+    });
+  } catch (error) {
+    return createErrorResponse(error as Error);
+  }
+}
+
+/**
+ * Handler: synthesize_debate
+ */
+async function handleSynthesizeDebate(
+  args: unknown,
+  sessionManager: SessionManager,
+  agentRegistry: AgentRegistry
+): Promise<ToolResponse> {
+  try {
+    // Validate input
+    const input = SynthesizeDebateInputSchema.parse(args) as SynthesizeDebateInputType;
+
+    // Get session
+    const session = await sessionManager.getSession(input.sessionId);
+    if (!session) {
+      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    }
+
+    // Get all responses
+    const responses = await sessionManager.getResponses(input.sessionId);
+    if (responses.length === 0) {
+      return createErrorResponse('No responses found in this session. Cannot synthesize an empty debate.');
+    }
+
+    // Determine synthesizer agent
+    let synthesizerId = input.synthesizer;
+    if (!synthesizerId) {
+      // Use first active agent as default
+      const activeAgentIds = agentRegistry.getActiveAgentIds();
+      if (activeAgentIds.length === 0) {
+        return createErrorResponse('No active agents available for synthesis');
+      }
+      synthesizerId = activeAgentIds[0]!;
+    }
+
+    // Verify synthesizer exists
+    const synthesizerAgent = agentRegistry.getAgent(synthesizerId);
+    if (!synthesizerAgent) {
+      return createErrorResponse(`Synthesizer agent "${synthesizerId}" not found`);
+    }
+
+    // Build synthesis prompt
+    const synthesisPrompt = buildSynthesisPrompt(session.topic, responses, session.mode);
+
+    // Create a debate context for the synthesizer
+    const synthesisContext: DebateContext = {
+      sessionId: session.id,
+      topic: synthesisPrompt,
+      mode: session.mode,
+      currentRound: 1,
+      totalRounds: 1,
+      previousResponses: [],
+    };
+
+    // Generate synthesis using the agent
+    const agentResponse = await synthesizerAgent.generateResponse(synthesisContext);
+
+    // Parse the agent response to extract synthesis result
+    const synthesis = parseSynthesisResponse(agentResponse.reasoning, synthesizerId);
+
+    return createSuccessResponse({
+      sessionId: input.sessionId,
+      synthesizerId: synthesizerId,
+      synthesis: synthesis,
+    });
+  } catch (error) {
+    return createErrorResponse(error as Error);
+  }
+}
+
+/**
+ * Build synthesis prompt from debate responses
+ */
+function buildSynthesisPrompt(
+  topic: string,
+  responses: import('../types/index.js').AgentResponse[],
+  mode: string
+): string {
+  const parts: string[] = [];
+
+  parts.push(`You are analyzing a debate on the topic: "${topic}"`);
+  parts.push(`Debate mode: ${mode}`);
+  parts.push('');
+
+  // Group responses by round
+  const responsesByRound: Record<number, typeof responses> = {};
+  const agentsInSession = new Set(responses.map((r) => r.agentId));
+  const agentsPerRound = agentsInSession.size;
+
+  for (let i = 0; i < responses.length; i++) {
+    const response = responses[i];
+    if (!response) continue;
+    const round = Math.floor(i / agentsPerRound) + 1;
+    if (!responsesByRound[round]) {
+      responsesByRound[round] = [];
+    }
+    responsesByRound[round].push(response);
+  }
+
+  const totalRounds = Object.keys(responsesByRound).length;
+  parts.push(`The debate had ${totalRounds} rounds with the following participants: ${Array.from(agentsInSession).join(', ')}`);
+  parts.push('');
+
+  // Add all responses
+  parts.push('Here are all the positions and reasoning from each round:');
+  parts.push('');
+
+  for (const [round, roundResponses] of Object.entries(responsesByRound).sort(
+    ([a], [b]) => Number(a) - Number(b)
+  )) {
+    parts.push(`--- Round ${round} ---`);
+    for (const response of roundResponses) {
+      parts.push(`${response.agentName}:`);
+      parts.push(`Position: ${response.position}`);
+      parts.push(`Reasoning: ${response.reasoning}`);
+      parts.push(`Confidence: ${(response.confidence * 100).toFixed(0)}%`);
+      if (response.citations && response.citations.length > 0) {
+        parts.push(`Citations: ${response.citations.map((c) => c.title).join(', ')}`);
+      }
+      parts.push('');
+    }
+  }
+
+  parts.push('Please analyze this debate and provide a comprehensive synthesis in JSON format with the following structure:');
+  parts.push('{');
+  parts.push('  "commonGround": ["Key point 1", "Key point 2", ...],');
+  parts.push('  "keyDifferences": ["Difference 1", "Difference 2", ...],');
+  parts.push('  "evolutionSummary": "How opinions evolved throughout the debate",');
+  parts.push('  "conclusion": "Your overall conclusion based on the debate",');
+  parts.push('  "recommendation": "Your recommendation for the user",');
+  parts.push('  "confidence": 0.0 to 1.0');
+  parts.push('}');
+  parts.push('');
+  parts.push('Guidelines:');
+  parts.push('- commonGround: List points where ALL agents agreed or showed convergence');
+  parts.push('- keyDifferences: List the main points where agents disagreed');
+  parts.push('- evolutionSummary: Describe how positions changed across rounds');
+  parts.push('- conclusion: Synthesize the key insights from the debate');
+  parts.push('- recommendation: Provide actionable advice based on the debate');
+  parts.push('- confidence: Your confidence in this synthesis (0-1)');
+
+  return parts.join('\n');
+}
+
+/**
+ * Parse agent response to extract synthesis result
+ */
+function parseSynthesisResponse(responseText: string, synthesizerId: string): SynthesisResult {
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as {
+        commonGround?: string[];
+        keyDifferences?: string[];
+        evolutionSummary?: string;
+        conclusion?: string;
+        recommendation?: string;
+        confidence?: number;
+      };
+
+      return {
+        commonGround: parsed.commonGround || [],
+        keyDifferences: parsed.keyDifferences || [],
+        evolutionSummary: parsed.evolutionSummary || 'No evolution summary provided',
+        conclusion: parsed.conclusion || 'No conclusion provided',
+        recommendation: parsed.recommendation || 'No recommendation provided',
+        confidence: Math.min(1, Math.max(0, parsed.confidence ?? 0.5)),
+        synthesizerId,
+        timestamp: new Date(),
+      };
+    }
+  } catch (error) {
+    // Fall through to fallback parsing
+    logger.warn({ err: error }, 'Failed to parse synthesis response as JSON');
+  }
+
+  // Fallback: create a basic synthesis from the raw text
+  return {
+    commonGround: ['See detailed analysis in conclusion'],
+    keyDifferences: ['See detailed analysis in conclusion'],
+    evolutionSummary: 'Unable to parse structured evolution summary',
+    conclusion: responseText,
+    recommendation: 'Review the detailed analysis above',
+    confidence: 0.5,
+    synthesizerId,
+    timestamp: new Date(),
+  };
 }
