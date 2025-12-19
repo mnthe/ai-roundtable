@@ -10,6 +10,8 @@ AI Roundtable orchestrates debates between multiple AI models using various disc
 
 - **4 AI Providers**: Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), Perplexity
 - **7 Debate Modes**: Collaborative, Adversarial, Socratic, Expert Panel, Devil's Advocate, Delphi, Red Team/Blue Team
+- **AI-Powered Analysis**: Semantic consensus analysis using lightweight AI models
+- **Health Check System**: Automatic agent health verification on startup
 - **Tool Support**: Agents can use web search, fact-checking, and Perplexity's advanced search
 - **Persistent Storage**: SQLite-based session storage
 - **MCP Protocol**: Standard MCP server interface for integration with Claude Desktop and other MCP clients
@@ -114,6 +116,85 @@ List available AI agents and their configurations.
 
 List all debate sessions with their status.
 
+### `get_round_details`
+
+Get detailed responses for a specific round.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  roundNumber: number;  // Required: Round number (1-based)
+}
+```
+
+### `get_response_detail`
+
+Get detailed response from a specific agent.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  agentId: string;      // Required: Agent ID
+  roundNumber?: number; // Optional: specific round
+}
+```
+
+### `get_citations`
+
+Get all citations used in a debate.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  roundNumber?: number; // Optional: filter by round
+  agentId?: string;     // Optional: filter by agent
+}
+```
+
+### `synthesize_debate`
+
+AI-powered synthesis of the entire debate. Uses lightweight AI models to generate comprehensive analysis.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  synthesizer?: string; // Optional: Agent ID to use
+}
+```
+
+### `get_thoughts`
+
+Get detailed reasoning evolution for an agent.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  agentId: string;      // Required: Agent ID
+}
+```
+
+### `export_session`
+
+Export debate in markdown or JSON format.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  format?: 'markdown' | 'json';  // Default: 'markdown'
+}
+```
+
+### `control_session`
+
+Control session execution state.
+
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+  action: 'pause' | 'resume' | 'stop';
+}
+```
+
 ## Debate Modes
 
 | Mode | Execution | Description |
@@ -152,7 +233,12 @@ List all debate sessions with their status.
 │                    Core Layer                            │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
 │  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│  │
-│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+│  └─────────────┘  └─────────────┘  └────────┬────────┘  │
+│                                             │           │
+│                            ┌────────────────┴────────┐  │
+│                            │  AIConsensusAnalyzer   │  │
+│                            │  (semantic AI analysis) │  │
+│                            └─────────────────────────┘  │
 ├─────────────────────────────────────────────────────────┤
 │         Agents Layer              Modes Layer            │
 │  ┌──────────────────┐      ┌──────────────────────┐     │
@@ -161,7 +247,10 @@ List all debate sessions with their status.
 │  │  ├─ ChatGPT      │      │  ├─ Adversarial      │     │
 │  │  ├─ Gemini       │      │  ├─ Socratic         │     │
 │  │  └─ Perplexity   │      │  └─ ... (7 modes)    │     │
-│  └──────────────────┘      └──────────────────────┘     │
+│  │                  │      └──────────────────────┘     │
+│  │  Health Check    │                                   │
+│  │  (startup verify)│                                   │
+│  └──────────────────┘                                   │
 ├─────────────────────────────────────────────────────────┤
 │  Tools Layer                    Storage Layer            │
 │  ┌──────────────────┐      ┌──────────────────────┐     │
@@ -174,6 +263,17 @@ List all debate sessions with their status.
 │  └──────────────────┘      └──────────────────────┘     │
 └─────────────────────────────────────────────────────────┘
 ```
+
+### Model Tiers
+
+AI Roundtable uses different model tiers for different purposes:
+
+| Tier | Purpose | Models |
+|------|---------|--------|
+| **Heavy** | Debate participation | claude-sonnet-4-5, gpt-5.2, gemini-3-flash-preview, sonar-pro |
+| **Light** | Consensus analysis | claude-haiku-4-5, gpt-5-mini, gemini-2.5-flash-lite, sonar |
+
+Light models are automatically used for `AIConsensusAnalyzer` and `synthesize_debate` to reduce costs and latency.
 
 ## Project Structure
 
@@ -188,9 +288,10 @@ src/
 │   ├── registry.ts       # Agent registry
 │   └── setup.ts          # Auto-configuration
 ├── core/         # Core debate logic
-│   ├── debate-engine.ts  # Main orchestrator
+│   ├── debate-engine.ts       # Main orchestrator
 │   ├── session-manager.ts
-│   └── consensus-analyzer.ts
+│   ├── consensus-analyzer.ts  # Rule-based fallback
+│   └── ai-consensus-analyzer.ts  # AI semantic analysis
 ├── modes/        # Debate mode strategies
 │   ├── base.ts           # DebateModeStrategy interface
 │   ├── collaborative.ts
