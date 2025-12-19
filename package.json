@@ -57,6 +57,7 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "jsonrepair": "^3.13.1",
     "openai": "^4.73.0",
     "pino": "^9.5.0",
     "sql.js": "^1.13.0",
