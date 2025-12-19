@@ -139,6 +139,41 @@ interface DebateContext {
 }
 ```
 
+### 4-Layer Response Types
+
+```typescript
+type ConsensusLevel = 'high' | 'medium' | 'low';
+type ActionRecommendationType = 'proceed' | 'verify' | 'query_detail';
+
+interface RoundtableResponse {
+  sessionId: string;
+  topic: string;
+  mode: DebateMode;
+  roundNumber: number;
+  totalRounds: number;
+  decision: DecisionLayer;           // Layer 1
+  agentResponses: AgentResponseSummary[];  // Layer 2
+  evidence: EvidenceLayer;           // Layer 3
+  metadata: MetadataLayer;           // Layer 4
+}
+
+interface DecisionLayer {
+  consensusLevel: ConsensusLevel;
+  agreementScore: number;
+  actionRecommendation: { type: ActionRecommendationType; reason: string };
+}
+
+interface AgentResponseSummary {
+  agentId: string;
+  agentName: string;
+  position: string;
+  keyPoints: string[];
+  confidence: number;
+  confidenceChange?: { delta: number; previousRound: number; reason: string };
+  evidenceUsed: { webSearches: number; citations: number; toolCalls: string[] };
+}
+```
+
 ## Error Handling
 
 Use custom error types from `src/errors/index.ts`:

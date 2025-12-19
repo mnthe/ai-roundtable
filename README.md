@@ -10,6 +10,7 @@ AI Roundtable orchestrates debates between multiple AI models using various disc
 
 - **4 AI Providers**: Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), Perplexity
 - **7 Debate Modes**: Collaborative, Adversarial, Socratic, Expert Panel, Devil's Advocate, Delphi, Red Team/Blue Team
+- **4-Layer Response Structure**: Optimized for agentic workflows with progressive detail levels
 - **AI-Powered Analysis**: Semantic consensus analysis using lightweight AI models
 - **Health Check System**: Automatic agent health verification on startup
 - **Tool Support**: Agents can use web search, fact-checking, and Perplexity's advanced search
@@ -274,6 +275,24 @@ AI Roundtable uses different model tiers for different purposes:
 | **Light** | Consensus analysis | claude-haiku-4-5, gpt-5-mini, gemini-2.5-flash-lite, sonar |
 
 Light models are automatically used for `AIConsensusAnalyzer` and `synthesize_debate` to reduce costs and latency.
+
+### 4-Layer Response Structure
+
+Roundtable responses are structured in 4 progressive layers, optimized for agentic workflows where the main agent needs to make decisions efficiently:
+
+| Layer | Name | Purpose |
+|-------|------|---------|
+| **1** | Decision | Quick consensus level (high/medium/low), action recommendation |
+| **2** | Agent Responses | Per-agent position summaries with key points and confidence |
+| **3** | Evidence | Aggregated citations, identified conflicts, consensus summary |
+| **4** | Metadata | References for deep dive, verification hints |
+
+**Action Recommendations:**
+- `proceed` - High consensus, safe to act on results
+- `verify` - Medium consensus, review before proceeding
+- `query_detail` - Low consensus, use detail tools for more info
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed structure.
 
 ## Project Structure
 
