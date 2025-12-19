@@ -44,7 +44,7 @@ describe('Real Agent Integration Tests', () => {
         const agent = new ClaudeAgent({
           id: 'claude-test',
           name: 'Claude Test',
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-sonnet-4-5',
           apiKey: config.anthropicApiKey!,
         });
 
@@ -181,7 +181,7 @@ describe('Real Agent Integration Tests', () => {
         const claude = new ClaudeAgent({
           id: 'claude-debate',
           name: 'Claude',
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-sonnet-4-5',
           apiKey: config.anthropicApiKey!,
         });
         agentRegistry.register(claude);
@@ -246,7 +246,7 @@ describe('Real Agent Integration Tests', () => {
           agent = new ClaudeAgent({
             id: 'claude-tools',
             name: 'Claude with Tools',
-            model: 'claude-sonnet-4-5-20250929',
+            model: 'claude-sonnet-4-5',
             apiKey: config.anthropicApiKey!,
           });
           break;

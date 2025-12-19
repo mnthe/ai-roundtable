@@ -383,12 +383,12 @@ Round 2: Revision Based on Anonymous Summary
 
 AI consensus analysis uses lightweight models for cost efficiency:
 
-| Provider   | Light Model                 |
-| ---------- | --------------------------- |
-| Anthropic  | `claude-haiku-4-5-20251022` |
-| OpenAI     | `gpt-5-mini`                |
-| Google     | `gemini-2.5-flash-lite`     |
-| Perplexity | `sonar`                     |
+| Provider   | Light Model             |
+| ---------- | ----------------------- |
+| Anthropic  | `cclaude-haiku-4-5`     |
+| OpenAI     | `gpt-5-mini`            |
+| Google     | `gemini-2.5-flash-lite` |
+| Perplexity | `sonar`                 |
 
 ### Rule-Based vs AI-Based Analysis
 

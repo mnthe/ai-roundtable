@@ -117,15 +117,15 @@ interface DebateModeStrategy {
 
 **Mode Execution Patterns:**
 
-| Mode            | Execution  | Description                              |
-| --------------- | ---------- | ---------------------------------------- |
-| Collaborative   | Parallel   | Find common ground, build consensus      |
-| Adversarial     | Sequential | Challenge opposing viewpoints            |
-| Socratic        | Sequential | Dialogue through questioning             |
-| Expert Panel    | Parallel   | Independent expert assessments           |
-| Devil's Advocate| Sequential | Structured opposition and challenge      |
-| Delphi          | Parallel   | Anonymized iterative consensus building  |
-| Red Team/Blue Team | Parallel (teams) | Attack/defense team analysis     |
+| Mode               | Execution        | Description                             |
+| ------------------ | ---------------- | --------------------------------------- |
+| Collaborative      | Parallel         | Find common ground, build consensus     |
+| Adversarial        | Sequential       | Challenge opposing viewpoints           |
+| Socratic           | Sequential       | Dialogue through questioning            |
+| Expert Panel       | Parallel         | Independent expert assessments          |
+| Devil's Advocate   | Sequential       | Structured opposition and challenge     |
+| Delphi             | Parallel         | Anonymized iterative consensus building |
+| Red Team/Blue Team | Parallel (teams) | Attack/defense team analysis            |
 
 ## Adding a New AI Provider
 
@@ -386,7 +386,7 @@ Expected result:
 ```json
 {
   "agents": [
-    { "id": "claude-1", "name": "Claude", "provider": "anthropic", "model": "claude-sonnet-4-5-20250929" },
+    { "id": "claude-1", "name": "Claude", "provider": "anthropic", "model": "claude-sonnet-4-5" },
     { "id": "chatgpt-1", "name": "ChatGPT", "provider": "openai", "model": "gpt-5.2" }
   ]
 }
@@ -520,13 +520,13 @@ LOG_LEVEL=error npx -y @modelcontextprotocol/inspector node dist/index.js
 
 #### Common Issues
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| "No agents available" | API keys not set | Check environment variables |
-| "Agent health check failed" | Invalid API key or quota exceeded | Verify API key validity |
-| "Session not found" | Invalid sessionId | Use `list_sessions` to verify |
-| Inspector connection failed | Build not run | Run `pnpm build` first |
-| Timeout | Network or API latency | Retry or reduce number of rounds |
+| Issue                       | Cause                             | Solution                         |
+| --------------------------- | --------------------------------- | -------------------------------- |
+| "No agents available"       | API keys not set                  | Check environment variables      |
+| "Agent health check failed" | Invalid API key or quota exceeded | Verify API key validity          |
+| "Session not found"         | Invalid sessionId                 | Use `list_sessions` to verify    |
+| Inspector connection failed | Build not run                     | Run `pnpm build` first           |
+| Timeout                     | Network or API latency            | Retry or reduce number of rounds |
 
 #### Development with Watch Mode
 

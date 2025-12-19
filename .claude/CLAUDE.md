@@ -6,14 +6,14 @@ AI Roundtable is an MCP server that enables structured debates between multiple 
 
 ## Key Design Decisions (Update docs when changing)
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Language | TypeScript (ESM) | Type safety, Node.js 20+ |
-| AI Abstraction | Agent SDK abstraction | Tool use support, extensibility |
-| Initial Providers | Claude + ChatGPT + Gemini + Perplexity | Mature Agent SDKs |
-| Storage | SQLite only | Local MCP server use case |
-| Testing | Unit (Mock) + Integration (optional) | Fast feedback |
-| Mode Pattern | Strategy Pattern | Easy to add new debate modes |
+| Decision          | Choice                                 | Rationale                       |
+| ----------------- | -------------------------------------- | ------------------------------- |
+| Language          | TypeScript (ESM)                       | Type safety, Node.js 20+        |
+| AI Abstraction    | Agent SDK abstraction                  | Tool use support, extensibility |
+| Initial Providers | Claude + ChatGPT + Gemini + Perplexity | Mature Agent SDKs               |
+| Storage           | SQLite only                            | Local MCP server use case       |
+| Testing           | Unit (Mock) + Integration (optional)   | Fast feedback                   |
+| Mode Pattern      | Strategy Pattern                       | Easy to add new debate modes    |
 
 ## Architecture Rules
 
@@ -225,12 +225,12 @@ Uses lightweight AI models for semantic analysis of debate positions:
 - Provides nuanced analysis (partial agreements, conditional positions)
 
 **Light Models Used:**
-| Provider | Model |
-|----------|-------|
-| Anthropic | claude-haiku-4-5-20251022 |
-| OpenAI | gpt-5-mini |
-| Google | gemini-2.5-flash-lite |
-| Perplexity | sonar |
+| Provider   | Model                 |
+| ---------- | --------------------- |
+| Anthropic  | cclaude-haiku-4-5     |
+| OpenAI     | gpt-5-mini            |
+| Google     | gemini-2.5-flash-lite |
+| Perplexity | sonar                 |
 
 ### ConsensusAnalyzer (Fallback)
 
@@ -245,20 +245,20 @@ Agents undergo health checks on startup via `runHealthChecks()`:
 
 ## MCP Tools
 
-| Tool | Description |
-|------|-------------|
-| `start_roundtable` | Start new debate session |
-| `continue_roundtable` | Continue existing debate |
-| `get_consensus` | Get consensus analysis |
-| `get_agents` | List available agents |
-| `list_sessions` | List debate sessions |
-| `get_round_details` | Get responses for specific round |
-| `get_response_detail` | Get agent's detailed response |
-| `get_citations` | Get citations from debate |
-| `get_thoughts` | Get agent's reasoning evolution |
-| `export_session` | Export session (markdown/JSON) |
-| `control_session` | Pause/resume/stop session |
-| `synthesize_debate` | AI-powered debate synthesis |
+| Tool                  | Description                      |
+| --------------------- | -------------------------------- |
+| `start_roundtable`    | Start new debate session         |
+| `continue_roundtable` | Continue existing debate         |
+| `get_consensus`       | Get consensus analysis           |
+| `get_agents`          | List available agents            |
+| `list_sessions`       | List debate sessions             |
+| `get_round_details`   | Get responses for specific round |
+| `get_response_detail` | Get agent's detailed response    |
+| `get_citations`       | Get citations from debate        |
+| `get_thoughts`        | Get agent's reasoning evolution  |
+| `export_session`      | Export session (markdown/JSON)   |
+| `control_session`     | Pause/resume/stop session        |
+| `synthesize_debate`   | AI-powered debate synthesis      |
 
 ## Known Issues / Future Improvements
 

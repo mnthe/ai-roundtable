@@ -44,7 +44,7 @@ export interface SetupResult {
  * Default models for each provider (heavy models for debate)
  */
 const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-sonnet-4-5-20250929',
+  anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-5.2',
   google: 'gemini-3-flash-preview',
   perplexity: 'sonar-pro',
@@ -54,7 +54,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
  * Light models for each provider (for analysis tasks - faster & cheaper)
  */
 export const LIGHT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-haiku-4-5-20251022',
+  anthropic: 'claude-haiku-4-5',
   openai: 'gpt-5-mini',
   google: 'gemini-2.5-flash-lite',
   perplexity: 'sonar',
@@ -117,10 +117,7 @@ export function checkProviderAvailability(apiKeys: ApiKeyConfig): ProviderAvaila
  * @param apiKeys - Optional API key configuration (defaults to env vars)
  * @returns Setup result with providers and agents info
  */
-export function setupProviders(
-  registry: AgentRegistry,
-  apiKeys?: ApiKeyConfig
-): SetupResult {
+export function setupProviders(registry: AgentRegistry, apiKeys?: ApiKeyConfig): SetupResult {
   const keys = apiKeys ?? detectApiKeys();
   const availability = checkProviderAvailability(keys);
   const warnings: string[] = [];
