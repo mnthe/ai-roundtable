@@ -2,6 +2,7 @@
  * Base Agent - Abstract class for all AI agents
  */
 
+import { jsonrepair } from 'jsonrepair';
 import type {
   AgentConfig,
   AgentResponse,
@@ -103,9 +104,14 @@ export abstract class BaseAgent {
    */
   protected buildSystemPrompt(context: DebateContext): string {
     const basePrompt = this.systemPrompt ?? this.getDefaultSystemPrompt();
-    return `${basePrompt}
+    const parts: string[] = [basePrompt];
 
-Current debate topic: ${context.topic}
+    // Add mode-specific prompt if provided
+    if (context.modePrompt) {
+      parts.push(context.modePrompt);
+    }
+
+    parts.push(`Current debate topic: ${context.topic}
 Debate mode: ${context.mode}
 Round ${context.currentRound} of ${context.totalRounds}
 
@@ -115,7 +121,9 @@ Instructions:
 - Provide your position clearly and concisely
 - Support your position with logical reasoning
 - Express your confidence level (0-1) in your position
-- If you use any tools (web search, fact check), cite your sources`;
+- If you use any tools (web search, fact check), cite your sources`);
+
+    return parts.join('\n\n');
   }
 
   /**
@@ -160,13 +168,16 @@ Please provide your response in the following JSON format:
 
   /**
    * Parse the raw response from the AI into structured format
+   * Uses jsonrepair to handle malformed JSON from AI models
    */
   protected parseResponse(raw: string, _context: DebateContext): Partial<AgentResponse> {
     try {
       // Try to extract JSON from the response
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]) as {
+        // Use jsonrepair to fix common JSON issues (trailing commas, unquoted keys, etc.)
+        const repairedJson = jsonrepair(jsonMatch[0]);
+        const parsed = JSON.parse(repairedJson) as {
           position?: string;
           reasoning?: string;
           confidence?: number;

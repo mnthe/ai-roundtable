@@ -2,6 +2,7 @@
  * MCP Server Implementation
  */
 
+import { jsonrepair } from 'jsonrepair';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createLogger } from '../utils/logger.js';
@@ -44,7 +45,6 @@ import type {
   DebateContext,
   RoundResult,
   AgentResponse,
-  ConsensusResult,
   RoundtableResponse,
   ConsensusLevel,
   ActionRecommendationType,
@@ -263,11 +263,11 @@ function extractKeyPoints(reasoning: string): string[] {
   const keyPoints: string[] = [];
 
   // Try to extract numbered points (1., 2., etc.) or bullet points
-  const numberedMatches = reasoning.match(/(?:^|\n)\s*(?:\d+[.):]\s*|\*\s*|\-\s*)\*?\*?([^\n*]+)/g);
+  const numberedMatches = reasoning.match(/(?:^|\n)\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?([^\n*]+)/g);
   if (numberedMatches && numberedMatches.length > 0) {
     for (const match of numberedMatches.slice(0, 3)) {
       const cleaned = match
-        .replace(/^\s*(?:\d+[.):]\s*|\*\s*|\-\s*)\*?\*?/, '')
+        .replace(/^\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?/, '')
         .trim();
       if (cleaned.length > 10 && cleaned.length < 200) {
         keyPoints.push(cleaned);
@@ -364,7 +364,7 @@ function detectConflicts(
  */
 function buildVerificationHints(
   responses: AgentResponse[],
-  sessionId: string
+  _sessionId: string
 ): { field: string; reason: string; suggestedTool: string }[] {
   const hints: { field: string; reason: string; suggestedTool: string }[] = [];
 
@@ -1413,13 +1413,16 @@ function buildSynthesisPrompt(
 
 /**
  * Parse agent response to extract synthesis result
+ * Uses jsonrepair to handle malformed JSON from AI models
  */
 function parseSynthesisResponse(responseText: string, synthesizerId: string): SynthesisResult {
   try {
     // Try to extract JSON from the response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      // Use jsonrepair to fix common JSON issues (trailing commas, unquoted keys, etc.)
+      const repairedJson = jsonrepair(jsonMatch[0]);
+      const parsed = JSON.parse(repairedJson) as {
         commonGround?: string[];
         keyDifferences?: string[];
         evolutionSummary?: string;

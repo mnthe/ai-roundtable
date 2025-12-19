@@ -5,6 +5,7 @@
  * replacing rule-based keyword matching with true language understanding.
  */
 
+import { jsonrepair } from 'jsonrepair';
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
@@ -165,15 +166,30 @@ export class AIConsensusAnalyzer {
 
   /**
    * Create a variant of the agent using the light model
+   *
+   * Creates a new agent instance with the same provider but using the lightweight model
+   * defined in LIGHT_MODELS for cost-efficient consensus analysis.
    */
   private createLightModelAgent(baseAgent: BaseAgent): BaseAgent {
     const info = baseAgent.getInfo();
     const lightModel = LIGHT_MODELS[info.provider];
 
-    // Create a new agent config with the light model
-    // For now, we'll use the base agent but could create a new instance with light model
-    // This is a simplified approach - in production, you'd want to create a proper light agent
-    return baseAgent;
+    // Get the factory from registry to create a new agent with light model
+    const factory = this.registry.getProviderFactory(info.provider);
+    if (!factory) {
+      // Fallback to base agent if factory not available
+      return baseAgent;
+    }
+
+    // Create new agent with light model config
+    const lightConfig = {
+      id: `${info.id}-light-consensus`,
+      name: `${info.name} (Light)`,
+      provider: info.provider,
+      model: lightModel,
+    };
+
+    return factory(lightConfig);
   }
 
   /**
@@ -256,9 +272,12 @@ export class AIConsensusAnalyzer {
 
   /**
    * Parse JSON string into AIConsensusResult
+   * Uses jsonrepair to handle malformed JSON from AI models
    */
   private parseJsonToResult(json: string, analyzerId: string): AIConsensusResult {
-    const parsed = JSON.parse(json);
+    // Use jsonrepair to fix common JSON issues (trailing commas, unquoted keys, etc.)
+    const repairedJson = jsonrepair(json);
+    const parsed = JSON.parse(repairedJson);
 
     return {
       agreementLevel: Math.max(0, Math.min(1, Number(parsed.agreementLevel) || 0.5)),
