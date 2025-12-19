@@ -52,7 +52,15 @@ export const AgentResponseSchema = z.object({
 // Debate Schemas
 // ============================================
 
-export const DebateModeSchema = z.enum(['collaborative', 'adversarial', 'socratic', 'expert-panel']);
+export const DebateModeSchema = z.enum([
+  'collaborative',
+  'adversarial',
+  'socratic',
+  'expert-panel',
+  'devils-advocate',
+  'delphi',
+  'red-team-blue-team',
+]);
 
 export const DebateConfigSchema = z.object({
   topic: z.string().min(1),
