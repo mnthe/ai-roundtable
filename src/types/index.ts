@@ -30,6 +30,10 @@ export interface AgentResponse {
   confidence: number;
   citations?: Citation[];
   toolCalls?: ToolCallRecord[];
+  /** Images from search results (Perplexity) */
+  images?: ImageResult[];
+  /** Related questions from search (Perplexity) */
+  relatedQuestions?: string[];
   timestamp: Date;
 }
 
@@ -37,6 +41,11 @@ export interface Citation {
   title: string;
   url: string;
   snippet?: string;
+}
+
+export interface ImageResult {
+  url: string;
+  description?: string;
 }
 
 export interface ToolCallRecord {

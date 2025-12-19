@@ -9,4 +9,7 @@ export {
   type ToolDefinition,
   type WebSearchProvider,
   type SessionDataProvider,
+  type PerplexitySearchProvider,
+  type PerplexitySearchInput,
+  type PerplexitySearchResult,
 } from './toolkit.js';

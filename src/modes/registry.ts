@@ -5,6 +5,9 @@
 import type { DebateModeStrategy } from './base.js';
 import type { DebateMode } from '../types/index.js';
 import { CollaborativeMode } from './collaborative.js';
+import { AdversarialMode } from './adversarial.js';
+import { SocraticMode } from './socratic.js';
+import { ExpertPanelMode } from './expert-panel.js';
 
 /**
  * Registry for debate mode strategies
@@ -30,6 +33,9 @@ export class ModeRegistry {
    */
   private registerDefaultModes(): void {
     this.registerMode('collaborative', new CollaborativeMode());
+    this.registerMode('adversarial', new AdversarialMode());
+    this.registerMode('socratic', new SocraticMode());
+    this.registerMode('expert-panel', new ExpertPanelMode());
   }
 
   /**

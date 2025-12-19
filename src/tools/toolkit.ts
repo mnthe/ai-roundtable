@@ -32,6 +32,34 @@ export interface WebSearchProvider {
 }
 
 /**
+ * Perplexity search options for detailed search control
+ */
+export interface PerplexitySearchInput {
+  query: string;
+  recency_filter?: 'hour' | 'day' | 'week' | 'month';
+  domain_filter?: string[];
+  return_images?: boolean;
+  return_related_questions?: boolean;
+}
+
+/**
+ * Perplexity search result with extended metadata
+ */
+export interface PerplexitySearchResult {
+  answer: string;
+  citations?: Array<{ title: string; url: string; snippet?: string }>;
+  images?: Array<{ url: string; description?: string }>;
+  related_questions?: string[];
+}
+
+/**
+ * Interface for Perplexity search provider
+ */
+export interface PerplexitySearchProvider {
+  search(input: PerplexitySearchInput): Promise<PerplexitySearchResult>;
+}
+
+/**
  * Interface for session data provider (to get context)
  */
 export interface SessionDataProvider {
@@ -57,6 +85,7 @@ export interface SessionDataProvider {
  * - submit_response: Submit structured response (validation)
  * - search_web: Search the web for information
  * - fact_check: Request fact checking on a claim
+ * - perplexity_search: Advanced search with Perplexity AI (recency, domain filters, images)
  */
 export class DefaultAgentToolkit implements AgentToolkit {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -64,7 +93,8 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   constructor(
     private webSearchProvider?: WebSearchProvider,
-    private sessionDataProvider?: SessionDataProvider
+    private sessionDataProvider?: SessionDataProvider,
+    private perplexitySearchProvider?: PerplexitySearchProvider
   ) {
     this.registerDefaultTools();
   }
@@ -153,6 +183,44 @@ export class DefaultAgentToolkit implements AgentToolkit {
         },
       },
       executor: async (input) => this.executeFactCheck(input),
+    });
+
+    // Tool 5: Perplexity Search (Advanced)
+    this.registerTool({
+      tool: {
+        name: 'perplexity_search',
+        description:
+          'Advanced web search using Perplexity AI with detailed control over search parameters. ' +
+          'Use this when you need: recent information (news, events), domain-specific sources (academic, news sites), ' +
+          'or visual content (images). Returns comprehensive answer with citations.',
+        parameters: {
+          query: {
+            type: 'string',
+            description: 'The search query - be specific and detailed for better results',
+          },
+          recency_filter: {
+            type: 'string',
+            description:
+              'Filter by time: "hour" (last hour), "day" (last 24h), "week" (last 7 days), "month" (last 30 days). ' +
+              'Use for current events or recent news.',
+          },
+          domain_filter: {
+            type: 'array',
+            description:
+              'Limit search to specific domains (max 3). Examples: ["arxiv.org", "nature.com"] for academic, ' +
+              '["reuters.com", "bbc.com"] for news. Omit to search all sources.',
+          },
+          return_images: {
+            type: 'boolean',
+            description: 'Set true to include relevant images in results. Useful for visual topics.',
+          },
+          return_related_questions: {
+            type: 'boolean',
+            description: 'Set true to get related follow-up questions. Useful for exploring topics deeper.',
+          },
+        },
+      },
+      executor: async (input) => this.executePerplexitySearch(input),
     });
   }
 
@@ -389,6 +457,64 @@ export class DefaultAgentToolkit implements AgentToolkit {
       },
     };
   }
+
+  /**
+   * Execute perplexity_search tool
+   */
+  private async executePerplexitySearch(
+    input: unknown
+  ): Promise<ToolResult<PerplexitySearchResult>> {
+    if (!this.perplexitySearchProvider) {
+      return {
+        success: false,
+        error: 'Perplexity search is not available. Use search_web as an alternative.',
+      };
+    }
+
+    const data = input as PerplexitySearchInput;
+
+    if (!data.query || typeof data.query !== 'string') {
+      return {
+        success: false,
+        error: 'Query is required and must be a string',
+      };
+    }
+
+    // Validate recency_filter
+    const validRecencyFilters = ['hour', 'day', 'week', 'month'];
+    if (data.recency_filter && !validRecencyFilters.includes(data.recency_filter)) {
+      return {
+        success: false,
+        error: `Invalid recency_filter. Must be one of: ${validRecencyFilters.join(', ')}`,
+      };
+    }
+
+    // Validate and limit domain_filter
+    let domainFilter = data.domain_filter;
+    if (domainFilter && Array.isArray(domainFilter)) {
+      domainFilter = domainFilter.slice(0, 3); // Max 3 domains
+    }
+
+    try {
+      const result = await this.perplexitySearchProvider.search({
+        query: data.query,
+        recency_filter: data.recency_filter,
+        domain_filter: domainFilter,
+        return_images: data.return_images,
+        return_related_questions: data.return_related_questions,
+      });
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Perplexity search failed',
+      };
+    }
+  }
 }
 
 /**
@@ -396,7 +522,8 @@ export class DefaultAgentToolkit implements AgentToolkit {
  */
 export function createDefaultToolkit(
   webSearchProvider?: WebSearchProvider,
-  sessionDataProvider?: SessionDataProvider
+  sessionDataProvider?: SessionDataProvider,
+  perplexitySearchProvider?: PerplexitySearchProvider
 ): DefaultAgentToolkit {
-  return new DefaultAgentToolkit(webSearchProvider, sessionDataProvider);
+  return new DefaultAgentToolkit(webSearchProvider, sessionDataProvider, perplexitySearchProvider);
 }

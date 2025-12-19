@@ -4,6 +4,8 @@ import {
   createDefaultToolkit,
   type WebSearchProvider,
   type SessionDataProvider,
+  type PerplexitySearchProvider,
+  type PerplexitySearchResult,
 } from '../../../src/tools/toolkit.js';
 import type { DebateContext, SearchResult } from '../../../src/types/index.js';
 
@@ -37,11 +39,12 @@ describe('DefaultAgentToolkit', () => {
     it('should return default tools', () => {
       const tools = toolkit.getTools();
 
-      expect(tools).toHaveLength(4);
+      expect(tools).toHaveLength(5);
       expect(tools.map((t) => t.name)).toContain('get_context');
       expect(tools.map((t) => t.name)).toContain('submit_response');
       expect(tools.map((t) => t.name)).toContain('search_web');
       expect(tools.map((t) => t.name)).toContain('fact_check');
+      expect(tools.map((t) => t.name)).toContain('perplexity_search');
     });
 
     it('should have descriptions for all tools', () => {
@@ -403,10 +406,136 @@ describe('DefaultAgentToolkit', () => {
   });
 });
 
+describe('perplexity_search tool', () => {
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'AI regulation',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  it('should return error when provider is not available', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('perplexity_search', {
+      query: 'test query',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not available');
+  });
+
+  it('should return error when query is missing', async () => {
+    const mockProvider: PerplexitySearchProvider = {
+      search: vi.fn(),
+    };
+    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('perplexity_search', {})) as {
+      success: boolean;
+      error?: string;
+    };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Query is required');
+  });
+
+  it('should return error for invalid recency_filter', async () => {
+    const mockProvider: PerplexitySearchProvider = {
+      search: vi.fn(),
+    };
+    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('perplexity_search', {
+      query: 'test',
+      recency_filter: 'invalid',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Invalid recency_filter');
+  });
+
+  it('should execute search with all options', async () => {
+    const mockResult: PerplexitySearchResult = {
+      answer: 'AI regulation is important because...',
+      citations: [{ title: 'Source 1', url: 'https://example.com' }],
+      images: [{ url: 'https://example.com/img.jpg' }],
+      related_questions: ['What are the benefits?'],
+    };
+
+    const mockProvider: PerplexitySearchProvider = {
+      search: vi.fn().mockResolvedValue(mockResult),
+    };
+    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('perplexity_search', {
+      query: 'AI regulation 2024',
+      recency_filter: 'week',
+      domain_filter: ['reuters.com', 'bbc.com'],
+      return_images: true,
+      return_related_questions: true,
+    })) as { success: boolean; data?: PerplexitySearchResult };
+
+    expect(result.success).toBe(true);
+    expect(result.data?.answer).toBe('AI regulation is important because...');
+    expect(result.data?.citations).toHaveLength(1);
+    expect(result.data?.images).toHaveLength(1);
+    expect(result.data?.related_questions).toHaveLength(1);
+
+    expect(mockProvider.search).toHaveBeenCalledWith({
+      query: 'AI regulation 2024',
+      recency_filter: 'week',
+      domain_filter: ['reuters.com', 'bbc.com'],
+      return_images: true,
+      return_related_questions: true,
+    });
+  });
+
+  it('should limit domain_filter to 3 domains', async () => {
+    const mockProvider: PerplexitySearchProvider = {
+      search: vi.fn().mockResolvedValue({ answer: 'test' }),
+    };
+    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+    toolkit.setContext(defaultContext);
+
+    await toolkit.executeTool('perplexity_search', {
+      query: 'test',
+      domain_filter: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'],
+    });
+
+    expect(mockProvider.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain_filter: ['a.com', 'b.com', 'c.com'],
+      })
+    );
+  });
+
+  it('should handle provider errors gracefully', async () => {
+    const mockProvider: PerplexitySearchProvider = {
+      search: vi.fn().mockRejectedValue(new Error('API error')),
+    };
+    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('perplexity_search', {
+      query: 'test',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('API error');
+  });
+});
+
 describe('createDefaultToolkit', () => {
   it('should create toolkit without providers', () => {
     const toolkit = createDefaultToolkit();
-    expect(toolkit.getTools()).toHaveLength(4);
+    expect(toolkit.getTools()).toHaveLength(5);
   });
 
   it('should create toolkit with providers', () => {
@@ -419,6 +548,6 @@ describe('createDefaultToolkit', () => {
     };
 
     const toolkit = createDefaultToolkit(mockSearchProvider, mockSessionProvider);
-    expect(toolkit.getTools()).toHaveLength(4);
+    expect(toolkit.getTools()).toHaveLength(5);
   });
 });

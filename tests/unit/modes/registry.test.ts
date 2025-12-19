@@ -5,8 +5,14 @@ import {
   resetGlobalModeRegistry,
 } from '../../../src/modes/registry.js';
 import { CollaborativeMode } from '../../../src/modes/collaborative.js';
+import { AdversarialMode } from '../../../src/modes/adversarial.js';
+import { SocraticMode } from '../../../src/modes/socratic.js';
+import { ExpertPanelMode } from '../../../src/modes/expert-panel.js';
 import type { DebateModeStrategy } from '../../../src/modes/base.js';
 import type { DebateMode } from '../../../src/types/index.js';
+
+// All default modes
+const DEFAULT_MODES: DebateMode[] = ['collaborative', 'adversarial', 'socratic', 'expert-panel'];
 
 describe('ModeRegistry', () => {
   let registry: ModeRegistry;
@@ -16,15 +22,18 @@ describe('ModeRegistry', () => {
   });
 
   describe('constructor', () => {
-    it('should register default modes', () => {
-      expect(registry.hasMode('collaborative')).toBe(true);
-      expect(registry.getAvailableModes()).toContain('collaborative');
+    it('should register all default modes', () => {
+      for (const modeName of DEFAULT_MODES) {
+        expect(registry.hasMode(modeName)).toBe(true);
+        expect(registry.getAvailableModes()).toContain(modeName);
+      }
     });
 
-    it('should initialize with collaborative mode', () => {
-      const mode = registry.getMode('collaborative');
-      expect(mode).toBeInstanceOf(CollaborativeMode);
-      expect(mode.name).toBe('collaborative');
+    it('should initialize with correct mode instances', () => {
+      expect(registry.getMode('collaborative')).toBeInstanceOf(CollaborativeMode);
+      expect(registry.getMode('adversarial')).toBeInstanceOf(AdversarialMode);
+      expect(registry.getMode('socratic')).toBeInstanceOf(SocraticMode);
+      expect(registry.getMode('expert-panel')).toBeInstanceOf(ExpertPanelMode);
     });
   });
 
@@ -70,12 +79,16 @@ describe('ModeRegistry', () => {
     });
 
     it('should throw error for unregistered mode', () => {
-      expect(() => registry.getMode('adversarial' as DebateMode)).toThrow(
-        'Debate mode "adversarial" is not registered'
+      // Remove a mode first to test error
+      registry.clear();
+      expect(() => registry.getMode('collaborative')).toThrow(
+        'Debate mode "collaborative" is not registered'
       );
     });
 
     it('should include available modes in error message', () => {
+      registry.clear();
+      registry.registerMode('collaborative', new CollaborativeMode());
       expect(() => registry.getMode('invalid' as DebateMode)).toThrow(
         'Available modes: collaborative'
       );
@@ -83,22 +96,27 @@ describe('ModeRegistry', () => {
   });
 
   describe('hasMode', () => {
-    it('should return true for registered mode', () => {
-      expect(registry.hasMode('collaborative')).toBe(true);
+    it('should return true for registered modes', () => {
+      for (const modeName of DEFAULT_MODES) {
+        expect(registry.hasMode(modeName)).toBe(true);
+      }
     });
 
     it('should return false for unregistered mode', () => {
-      expect(registry.hasMode('adversarial' as DebateMode)).toBe(false);
+      expect(registry.hasMode('invalid' as DebateMode)).toBe(false);
     });
   });
 
   describe('getAvailableModes', () => {
-    it('should return array of registered modes', () => {
+    it('should return array of all default modes', () => {
       const modes = registry.getAvailableModes();
-      expect(modes).toEqual(['collaborative']);
+      expect(modes).toHaveLength(4);
+      for (const modeName of DEFAULT_MODES) {
+        expect(modes).toContain(modeName);
+      }
     });
 
-    it('should include newly registered modes', () => {
+    it('should include newly registered custom modes', () => {
       const mockMode: DebateModeStrategy = {
         name: 'test',
         async executeRound() {
@@ -109,14 +127,15 @@ describe('ModeRegistry', () => {
         },
       };
 
-      registry.registerMode('adversarial' as DebateMode, mockMode);
-      registry.registerMode('socratic' as DebateMode, mockMode);
+      // Override adversarial with custom implementation
+      registry.registerMode('adversarial', mockMode);
 
       const modes = registry.getAvailableModes();
       expect(modes).toContain('collaborative');
       expect(modes).toContain('adversarial');
       expect(modes).toContain('socratic');
-      expect(modes).toHaveLength(3);
+      expect(modes).toContain('expert-panel');
+      expect(modes).toHaveLength(4);
     });
   });
 
@@ -131,44 +150,38 @@ describe('ModeRegistry', () => {
     });
 
     it('should return false when removing non-existent mode', () => {
-      const removed = registry.removeMode('adversarial' as DebateMode);
+      const removed = registry.removeMode('invalid' as DebateMode);
       expect(removed).toBe(false);
     });
   });
 
   describe('clear', () => {
     it('should remove all modes', () => {
-      expect(registry.getAvailableModes()).toHaveLength(1);
+      expect(registry.getAvailableModes()).toHaveLength(4);
 
       registry.clear();
 
       expect(registry.getAvailableModes()).toHaveLength(0);
-      expect(registry.hasMode('collaborative')).toBe(false);
+      for (const modeName of DEFAULT_MODES) {
+        expect(registry.hasMode(modeName)).toBe(false);
+      }
     });
   });
 
   describe('reset', () => {
     it('should clear and re-register default modes', () => {
-      // Add custom mode
-      const mockMode: DebateModeStrategy = {
-        name: 'custom',
-        async executeRound() {
-          return [];
-        },
-        buildAgentPrompt() {
-          return '';
-        },
-      };
-      registry.registerMode('adversarial' as DebateMode, mockMode);
-
-      expect(registry.getAvailableModes()).toHaveLength(2);
+      // Clear all modes
+      registry.clear();
+      expect(registry.getAvailableModes()).toHaveLength(0);
 
       // Reset
       registry.reset();
 
-      // Should only have default modes
-      expect(registry.getAvailableModes()).toEqual(['collaborative']);
-      expect(registry.hasMode('adversarial' as DebateMode)).toBe(false);
+      // Should have all default modes again
+      expect(registry.getAvailableModes()).toHaveLength(4);
+      for (const modeName of DEFAULT_MODES) {
+        expect(registry.hasMode(modeName)).toBe(true);
+      }
     });
   });
 });
@@ -185,49 +198,40 @@ describe('Global Mode Registry', () => {
     expect(registry1).toBe(registry2);
   });
 
-  it('should have default modes registered', () => {
+  it('should have all default modes registered', () => {
     const registry = getGlobalModeRegistry();
 
-    expect(registry.hasMode('collaborative')).toBe(true);
-    expect(registry.getAvailableModes()).toContain('collaborative');
+    for (const modeName of DEFAULT_MODES) {
+      expect(registry.hasMode(modeName)).toBe(true);
+      expect(registry.getAvailableModes()).toContain(modeName);
+    }
   });
 
   it('should persist changes across calls', () => {
     const registry1 = getGlobalModeRegistry();
 
-    const mockMode: DebateModeStrategy = {
-      name: 'test',
-      async executeRound() {
-        return [];
-      },
-      buildAgentPrompt() {
-        return '';
-      },
-    };
-
-    registry1.registerMode('adversarial' as DebateMode, mockMode);
+    // Remove a mode and verify it persists
+    registry1.removeMode('collaborative');
 
     const registry2 = getGlobalModeRegistry();
-    expect(registry2.hasMode('adversarial' as DebateMode)).toBe(true);
+    expect(registry2.hasMode('collaborative')).toBe(false);
+    expect(registry2.hasMode('adversarial')).toBe(true);
   });
 
-  it('should reset global instance', () => {
+  it('should reset global instance to defaults', () => {
     const registry1 = getGlobalModeRegistry();
-    const mockMode: DebateModeStrategy = {
-      name: 'test',
-      async executeRound() {
-        return [];
-      },
-      buildAgentPrompt() {
-        return '';
-      },
-    };
-    registry1.registerMode('adversarial' as DebateMode, mockMode);
 
+    // Remove a mode
+    registry1.removeMode('collaborative');
+    expect(registry1.hasMode('collaborative')).toBe(false);
+
+    // Reset
     resetGlobalModeRegistry();
 
+    // Should have all defaults again
     const registry2 = getGlobalModeRegistry();
-    expect(registry2.hasMode('adversarial' as DebateMode)).toBe(false);
-    expect(registry2.hasMode('collaborative')).toBe(true);
+    for (const modeName of DEFAULT_MODES) {
+      expect(registry2.hasMode(modeName)).toBe(true);
+    }
   });
 });

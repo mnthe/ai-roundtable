@@ -41,6 +41,7 @@
   "packageManager": "pnpm@9.15.1",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "better-sqlite3": "^11.6.0",
     "openai": "^4.73.0",
