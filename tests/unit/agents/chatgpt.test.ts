@@ -134,7 +134,7 @@ describe('ChatGPTAgent', () => {
       expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4-turbo',
-          max_tokens: 4096,
+          max_completion_tokens: 4096,
           temperature: 0.7,
         })
       );

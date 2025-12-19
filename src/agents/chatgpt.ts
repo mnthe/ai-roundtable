@@ -71,7 +71,7 @@ export class ChatGPTAgent extends BaseAgent {
     // Make the API call
     let response = await this.client.chat.completions.create({
       model: this.model,
-      max_tokens: this.maxTokens,
+      max_completion_tokens: this.maxTokens,
       messages,
       tools,
       temperature: this.temperature,
@@ -123,7 +123,7 @@ export class ChatGPTAgent extends BaseAgent {
       // Continue the conversation with tool results
       response = await this.client.chat.completions.create({
         model: this.model,
-        max_tokens: this.maxTokens,
+        max_completion_tokens: this.maxTokens,
         messages,
         tools,
         temperature: this.temperature,
@@ -184,7 +184,7 @@ export class ChatGPTAgent extends BaseAgent {
     try {
       await this.client.chat.completions.create({
         model: this.model,
-        max_tokens: 10,
+        max_completion_tokens: 10,
         messages: [{ role: 'user', content: 'test' }],
       });
       return { healthy: true };
