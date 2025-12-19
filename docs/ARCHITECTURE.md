@@ -325,6 +325,71 @@ Round 2: Revision Based on Anonymous Summary
 
 ## Consensus Analysis
 
+### Execution Flow (MCP Server)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Server Startup (server.ts:104-107)                       │
+│                                                                             │
+│   aiConsensusAnalyzer = new AIConsensusAnalyzer({                           │
+│     registry: agentRegistry,                                                │
+│     fallbackToRuleBased: true                                               │
+│   })                                                                        │
+│                                                                             │
+│   ⚠️ Always created → aiConsensusAnalyzer is NEVER null                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              get_consensus / get_round_details (server.ts:696-698)          │
+│                                                                             │
+│   const consensus = aiConsensusAnalyzer                                     │
+│     ? await aiConsensusAnalyzer.analyzeConsensus(...)  ← Always executed    │
+│     : debateEngine.analyzeConsensus(...);              ← Never executed     │
+└─────────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      AIConsensusAnalyzer                                    │
+│                                                                             │
+│   ┌───────────────────┐     ┌────────────────────┐                          │
+│   │ AI Agent Available│ Yes │  Semantic Analysis │                          │
+│   │       ?           │────▶│  (Light Model)     │──▶ AI determines         │
+│   └─────────┬─────────┘     │                    │    agreementLevel        │
+│             │ No            │  • Understand      │                          │
+│             ▼               │    meaning         │                          │
+│   ┌───────────────────┐     │  • Detect negation │                          │
+│   │  performBasic     │     │  • Find nuances    │                          │
+│   │  Analysis()       │     │  • Cluster themes  │                          │
+│   │                   │     └────────────────────┘                          │
+│   │  agreementLevel = │                                                     │
+│   │  1-(unique-1)/n   │ ← Simple string equality, no Jaccard                │
+│   └───────────────────┘                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Which Analyzer is Actually Used?
+
+| Condition                   | Executed Code                                | agreementLevel Calculation          |
+| --------------------------- | -------------------------------------------- | ----------------------------------- |
+| API key exists + AI success | `AIConsensusAnalyzer.performAIAnalysis()`    | AI semantically determines (0-1)    |
+| API key exists + AI failure | `AIConsensusAnalyzer.performBasicAnalysis()` | `1 - (uniquePositionCount - 1) / n` |
+| No API key (no agents)      | `AIConsensusAnalyzer.performBasicAnalysis()` | `1 - (uniquePositionCount - 1) / n` |
+
+> **Note:** `ConsensusAnalyzer` (Jaccard-based, `consensus-analyzer.ts`) is NOT used in MCP server.
+> It exists in `DebateEngine` but is bypassed because `aiConsensusAnalyzer` is always present.
+
+### Light Models for Analysis
+
+AI consensus analysis uses lightweight models for cost efficiency:
+
+| Provider   | Light Model                 |
+| ---------- | --------------------------- |
+| Anthropic  | `claude-haiku-4-5-20251022` |
+| OpenAI     | `gpt-5-mini`                |
+| Google     | `gemini-2.5-flash-lite`     |
+| Perplexity | `sonar`                     |
+
 ### Rule-Based vs AI-Based Analysis
 
 ```
@@ -345,7 +410,7 @@ Round 2: Revision Based on Anonymous Summary
 │   │             ▼               │    meaning         │                  │   │
 │   │   ┌───────────────────┐     │  • Detect negation │                  │   │
 │   │   │  Fallback to      │     │  • Find nuances    │                  │   │
-│   │   │  Rule-Based       │     │  • Cluster themes  │                  │   │
+│   │   │  Basic Analysis   │     │  • Cluster themes  │                  │   │
 │   │   └───────────────────┘     └────────────────────┘                  │   │
 │   │                                                                     │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
