@@ -556,6 +556,29 @@ In addition to MCP Inspector, you can test directly with Claude Desktop:
 
 Restart Claude Desktop to use AI Roundtable tools in conversations.
 
+### Local Development with Claude Code
+
+For testing with Claude Code CLI, create a `.mcp.json` file in the project root:
+
+```json
+{
+  "mcpServers": {
+    "ai-roundtable": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "ANTHROPIC_API_KEY": "your-anthropic-api-key",
+        "OPENAI_API_KEY": "your-openai-api-key",
+        "PERPLEXITY_API_KEY": "your-perplexity-api-key",
+        "GOOGLE_AI_API_KEY": "your-google-ai-api-key"
+      }
+    }
+  }
+}
+```
+
+Make sure to run `pnpm build` before starting Claude Code to ensure the latest changes are compiled.
+
 ---
 
 ## Code Style Guidelines
