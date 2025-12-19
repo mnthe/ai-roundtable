@@ -3,31 +3,39 @@ import { GeminiAgent, createGeminiAgent } from '../../../src/agents/gemini.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 
-// Mock Gemini model
-const createMockModel = (responseText: string, functionCalls?: Array<{ name: string; args: unknown }>) => {
+// Mock GoogleGenAI client for new @google/genai SDK
+const createMockClient = (
+  responseText: string,
+  functionCalls?: Array<{ id?: string; name: string; args: unknown }>
+) => {
   let callCount = 0;
+
   const mockSendMessage = vi.fn().mockImplementation(() => {
     callCount++;
     if (functionCalls && callCount === 1) {
       return Promise.resolve({
-        response: {
-          text: () => responseText,
-          functionCalls: () => functionCalls,
-        },
+        text: responseText,
+        functionCalls: functionCalls,
       });
     }
     return Promise.resolve({
-      response: {
-        text: () => responseText,
-        functionCalls: () => null,
-      },
+      text: responseText,
+      functionCalls: undefined,
     });
   });
 
   return {
-    startChat: vi.fn().mockReturnValue({
-      sendMessage: mockSendMessage,
-    }),
+    chats: {
+      create: vi.fn().mockReturnValue({
+        sendMessage: mockSendMessage,
+        getHistory: vi.fn().mockReturnValue([]),
+      }),
+    },
+    models: {
+      generateContent: vi.fn().mockResolvedValue({
+        text: 'ok',
+      }),
+    },
   };
 };
 
@@ -36,7 +44,7 @@ describe('GeminiAgent', () => {
     id: 'gemini-test',
     name: 'Gemini Test',
     provider: 'google',
-    model: 'gemini-1.5-pro',
+    model: 'gemini-3-flash-preview',
     temperature: 0.7,
   };
 
@@ -49,11 +57,15 @@ describe('GeminiAgent', () => {
     previousResponses: [],
   };
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('constructor', () => {
-    it('should create agent with custom model', () => {
-      const mockModel = createMockModel('test');
+    it('should create agent with custom client', () => {
+      const mockClient = createMockClient('test');
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
 
       expect(agent.id).toBe('gemini-test');
@@ -69,9 +81,9 @@ describe('GeminiAgent', () => {
         confidence: 0.85,
       });
 
-      const mockModel = createMockModel(mockResponse);
+      const mockClient = createMockClient(mockResponse);
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
 
       const response = await agent.generateResponse(defaultContext);
@@ -85,9 +97,9 @@ describe('GeminiAgent', () => {
     });
 
     it('should handle non-JSON response gracefully', async () => {
-      const mockModel = createMockModel('This is a plain text response without JSON');
+      const mockClient = createMockClient('This is a plain text response without JSON');
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
 
       const response = await agent.generateResponse(defaultContext);
@@ -104,9 +116,9 @@ describe('GeminiAgent', () => {
         confidence: 1.5, // Above 1
       });
 
-      const mockModel = createMockModel(mockResponse);
+      const mockClient = createMockClient(mockResponse);
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
 
       const response = await agent.generateResponse(defaultContext);
@@ -115,9 +127,11 @@ describe('GeminiAgent', () => {
     });
 
     it('should include previous responses in context', async () => {
-      const mockModel = createMockModel('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockClient(
+        '{"position":"test","reasoning":"test","confidence":0.5}'
+      );
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
 
       const contextWithPrevious: DebateContext = {
@@ -139,34 +153,68 @@ describe('GeminiAgent', () => {
     });
   });
 
+  describe('healthCheck', () => {
+    it('should return healthy when API responds', async () => {
+      const mockClient = createMockClient('test');
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const result = await agent.healthCheck();
+
+      expect(result.healthy).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should return unhealthy when API fails', async () => {
+      const mockClient = {
+        chats: {
+          create: vi.fn(),
+        },
+        models: {
+          generateContent: vi.fn().mockRejectedValue(new Error('API Error')),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const result = await agent.healthCheck();
+
+      expect(result.healthy).toBe(false);
+      expect(result.error).toBe('API Error');
+    });
+  });
+
   describe('tool use', () => {
     it('should handle function calling', async () => {
-      const mockModel = createMockModel(
-        '{"position":"Based on research","reasoning":"Found relevant sources","confidence":0.9}',
-        [{ name: 'search_web', args: { query: 'AI regulation' } }]
-      );
-
-      // Override to handle multiple calls
       let callCount = 0;
-      (mockModel.startChat as ReturnType<typeof vi.fn>).mockReturnValue({
-        sendMessage: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.resolve({
-              response: {
-                text: () => '',
-                functionCalls: () => [{ name: 'search_web', args: { query: 'AI regulation' } }],
-              },
-            });
-          }
-          return Promise.resolve({
-            response: {
-              text: () => '{"position":"Based on research","reasoning":"Found relevant sources","confidence":0.9}',
-              functionCalls: () => null,
-            },
-          });
-        }),
-      });
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                return Promise.resolve({
+                  text: '',
+                  functionCalls: [
+                    { id: 'call-1', name: 'search_web', args: { query: 'AI regulation' } },
+                  ],
+                });
+              }
+              return Promise.resolve({
+                text: '{"position":"Based on research","reasoning":"Found relevant sources","confidence":0.9}',
+                functionCalls: undefined,
+              });
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
 
       const mockToolkit: AgentToolkit = {
         getTools: () => [
@@ -184,13 +232,15 @@ describe('GeminiAgent', () => {
       };
 
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
       agent.setToolkit(mockToolkit);
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', { query: 'AI regulation' });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
+        query: 'AI regulation',
+      });
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
       expect(response.citations).toHaveLength(1);
@@ -199,26 +249,28 @@ describe('GeminiAgent', () => {
 
     it('should handle tool execution errors', async () => {
       let callCount = 0;
-      const mockModel = {
-        startChat: vi.fn().mockReturnValue({
-          sendMessage: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) {
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                return Promise.resolve({
+                  text: '',
+                  functionCalls: [{ id: 'call-1', name: 'failing_tool', args: { input: 'test' } }],
+                });
+              }
               return Promise.resolve({
-                response: {
-                  text: () => '',
-                  functionCalls: () => [{ name: 'failing_tool', args: { input: 'test' } }],
-                },
+                text: '{"position":"Handled error","reasoning":"Continued despite tool failure","confidence":0.6}',
+                functionCalls: undefined,
               });
-            }
-            return Promise.resolve({
-              response: {
-                text: () => '{"position":"Handled error","reasoning":"Continued despite tool failure","confidence":0.6}',
-                functionCalls: () => null,
-              },
-            });
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
           }),
-        }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
       };
 
       const mockToolkit: AgentToolkit = {
@@ -233,7 +285,7 @@ describe('GeminiAgent', () => {
       };
 
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
       agent.setToolkit(mockToolkit);
 
@@ -243,35 +295,39 @@ describe('GeminiAgent', () => {
 
     it('should extract position/reasoning from submit_response tool call', async () => {
       let callCount = 0;
-      const mockModel = {
-        startChat: vi.fn().mockReturnValue({
-          sendMessage: vi.fn().mockImplementation(() => {
-            callCount++;
-            if (callCount === 1) {
-              return Promise.resolve({
-                response: {
-                  text: () => '',
-                  functionCalls: () => [
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockImplementation(() => {
+              callCount++;
+              if (callCount === 1) {
+                return Promise.resolve({
+                  text: '',
+                  functionCalls: [
                     {
+                      id: 'call-1',
                       name: 'submit_response',
                       args: {
                         position: 'AI should be carefully regulated to balance innovation and safety',
-                        reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
+                        reasoning:
+                          'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
                         confidence: 0.85,
                       },
                     },
                   ],
-                },
+                });
+              }
+              return Promise.resolve({
+                text: '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.',
+                functionCalls: undefined,
               });
-            }
-            return Promise.resolve({
-              response: {
-                text: () => '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.',
-                functionCalls: () => null,
-              },
-            });
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
           }),
-        }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
       };
 
       const mockToolkit: AgentToolkit = {
@@ -290,22 +346,27 @@ describe('GeminiAgent', () => {
           success: true,
           data: {
             position: 'AI should be carefully regulated to balance innovation and safety',
-            reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
+            reasoning:
+              'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
             confidence: 0.85,
           },
         }),
       };
 
       const agent = new GeminiAgent(defaultConfig, {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
       agent.setToolkit(mockToolkit);
 
       const response = await agent.generateResponse(defaultContext);
 
       // Should extract from tool call, NOT from text response
-      expect(response.position).toBe('AI should be carefully regulated to balance innovation and safety');
-      expect(response.reasoning).toBe('Regulation is necessary to prevent misuse while ensuring technological progress continues.');
+      expect(response.position).toBe(
+        'AI should be carefully regulated to balance innovation and safety'
+      );
+      expect(response.reasoning).toBe(
+        'Regulation is necessary to prevent misuse while ensuring technological progress continues.'
+      );
       expect(response.confidence).toBe(0.85);
 
       // Should record the tool call
@@ -317,16 +378,16 @@ describe('GeminiAgent', () => {
 
 describe('createGeminiAgent', () => {
   it('should create agent with factory function', () => {
-    const mockModel = createMockModel('test');
+    const mockClient = createMockClient('test');
     const config: AgentConfig = {
       id: 'factory-agent',
       name: 'Factory Agent',
       provider: 'google',
-      model: 'gemini-1.5-pro',
+      model: 'gemini-3-flash-preview',
     };
 
     const agent = createGeminiAgent(config, undefined, {
-      model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+      client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
     });
 
     expect(agent.id).toBe('factory-agent');
@@ -334,7 +395,7 @@ describe('createGeminiAgent', () => {
   });
 
   it('should set toolkit when provided', () => {
-    const mockModel = createMockModel('test');
+    const mockClient = createMockClient('test');
     const mockToolkit: AgentToolkit = {
       getTools: () => [],
       executeTool: vi.fn(),
@@ -349,7 +410,7 @@ describe('createGeminiAgent', () => {
       },
       mockToolkit,
       {
-        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       }
     );
 

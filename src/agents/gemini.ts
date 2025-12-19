@@ -1,14 +1,9 @@
 /**
- * Gemini Agent - Google Gemini implementation
+ * Gemini Agent - Google Gemini implementation using the new @google/genai SDK
  */
 
-import {
-  GoogleGenerativeAI,
-  SchemaType,
-  type GenerativeModel,
-  type Content,
-  type FunctionDeclaration,
-} from '@google/generative-ai';
+import { GoogleGenAI, Type } from '@google/genai';
+import type { Chat, FunctionDeclaration, Content } from '@google/genai';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import type {
   AgentConfig,
@@ -24,39 +19,31 @@ import type {
 export interface GeminiAgentOptions {
   /** Google AI API key (defaults to GOOGLE_API_KEY env var) */
   apiKey?: string;
-  /** Custom GenerativeModel instance (for testing) */
-  model?: GenerativeModel;
+  /** Custom GoogleGenAI instance (for testing) */
+  client?: GoogleGenAI;
 }
 
 /**
- * Gemini Agent using Google's Generative AI API
+ * Gemini Agent using Google's new unified Gen AI SDK (@google/genai)
  *
  * Supports:
  * - Function calling (tools)
  * - Structured response parsing
  * - Citation tracking from tool calls
+ * - Multi-turn conversations
  */
 export class GeminiAgent extends BaseAgent {
-  private genAI: GoogleGenerativeAI;
-  private genModel: GenerativeModel;
+  private ai: GoogleGenAI;
 
   constructor(config: AgentConfig, options?: GeminiAgentOptions) {
     super(config);
 
     const apiKey = options?.apiKey ?? process.env.GOOGLE_API_KEY ?? '';
 
-    if (options?.model) {
-      this.genModel = options.model;
-      this.genAI = new GoogleGenerativeAI(apiKey);
+    if (options?.client) {
+      this.ai = options.client;
     } else {
-      this.genAI = new GoogleGenerativeAI(apiKey);
-      this.genModel = this.genAI.getGenerativeModel({
-        model: this.model,
-        generationConfig: {
-          maxOutputTokens: this.maxTokens,
-          temperature: this.temperature,
-        },
-      });
+      this.ai = new GoogleGenAI({ apiKey });
     }
   }
 
@@ -76,27 +63,35 @@ export class GeminiAgent extends BaseAgent {
     // Build chat history
     const history: Content[] = [];
 
-    // Create chat session with system instruction
-    const chat = this.genModel.startChat({
+    // Create chat session with system instruction in config
+    const chat: Chat = this.ai.chats.create({
+      model: this.model,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: this.temperature,
+        maxOutputTokens: this.maxTokens,
+        tools: tools ? [{ functionDeclarations: tools }] : undefined,
+      },
       history,
-      systemInstruction: systemPrompt,
-      tools: tools ? [{ functionDeclarations: tools }] : undefined,
     });
 
     // Send message
-    let result = await chat.sendMessage(userMessage);
-    let response = result.response;
+    let response = await chat.sendMessage({ message: userMessage });
 
     // Handle function calling loop
-    while (response.functionCalls() && response.functionCalls()!.length > 0) {
-      const functionCalls = response.functionCalls()!;
-      const functionResponses: Array<{ name: string; response: unknown }> = [];
+    while (response.functionCalls && response.functionCalls.length > 0) {
+      const functionCalls = response.functionCalls;
+      const functionResponses: Array<{
+        id?: string;
+        name: string;
+        response: Record<string, unknown>;
+      }> = [];
 
       for (const functionCall of functionCalls) {
-        const toolResult = await this.executeTool(functionCall.name, functionCall.args);
+        const toolResult = await this.executeTool(functionCall.name ?? '', functionCall.args);
 
         toolCalls.push({
-          toolName: functionCall.name,
+          toolName: functionCall.name ?? 'unknown',
           input: functionCall.args,
           output: toolResult,
           timestamp: new Date(),
@@ -104,7 +99,9 @@ export class GeminiAgent extends BaseAgent {
 
         // Extract citations from search results
         if (functionCall.name === 'search_web' && toolResult && typeof toolResult === 'object') {
-          const searchResult = toolResult as { results?: Array<{ title: string; url: string; snippet?: string }> };
+          const searchResult = toolResult as {
+            results?: Array<{ title: string; url: string; snippet?: string }>;
+          };
           if (searchResult.results) {
             for (const item of searchResult.results) {
               citations.push({
@@ -117,25 +114,26 @@ export class GeminiAgent extends BaseAgent {
         }
 
         functionResponses.push({
-          name: functionCall.name,
-          response: toolResult,
+          id: functionCall.id,
+          name: functionCall.name ?? '',
+          response: toolResult as Record<string, unknown>,
         });
       }
 
       // Send function responses back
-      result = await chat.sendMessage(
-        functionResponses.map((fr) => ({
+      response = await chat.sendMessage({
+        message: functionResponses.map((fr) => ({
           functionResponse: {
+            id: fr.id,
             name: fr.name,
-            response: fr.response as object,
+            response: fr.response,
           },
-        }))
-      );
-      response = result.response;
+        })),
+      });
     }
 
     // Extract text from final response
-    const rawText = response.text();
+    const rawText = response.text ?? '';
 
     // Check if agent used submit_response tool
     const submitResponseCall = toolCalls.find((tc) => tc.toolName === 'submit_response');
@@ -184,9 +182,18 @@ export class GeminiAgent extends BaseAgent {
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      const result = await this.genModel.generateContent('test');
-      await result.response.text();
-      return { healthy: true };
+      const response = await this.ai.models.generateContent({
+        model: this.model,
+        contents: 'test',
+        config: {
+          maxOutputTokens: 10,
+        },
+      });
+      // Check if we got a valid response
+      if (response.text !== undefined) {
+        return { healthy: true };
+      }
+      return { healthy: false, error: 'No response text' };
     } catch (error) {
       return {
         healthy: false,
@@ -214,6 +221,7 @@ export class GeminiAgent extends BaseAgent {
 
   /**
    * Build Gemini-format tool definitions from toolkit
+   * Uses the new @google/genai SDK format with parametersJsonSchema
    */
   private buildGeminiTools(): FunctionDeclaration[] {
     if (!this.toolkit) {
@@ -224,12 +232,12 @@ export class GeminiAgent extends BaseAgent {
       name: tool.name,
       description: tool.description,
       parameters: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: Object.fromEntries(
           Object.entries(tool.parameters).map(([key, value]) => [
             key,
             {
-              type: SchemaType.STRING,
+              type: Type.STRING,
               description: (value as { description?: string }).description ?? '',
             },
           ])
