@@ -135,8 +135,35 @@ export class ChatGPTAgent extends BaseAgent {
     // Extract text from final response
     const rawText = choice?.message?.content ?? '';
 
-    // Parse the response
-    const parsed = this.parseResponse(rawText, context);
+    // Check if agent used submit_response tool
+    const submitResponseCall = toolCalls.find((tc) => tc.toolName === 'submit_response');
+    let parsed: Partial<AgentResponse>;
+
+    if (submitResponseCall && submitResponseCall.output) {
+      // Extract from submit_response tool result
+      const toolOutput = submitResponseCall.output as {
+        success?: boolean;
+        data?: {
+          position?: string;
+          reasoning?: string;
+          confidence?: number;
+        };
+      };
+
+      if (toolOutput.success && toolOutput.data) {
+        parsed = {
+          position: toolOutput.data.position ?? 'Unable to determine position',
+          reasoning: toolOutput.data.reasoning ?? 'Unable to determine reasoning',
+          confidence: Math.min(1, Math.max(0, toolOutput.data.confidence ?? 0.5)),
+        };
+      } else {
+        // Tool call failed, fall back to parsing text
+        parsed = this.parseResponse(rawText, context);
+      }
+    } else {
+      // No submit_response tool call, parse from text
+      parsed = this.parseResponse(rawText, context);
+    }
 
     return {
       agentId: this.id,

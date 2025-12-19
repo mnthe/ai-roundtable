@@ -7,6 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { createLogger } from '../utils/logger.js';
 import { DebateEngine } from '../core/DebateEngine.js';
 import { SessionManager } from '../core/session-manager.js';
+import { AIConsensusAnalyzer } from '../core/ai-consensus-analyzer.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
 import { DefaultAgentToolkit } from '../tools/toolkit.js';
@@ -69,6 +70,9 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
   const toolkit = new DefaultAgentToolkit();
   const debateEngine = options.debateEngine || new DebateEngine({ toolkit });
 
+  // Initialize AI-based consensus analyzer (will be set up after agents are registered)
+  let aiConsensusAnalyzer: AIConsensusAnalyzer | null = null;
+
   // Set toolkit for agents
   agentRegistry.setToolkit(toolkit);
 
@@ -84,6 +88,12 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
     for (const warning of setupResult.warnings) {
       console.warn(`[ai-roundtable] ${warning}`);
     }
+
+    // Initialize AI consensus analyzer with available agents
+    aiConsensusAnalyzer = new AIConsensusAnalyzer({
+      registry: agentRegistry,
+      fallbackToRuleBased: true,
+    });
   }
 
   // Create server instance
@@ -124,7 +134,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           break;
 
         case 'get_consensus':
-          result = await handleGetConsensus(args, debateEngine, sessionManager);
+          result = await handleGetConsensus(args, sessionManager, aiConsensusAnalyzer, debateEngine);
           break;
 
         case 'get_agents':
@@ -148,7 +158,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           break;
 
         case 'get_round_details':
-          result = await handleGetRoundDetails(args, sessionManager, debateEngine);
+          result = await handleGetRoundDetails(args, sessionManager, aiConsensusAnalyzer, debateEngine);
           break;
 
         case 'get_response_detail':
@@ -238,7 +248,12 @@ async function handleStartRoundtable(
     }
 
     // Create summary response (less verbose)
-    const agentSummaries = roundResults[0].responses.map((response) => ({
+    const firstRound = roundResults[0];
+    if (!firstRound) {
+      return createErrorResponse('No round results available');
+    }
+
+    const agentSummaries = firstRound.responses.map((response) => ({
       agentId: response.agentId,
       agentName: response.agentName,
       positionSummary: response.position.substring(0, 150) + (response.position.length > 150 ? '...' : ''),
@@ -251,7 +266,7 @@ async function handleStartRoundtable(
       roundNumber: 1,
       totalRounds: session.totalRounds,
       agentSummaries,
-      consensusLevel: roundResults[0].consensus.agreementLevel,
+      consensusLevel: firstRound.consensus.agreementLevel,
     });
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -310,6 +325,10 @@ async function handleContinueRoundtable(
 
     // Create summary response (less verbose) - only latest round
     const latestRound = roundResults[roundResults.length - 1];
+    if (!latestRound) {
+      return createErrorResponse('No round results available');
+    }
+
     const agentSummaries = latestRound.responses.map((response) => ({
       agentId: response.agentId,
       agentName: response.agentName,
@@ -333,8 +352,9 @@ async function handleContinueRoundtable(
  */
 async function handleGetConsensus(
   args: unknown,
-  debateEngine: DebateEngine,
-  sessionManager: SessionManager
+  sessionManager: SessionManager,
+  aiConsensusAnalyzer: AIConsensusAnalyzer | null,
+  debateEngine: DebateEngine
 ): Promise<ToolResponse> {
   try {
     // Validate input
@@ -352,8 +372,10 @@ async function handleGetConsensus(
       return createErrorResponse('No responses found in this session');
     }
 
-    // Analyze consensus
-    const consensus = debateEngine.analyzeConsensus(responses);
+    // Analyze consensus using AI if available, otherwise fall back to rule-based
+    const consensus = aiConsensusAnalyzer
+      ? await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic)
+      : debateEngine.analyzeConsensus(responses);
 
     return createSuccessResponse({
       sessionId: input.sessionId,
@@ -736,6 +758,7 @@ async function handleControlSession(
 async function handleGetRoundDetails(
   args: unknown,
   sessionManager: SessionManager,
+  aiConsensusAnalyzer: AIConsensusAnalyzer | null,
   debateEngine: DebateEngine
 ): Promise<ToolResponse> {
   try {
@@ -762,8 +785,10 @@ async function handleGetRoundDetails(
       return createErrorResponse(`No responses found for round ${input.roundNumber}`);
     }
 
-    // Analyze consensus for this round
-    const consensus = debateEngine.analyzeConsensus(responses);
+    // Analyze consensus using AI if available, otherwise fall back to rule-based
+    const consensus = aiConsensusAnalyzer
+      ? await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic)
+      : debateEngine.analyzeConsensus(responses);
 
     return createSuccessResponse({
       sessionId: input.sessionId,

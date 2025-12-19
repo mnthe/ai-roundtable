@@ -5,6 +5,66 @@
 import type { AgentResponse, ConsensusResult } from '../types/index.js';
 
 /**
+ * Common English stop words for text analysis
+ */
+const STOP_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'but',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'with',
+  'by',
+  'from',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'do',
+  'does',
+  'did',
+  'will',
+  'would',
+  'should',
+  'could',
+  'may',
+  'might',
+  'must',
+  'can',
+  'this',
+  'that',
+  'these',
+  'those',
+  'not',
+  'i',
+  'you',
+  'he',
+  'she',
+  'it',
+  'we',
+  'they',
+]);
+
+/**
+ * Similarity threshold for clustering positions
+ * 0.35 allows for similar positions with different vocabulary
+ */
+const SIMILARITY_THRESHOLD = 0.35;
+
+/**
  * Analyze consensus among agent responses
  *
  * This is a basic implementation that:
@@ -124,95 +184,6 @@ export class ConsensusAnalyzer {
   }
 
   /**
-   * Calculate similarity between positions using keyword overlap
-   *
-   * @param positions - Array of position strings
-   * @returns Similarity score from 0 to 1
-   */
-  private calculatePositionSimilarity(positions: string[]): number {
-    // Extract keywords (simple word-based approach)
-    const stopWords = new Set([
-      'the',
-      'a',
-      'an',
-      'and',
-      'or',
-      'but',
-      'in',
-      'on',
-      'at',
-      'to',
-      'for',
-      'of',
-      'with',
-      'by',
-      'from',
-      'is',
-      'are',
-      'was',
-      'were',
-      'be',
-      'been',
-      'being',
-      'have',
-      'has',
-      'had',
-      'do',
-      'does',
-      'did',
-      'will',
-      'would',
-      'should',
-      'could',
-      'may',
-      'might',
-      'must',
-      'can',
-      'this',
-      'that',
-      'these',
-      'those',
-      'i',
-      'you',
-      'he',
-      'she',
-      'it',
-      'we',
-      'they',
-    ]);
-
-    const keywordSets = positions.map((pos) => {
-      const words = pos
-        .toLowerCase()
-        .replace(/[^\w\s]/g, ' ')
-        .split(/\s+/)
-        .filter((w) => w.length > 3 && !stopWords.has(w));
-      return new Set(words);
-    });
-
-    // Calculate pairwise overlaps
-    let totalOverlap = 0;
-    let comparisons = 0;
-
-    for (let i = 0; i < keywordSets.length; i++) {
-      for (let j = i + 1; j < keywordSets.length; j++) {
-        const set1 = keywordSets[i];
-        const set2 = keywordSets[j];
-        if (!set1 || !set2) continue;
-        const intersection = new Set([...set1].filter((x) => set2.has(x)));
-        const union = new Set([...set1, ...set2]);
-
-        if (union.size > 0) {
-          totalOverlap += intersection.size / union.size;
-          comparisons++;
-        }
-      }
-    }
-
-    return comparisons > 0 ? totalOverlap / comparisons : 0;
-  }
-
-  /**
    * Find common points across responses
    *
    * @param responses - Agent responses
@@ -279,55 +250,12 @@ export class ConsensusAnalyzer {
    */
   private extractCommonKeywords(positions: string[]): string[] {
     const wordFrequency = new Map<string, number>();
-    const stopWords = new Set([
-      'the',
-      'a',
-      'an',
-      'and',
-      'or',
-      'but',
-      'in',
-      'on',
-      'at',
-      'to',
-      'for',
-      'of',
-      'with',
-      'by',
-      'from',
-      'is',
-      'are',
-      'was',
-      'were',
-      'be',
-      'been',
-      'being',
-      'have',
-      'has',
-      'had',
-      'do',
-      'does',
-      'did',
-      'will',
-      'would',
-      'should',
-      'could',
-      'may',
-      'might',
-      'must',
-      'can',
-      'this',
-      'that',
-      'these',
-      'those',
-      'not',
-    ]);
 
     for (const position of positions) {
       const words = position
         .replace(/[^\w\s]/g, ' ')
         .split(/\s+/)
-        .filter((w) => w.length > 3 && !stopWords.has(w));
+        .filter((w) => w.length > 3 && !STOP_WORDS.has(w));
 
       // Use Set to count each word only once per position
       const uniqueWords = new Set(words);
@@ -451,10 +379,6 @@ export class ConsensusAnalyzer {
     const clusters: AgentResponse[][] = [];
     const assigned = new Set<number>();
 
-    // Similarity threshold for considering positions as similar
-    // 0.35 allows for similar positions with different vocabulary
-    const SIMILARITY_THRESHOLD = 0.35;
-
     for (let i = 0; i < responses.length; i++) {
       if (assigned.has(i)) continue;
 
@@ -498,72 +422,8 @@ export class ConsensusAnalyzer {
    * @returns Similarity score from 0 to 1
    */
   private calculatePairwiseSimilarity(pos1: string, pos2: string): number {
-    const stopWords = new Set([
-      'the',
-      'a',
-      'an',
-      'and',
-      'or',
-      'but',
-      'in',
-      'on',
-      'at',
-      'to',
-      'for',
-      'of',
-      'with',
-      'by',
-      'from',
-      'is',
-      'are',
-      'was',
-      'were',
-      'be',
-      'been',
-      'being',
-      'have',
-      'has',
-      'had',
-      'do',
-      'does',
-      'did',
-      'will',
-      'would',
-      'should',
-      'could',
-      'may',
-      'might',
-      'must',
-      'can',
-      'this',
-      'that',
-      'these',
-      'those',
-    ]);
-
-    const normalizeWord = (word: string): string => {
-      // Simple stemming: remove common suffixes
-      word = word.replace(/ing$/, ''); // replacing -> replac
-      word = word.replace(/ed$/, ''); // replaced -> replac
-      word = word.replace(/s$/, ''); // developers -> developer
-      word = word.replace(/es$/, ''); // fixes -> fix
-      word = word.replace(/er$/, ''); // developer -> develop
-      return word;
-    };
-
-    const words1 = pos1
-      .toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length > 3 && !stopWords.has(w))
-      .map(normalizeWord);
-
-    const words2 = pos2
-      .toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length > 3 && !stopWords.has(w))
-      .map(normalizeWord);
+    const words1 = this.extractNormalizedWords(pos1);
+    const words2 = this.extractNormalizedWords(pos2);
 
     const set1 = new Set(words1);
     const set2 = new Set(words2);
@@ -617,6 +477,37 @@ export class ConsensusAnalyzer {
     }
 
     return summary;
+  }
+
+  /**
+   * Extract and normalize words from a position string
+   *
+   * Applies stop word filtering, stemming, and empty string removal.
+   *
+   * @param text - Position string to process
+   * @returns Array of normalized words
+   */
+  private extractNormalizedWords(text: string): string[] {
+    const normalizeWord = (word: string): string => {
+      // Simple stemming: remove common suffixes
+      // Order matters: 'es' before 's' to handle 'fixes' -> 'fix' correctly
+      word = word.replace(/ing$/, ''); // replacing -> replac
+      word = word.replace(/ed$/, ''); // replaced -> replac
+      word = word.replace(/ies$/, 'y'); // families -> family
+      word = word.replace(/es$/, ''); // fixes -> fix
+      word = word.replace(/s$/, ''); // developers -> developer
+      word = word.replace(/er$/, ''); // developer -> develop
+      // Ensure word is still meaningful after stemming
+      return word.length >= 2 ? word : '';
+    };
+
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !STOP_WORDS.has(w))
+      .map(normalizeWord)
+      .filter((w) => w.length > 0);
   }
 }
 

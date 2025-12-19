@@ -56,10 +56,11 @@ export interface PerplexityAgentOptions {
  * Perplexity Agent using Perplexity's OpenAI-compatible API
  *
  * Perplexity models have built-in web search capabilities.
- * Supported models:
- * - llama-3.1-sonar-small-128k-online
- * - llama-3.1-sonar-large-128k-online
- * - llama-3.1-sonar-huge-128k-online
+ * Supported models (2025):
+ * - sonar: Fast, lightweight model based on Llama 3.3 70B
+ * - sonar-pro: Enhanced search with richer context
+ * - sonar-reasoning: Chain-of-thought reasoning with live search
+ * - sonar-reasoning-pro: Advanced reasoning powered by DeepSeek-R1
  *
  * Supports:
  * - Built-in web search (citations returned automatically)

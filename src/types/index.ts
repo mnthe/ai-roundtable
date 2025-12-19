@@ -123,6 +123,28 @@ export interface ConsensusResult {
   summary: string;
 }
 
+/**
+ * Enhanced AI-based consensus result with semantic analysis
+ */
+export interface AIConsensusResult extends ConsensusResult {
+  /** Position clusters identified by AI */
+  clusters?: {
+    theme: string;
+    agentIds: string[];
+    summary: string;
+  }[];
+  /** Nuanced aspects that rule-based analysis would miss */
+  nuances?: {
+    partialAgreements: string[];
+    conditionalPositions: string[];
+    uncertainties: string[];
+  };
+  /** AI's reasoning for the analysis */
+  reasoning?: string;
+  /** ID of the agent that performed the analysis */
+  analyzerId?: string;
+}
+
 // ============================================
 // Synthesis Types
 // ============================================

@@ -41,13 +41,23 @@ export interface SetupResult {
 }
 
 /**
- * Default models for each provider
+ * Default models for each provider (heavy models for debate)
  */
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-sonnet-4-5-20250929',
   openai: 'gpt-5.2',
-  google: 'gemini-2.5-flash',
+  google: 'gemini-3-flash-preview',
   perplexity: 'sonar-pro',
+};
+
+/**
+ * Light models for each provider (for analysis tasks - faster & cheaper)
+ */
+export const LIGHT_MODELS: Record<AIProvider, string> = {
+  anthropic: 'claude-haiku-4-5-20251022',
+  openai: 'gpt-5-mini',
+  google: 'gemini-2.5-flash-lite',
+  perplexity: 'sonar',
 };
 
 /**
@@ -203,6 +213,8 @@ export function createDefaultAgents(registry: AgentRegistry): AgentConfig[] {
 /**
  * Run health checks on all agents in the registry
  *
+ * Uses parallel execution for better performance when multiple agents are registered.
+ *
  * @param registry - Agent registry to check
  * @returns Array of health check results
  */
@@ -210,27 +222,29 @@ export async function runHealthChecks(
   registry: AgentRegistry
 ): Promise<Array<{ id: string; name: string; healthy: boolean; error?: string }>> {
   const agents = registry.getAllAgents();
-  const results: Array<{ id: string; name: string; healthy: boolean; error?: string }> = [];
 
-  for (const agent of agents) {
-    const info = agent.getInfo();
-    const result = await agent.healthCheck();
+  // Run all health checks in parallel for better performance
+  const results = await Promise.all(
+    agents.map(async (agent) => {
+      const info = agent.getInfo();
+      const result = await agent.healthCheck();
 
-    results.push({
-      id: info.id,
-      name: info.name,
-      healthy: result.healthy,
-      error: result.error,
-    });
+      // Update registry status based on health check
+      if (!result.healthy) {
+        registry.deactivateAgent(info.id, result.error);
+        console.warn(
+          `[ai-roundtable] Agent "${info.name}" (${info.provider}) health check failed: ${result.error}`
+        );
+      }
 
-    // Update registry status based on health check
-    if (!result.healthy) {
-      registry.deactivateAgent(info.id, result.error);
-      console.warn(
-        `[ai-roundtable] Agent "${info.name}" (${info.provider}) health check failed: ${result.error}`
-      );
-    }
-  }
+      return {
+        id: info.id,
+        name: info.name,
+        healthy: result.healthy,
+        error: result.error,
+      };
+    })
+  );
 
   return results;
 }
