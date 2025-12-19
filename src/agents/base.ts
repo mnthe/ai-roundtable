@@ -182,11 +182,12 @@ Please provide your response in the following JSON format:
           reasoning?: string;
           confidence?: number;
         };
+        // Use || to catch empty strings (not just null/undefined)
         return {
           agentId: this.id,
           agentName: this.name,
-          position: parsed.position ?? 'Unable to determine position',
-          reasoning: parsed.reasoning ?? 'Unable to determine reasoning',
+          position: parsed.position || 'Unable to determine position',
+          reasoning: parsed.reasoning || 'Unable to determine reasoning',
           confidence: Math.min(1, Math.max(0, parsed.confidence ?? 0.5)),
           timestamp: new Date(),
         };
@@ -196,11 +197,13 @@ Please provide your response in the following JSON format:
     }
 
     // Fallback: treat the entire response as position/reasoning
+    // Use || to ensure we never return empty strings
+    const trimmedRaw = raw.trim();
     return {
       agentId: this.id,
       agentName: this.name,
-      position: raw.slice(0, 200),
-      reasoning: raw,
+      position: trimmedRaw.slice(0, 200) || 'Unable to determine position',
+      reasoning: trimmedRaw || 'Unable to determine reasoning',
       confidence: 0.5,
       timestamp: new Date(),
     };

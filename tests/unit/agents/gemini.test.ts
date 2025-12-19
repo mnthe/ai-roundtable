@@ -109,6 +109,50 @@ describe('GeminiAgent', () => {
       expect(response.confidence).toBe(0.5); // fallback
     });
 
+    it('should handle empty response text gracefully', async () => {
+      // Simulate Gemini returning empty text (e.g., thinking models or tool-only responses)
+      const mockClient = createMockClient('');
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should never return empty strings - fallback to default messages
+      expect(response.position).toBe('Unable to determine position');
+      expect(response.reasoning).toBe('Unable to determine reasoning');
+      expect(response.confidence).toBe(0.5);
+    });
+
+    it('should handle undefined response text gracefully', async () => {
+      // Simulate Gemini returning undefined text
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: undefined,
+              functionCalls: undefined,
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should never return empty strings - fallback to default messages
+      expect(response.position).toBe('Unable to determine position');
+      expect(response.reasoning).toBe('Unable to determine reasoning');
+      expect(response.confidence).toBe(0.5);
+    });
+
     it('should clamp confidence to 0-1 range', async () => {
       const mockResponse = JSON.stringify({
         position: 'Test',

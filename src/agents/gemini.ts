@@ -165,11 +165,15 @@ export class GeminiAgent extends BaseAgent {
       parsed = this.parseResponse(rawText, context);
     }
 
+    // Validate response has content - use || to catch empty strings (not just null/undefined)
+    const position = parsed.position || 'Unable to determine position';
+    const reasoning = parsed.reasoning || rawText || 'Unable to determine reasoning';
+
     return {
       agentId: this.id,
       agentName: this.name,
-      position: parsed.position ?? 'Unable to determine position',
-      reasoning: parsed.reasoning ?? rawText,
+      position,
+      reasoning,
       confidence: parsed.confidence ?? 0.5,
       citations: citations.length > 0 ? citations : undefined,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
