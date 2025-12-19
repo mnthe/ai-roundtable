@@ -457,8 +457,9 @@ During debates, agents have access to these tools:
 
 ## Documentation
 
+- [Architecture & Flow](docs/ARCHITECTURE.md) - System architecture and debate flow visualization
 - [API Reference](docs/API.md) - Complete API documentation
-- [Development Guide](docs/DEVELOPMENT.md) - Architecture and contribution guide
+- [Development Guide](docs/DEVELOPMENT.md) - Contribution guide
 - [Testing Guide](docs/TESTING.md) - Testing patterns and practices
 
 ## License
