@@ -293,6 +293,15 @@ export class AgentRegistry {
   getDefaultModel(provider: AIProvider): string | undefined {
     return this.providers.get(provider)?.defaultModel;
   }
+
+  /**
+   * Get the factory function for a provider
+   *
+   * Useful for creating agents outside the registry (e.g., temporary light model agents)
+   */
+  getProviderFactory(provider: AIProvider): AgentFactory | undefined {
+    return this.providers.get(provider)?.factory;
+  }
 }
 
 /**
