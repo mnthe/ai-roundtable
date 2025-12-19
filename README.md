@@ -1,69 +1,56 @@
 # AI Roundtable
 
-Multi-AI debate platform that enables structured discussions between different AI models (Claude, ChatGPT, Gemini, Perplexity) as an MCP server.
+A Multi-AI debate platform that enables structured discussions between different AI models (Claude, ChatGPT, Gemini, Perplexity) through the Model Context Protocol (MCP).
 
-## Features
+## Overview
 
-- **Multi-AI Debates**: Run structured debates with Claude, ChatGPT, Gemini, and Perplexity
-- **Multiple Debate Modes**:
-  - Collaborative - Build consensus together
-  - Adversarial - Challenge opposing viewpoints
-  - Socratic - Explore through questioning
-  - Expert Panel - Parallel expert assessments
-- **Advanced Search**: Perplexity search with recency filters, domain restrictions, and image support
-- **Tool Use**: AI agents can search the web and fact-check claims
-- **Consensus Analysis**: Automatic identification of agreement/disagreement points
-- **MCP Integration**: Works with Claude Desktop and other MCP clients
-- **Session Persistence**: SQLite-based storage for debate history
+AI Roundtable orchestrates debates between multiple AI models using various discussion modes. Each AI agent participates in structured rounds, providing positions, reasoning, and confidence levels on topics. The platform analyzes consensus and tracks discussions through persistent storage.
+
+### Key Features
+
+- **4 AI Providers**: Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), Perplexity
+- **7 Debate Modes**: Collaborative, Adversarial, Socratic, Expert Panel, Devil's Advocate, Delphi, Red Team/Blue Team
+- **Tool Support**: Agents can use web search, fact-checking, and Perplexity's advanced search
+- **Persistent Storage**: SQLite-based session storage
+- **MCP Protocol**: Standard MCP server interface for integration with Claude Desktop and other MCP clients
 
 ## Quick Start
 
 ### Installation
 
-**Option 1: npx (Recommended)**
-
-Run directly from GitHub without installation:
-
 ```bash
+# Option 1: Run directly with npx (Recommended)
 npx github:mnthe/ai-roundtable
-```
 
-**Option 2: Clone and Build**
-
-```bash
-# Clone the repository
+# Option 2: Clone and build locally
 git clone https://github.com/mnthe/ai-roundtable.git
 cd ai-roundtable
-
-# Install dependencies
 pnpm install
-
-# Build
 pnpm build
 ```
 
-### Configuration
+### Environment Setup
 
 Create a `.env` file with your API keys:
 
 ```bash
-cp .env.example .env
+# Required: At least one API key
+ANTHROPIC_API_KEY=sk-ant-...     # For Claude agents
+OPENAI_API_KEY=sk-...            # For ChatGPT agents
+GOOGLE_AI_API_KEY=...            # For Gemini agents
+PERPLEXITY_API_KEY=pplx-...      # For Perplexity agents
+
+# Optional
+DATABASE_PATH=./data/roundtable.db
+LOG_LEVEL=info
 ```
 
-Required keys (at least one):
-- `ANTHROPIC_API_KEY` - For Claude agents
-- `OPENAI_API_KEY` - For ChatGPT agents
-- `GOOGLE_AI_API_KEY` - For Gemini agents
-- `PERPLEXITY_API_KEY` - For Perplexity agents
+### Claude Desktop Integration
 
-### Usage with Claude Desktop
-
-Add to your Claude Desktop MCP configuration:
+Add to your Claude Desktop configuration:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-**Option 1: Using npx (Recommended)**
 
 ```json
 {
@@ -72,29 +59,10 @@ Add to your Claude Desktop MCP configuration:
       "command": "npx",
       "args": ["github:mnthe/ai-roundtable"],
       "env": {
-        "ANTHROPIC_API_KEY": "your-key",
-        "OPENAI_API_KEY": "your-key",
-        "GOOGLE_AI_API_KEY": "your-key",
-        "PERPLEXITY_API_KEY": "your-key"
-      }
-    }
-  }
-}
-```
-
-**Option 2: Using local build**
-
-```json
-{
-  "mcpServers": {
-    "ai-roundtable": {
-      "command": "node",
-      "args": ["/path/to/ai-roundtable/dist/index.js"],
-      "env": {
-        "ANTHROPIC_API_KEY": "your-key",
-        "OPENAI_API_KEY": "your-key",
-        "GOOGLE_AI_API_KEY": "your-key",
-        "PERPLEXITY_API_KEY": "your-key"
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "OPENAI_API_KEY": "sk-...",
+        "GOOGLE_AI_API_KEY": "...",
+        "PERPLEXITY_API_KEY": "pplx-..."
       }
     }
   }
@@ -103,202 +71,197 @@ Add to your Claude Desktop MCP configuration:
 
 ## MCP Tools
 
-### start_roundtable
+### `start_roundtable`
 
-Start a new AI debate.
-
-```typescript
-{
-  topic: string;      // Required: The debate topic
-  mode?: DebateMode;  // Optional: 'collaborative' | 'adversarial' | 'socratic' | 'expert-panel'
-  agents?: string[];  // Optional: Agent IDs to participate
-  rounds?: number;    // Optional: Number of rounds (default: 3)
-}
-```
-
-**Example:**
-```
-Start a debate on "Should AI development be regulated?" using adversarial mode with Claude and ChatGPT
-```
-
-### continue_roundtable
-
-Continue an existing debate.
+Start a new debate session.
 
 ```typescript
 {
-  sessionId: string;       // Required: Session ID
-  rounds?: number;         // Optional: Additional rounds
-  focusQuestion?: string;  // Optional: New focus question
+  topic: string;        // Required: Debate topic
+  mode?: DebateMode;    // Default: 'collaborative'
+  agents?: string[];    // Default: all available
+  rounds?: number;      // Default: 3
 }
 ```
 
-### get_consensus
+### `continue_roundtable`
 
-Get consensus analysis for a debate.
+Continue an existing debate session.
 
 ```typescript
 {
-  sessionId: string;  // Required: Session ID
+  sessionId: string;    // Required: Session ID
+  rounds?: number;      // Additional rounds to run
+  focusQuestion?: string;
 }
 ```
 
-### get_agents
+### `get_consensus`
 
-List available AI agents with their capabilities.
+Get consensus analysis for a session.
 
-### list_sessions
+```typescript
+{
+  sessionId: string;    // Required: Session ID
+}
+```
 
-List all debate sessions with status and metadata.
+### `get_agents`
+
+List available AI agents and their configurations.
+
+### `list_sessions`
+
+List all debate sessions with their status.
 
 ## Debate Modes
 
-### Collaborative Mode
-Agents work together to build comprehensive understanding. Sequential execution where each agent builds on previous responses.
+| Mode | Execution | Description |
+|------|-----------|-------------|
+| **Collaborative** | Parallel | Agents build consensus by finding common ground |
+| **Adversarial** | Sequential | Agents challenge and counter-argue positions |
+| **Socratic** | Sequential | Dialogue through probing questions |
+| **Expert Panel** | Parallel | Independent expert assessments |
+| **Devil's Advocate** | Sequential | Structured opposition: propose/oppose/evaluate |
+| **Delphi** | Parallel | Anonymized iterative consensus building |
+| **Red Team/Blue Team** | Parallel | Attack/defense team dynamics |
 
-### Adversarial Mode
-Agents challenge each other's positions. Sequential execution with emphasis on counter-arguments and critiques.
+### Mode Details
 
-### Socratic Mode
-Agents explore topics through questioning. Sequential dialogue focused on probing assumptions and seeking deeper understanding.
+**Collaborative**: All agents respond in parallel, focusing on finding common ground and building on each other's ideas. Best for brainstorming and consensus formation.
 
-### Expert Panel Mode
-Agents provide parallel expert assessments. Parallel execution for efficient multi-perspective analysis.
+**Adversarial**: Agents respond sequentially, challenging previous positions with counter-arguments. Best for stress-testing ideas and identifying weaknesses.
 
-## Supported AI Providers
+**Socratic**: Sequential dialogue focused on probing questions rather than direct answers. Explores assumptions and seeks deeper understanding.
 
-| Provider | Model Examples | Features |
-|----------|---------------|----------|
-| Anthropic | claude-3-5-sonnet, claude-3-opus | Full tool use |
-| OpenAI | gpt-4, gpt-4-turbo | Full tool use |
-| Google | gemini-1.5-pro, gemini-1.5-flash | Function calling |
-| Perplexity | llama-3.1-sonar-large-128k-online | Built-in web search, citations |
+**Expert Panel**: Parallel independent assessments from each agent acting as a domain expert. Best for multi-disciplinary analysis.
 
-## Agent Tools
+**Devil's Advocate**: Three-role structure - primary position, opposition, and evaluator. Best for preventing groupthink and thorough risk assessment.
 
-Agents have access to these tools during debates:
+**Delphi**: Anonymized parallel rounds with statistical aggregation. Responses from previous rounds are anonymized ("Participant 1", "Participant 2") to reduce bias.
 
-| Tool | Description |
-|------|-------------|
-| `get_context` | Get current debate context |
-| `submit_response` | Submit structured response |
-| `search_web` | Basic web search |
-| `fact_check` | Verify claims with evidence |
-| `perplexity_search` | Advanced search with filters |
+**Red Team/Blue Team**: Agents split into attack (Red) and defense (Blue) teams. Even-indexed agents are Red Team (identify risks/weaknesses), odd-indexed are Blue Team (propose solutions/defenses).
 
-### Perplexity Search Options
+## Architecture
 
-The `perplexity_search` tool provides advanced search capabilities:
-
-```typescript
-{
-  query: string;                    // Search query
-  recency_filter?: 'hour' | 'day' | 'week' | 'month';  // Time filter
-  domain_filter?: string[];         // Limit to domains (max 3)
-  return_images?: boolean;          // Include images
-  return_related_questions?: boolean; // Get related questions
-}
 ```
-
-**Use cases:**
-- Recent news: `{ query: "AI news", recency_filter: "day" }`
-- Academic sources: `{ query: "machine learning", domain_filter: ["arxiv.org", "nature.com"] }`
+┌─────────────────────────────────────────────────────────┐
+│                    MCP Server Layer                      │
+│  (src/mcp/server.ts, src/mcp/tools.ts)                  │
+├─────────────────────────────────────────────────────────┤
+│                    Core Layer                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
+│  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│  │
+│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│         Agents Layer              Modes Layer            │
+│  ┌──────────────────┐      ┌──────────────────────┐     │
+│  │  AgentRegistry   │      │    ModeRegistry      │     │
+│  │  ├─ Claude       │      │  ├─ Collaborative    │     │
+│  │  ├─ ChatGPT      │      │  ├─ Adversarial      │     │
+│  │  ├─ Gemini       │      │  ├─ Socratic         │     │
+│  │  └─ Perplexity   │      │  └─ ... (7 modes)    │     │
+│  └──────────────────┘      └──────────────────────┘     │
+├─────────────────────────────────────────────────────────┤
+│  Tools Layer                    Storage Layer            │
+│  ┌──────────────────┐      ┌──────────────────────┐     │
+│  │DefaultAgentToolkit│      │   SQLiteStorage     │     │
+│  │ ├─ get_context   │      │                      │     │
+│  │ ├─ search_web    │      │                      │     │
+│  │ ├─ fact_check    │      │                      │     │
+│  │ └─ perplexity_   │      │                      │     │
+│  │    search        │      │                      │     │
+│  └──────────────────┘      └──────────────────────┘     │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Project Structure
 
 ```
-ai-roundtable/
-├── src/
-│   ├── agents/       # AI agent implementations
-│   │   ├── base.ts       # BaseAgent abstract class
-│   │   ├── claude.ts     # Claude (Anthropic) agent
-│   │   ├── chatgpt.ts    # ChatGPT (OpenAI) agent
-│   │   ├── gemini.ts     # Gemini (Google) agent
-│   │   ├── perplexity.ts # Perplexity agent
-│   │   └── registry.ts   # Agent registry
-│   ├── core/         # Core logic
-│   │   ├── debate-engine.ts    # Main debate orchestration
-│   │   ├── session-manager.ts  # Session management
-│   │   └── consensus-analyzer.ts # Consensus analysis
-│   ├── modes/        # Debate mode strategies
-│   │   ├── base.ts           # DebateModeStrategy interface
-│   │   ├── collaborative.ts  # Collaborative mode
-│   │   ├── adversarial.ts    # Adversarial mode
-│   │   ├── socratic.ts       # Socratic mode
-│   │   ├── expert-panel.ts   # Expert panel mode
-│   │   └── registry.ts       # Mode registry
-│   ├── tools/        # Agent toolkit
-│   │   └── toolkit.ts  # DefaultAgentToolkit
-│   ├── storage/      # Persistence
-│   │   └── sqlite.ts   # SQLite storage
-│   ├── mcp/          # MCP server interface
-│   │   ├── server.ts   # MCP server
-│   │   └── tools.ts    # MCP tool definitions
-│   └── types/        # TypeScript types
-│       └── index.ts
-├── tests/
-│   ├── unit/         # Unit tests
-│   └── integration/  # Integration tests
-├── docs/             # Documentation
-└── config/           # Configuration files
+src/
+├── agents/       # AI Agent implementations
+│   ├── base.ts           # BaseAgent abstract class
+│   ├── claude.ts         # Anthropic Claude
+│   ├── chatgpt.ts        # OpenAI ChatGPT
+│   ├── gemini.ts         # Google Gemini
+│   ├── perplexity.ts     # Perplexity AI
+│   ├── registry.ts       # Agent registry
+│   └── setup.ts          # Auto-configuration
+├── core/         # Core debate logic
+│   ├── debate-engine.ts  # Main orchestrator
+│   ├── session-manager.ts
+│   └── consensus-analyzer.ts
+├── modes/        # Debate mode strategies
+│   ├── base.ts           # DebateModeStrategy interface
+│   ├── collaborative.ts
+│   ├── adversarial.ts
+│   ├── socratic.ts
+│   ├── expert-panel.ts
+│   ├── devils-advocate.ts
+│   ├── delphi.ts
+│   ├── red-team-blue-team.ts
+│   └── registry.ts
+├── tools/        # Agent toolkit
+│   └── toolkit.ts
+├── storage/      # Persistence layer
+│   └── sqlite.ts
+├── mcp/          # MCP server interface
+│   ├── server.ts
+│   └── tools.ts
+├── types/        # TypeScript types
+├── utils/        # Utilities (logger, retry)
+├── errors/       # Custom error types
+└── index.ts      # Entry point
 ```
 
 ## Development
+
+### Prerequisites
+
+- Node.js >= 20.0.0
+- pnpm (recommended)
+
+### Commands
 
 ```bash
 # Install dependencies
 pnpm install
 
-# Run in development mode (watch)
+# Build
+pnpm build
+
+# Development (watch mode)
 pnpm dev
 
 # Run tests
 pnpm test
-
-# Run tests with watch
 pnpm test:watch
-
-# Run tests with coverage
 pnpm test:coverage
 
 # Run integration tests (requires API keys)
 pnpm test:integration
 
-# Type check
-pnpm typecheck
-
-# Lint
+# Lint and format
 pnpm lint
-
-# Format code
+pnpm lint:fix
 pnpm format
 
-# Build for production
-pnpm build
+# Type check
+pnpm typecheck
 ```
 
-## Adding New AI Providers
+### Adding a New AI Provider
 
-1. Create a new agent class extending `BaseAgent`:
+1. Create agent class extending `BaseAgent`:
 
 ```typescript
 // src/agents/my-agent.ts
-import { BaseAgent } from './base.js';
-import type { AgentConfig, AgentResponse, DebateContext } from '../types/index.js';
-
 export class MyAgent extends BaseAgent {
-  constructor(config: AgentConfig) {
-    super(config);
-    // Initialize your client
-  }
-
   async generateResponse(context: DebateContext): Promise<AgentResponse> {
     const systemPrompt = this.buildSystemPrompt(context);
     const userMessage = this.buildUserMessage(context);
-
-    // Call your AI provider
+    // Call your AI provider API
     // Handle tool calls if supported
-
     return {
       agentId: this.id,
       agentName: this.name,
@@ -311,57 +274,103 @@ export class MyAgent extends BaseAgent {
 }
 ```
 
-2. Register the provider:
+2. Update `AIProvider` type in `src/types/index.ts`
 
-```typescript
-import { getGlobalRegistry } from './agents/index.js';
+3. Register in `src/agents/setup.ts`
 
-const registry = getGlobalRegistry();
-registry.registerProvider(
-  'my-provider',
-  (config) => new MyAgent(config),
-  'default-model'
-);
-```
+4. Add tests in `tests/unit/agents/`
 
-## Adding New Debate Modes
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed guide.
 
-1. Implement `DebateModeStrategy`:
+### Adding a New Debate Mode
+
+1. Implement `DebateModeStrategy` interface:
 
 ```typescript
 // src/modes/my-mode.ts
-import type { DebateModeStrategy } from './base.js';
-
 export class MyMode implements DebateModeStrategy {
   readonly name = 'my-mode';
 
-  async executeRound(agents, context, toolkit) {
-    const responses = [];
-    // Your execution logic
-    return responses;
+  async executeRound(agents, context, toolkit): Promise<AgentResponse[]> {
+    // Parallel: return Promise.all(agents.map(a => a.generateResponse(context)));
+    // Sequential: use for...of loop with context accumulation
   }
 
-  buildAgentPrompt(context) {
-    return `Your custom prompt for ${context.topic}...`;
+  buildAgentPrompt(context: DebateContext): string {
+    return `Your mode-specific prompt for ${context.topic}...`;
   }
 }
 ```
 
-2. Register the mode:
+2. Register in `src/modes/registry.ts`
+
+3. Update `DebateMode` type in `src/types/index.ts`
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed guide.
+
+## Agent Tools
+
+During debates, agents have access to these tools:
+
+| Tool | Description |
+|------|-------------|
+| `get_context` | Get current debate context (topic, round, previous responses) |
+| `submit_response` | Submit structured response with position, reasoning, confidence |
+| `search_web` | Basic web search for evidence |
+| `fact_check` | Verify claims with web and debate evidence |
+| `perplexity_search` | Advanced search with recency/domain filters, images, related questions |
+
+### Perplexity Search Options
 
 ```typescript
-import { getGlobalModeRegistry } from './modes/index.js';
-
-const registry = getGlobalModeRegistry();
-registry.registerMode('my-mode', new MyMode());
+{
+  query: string;
+  recency_filter?: 'hour' | 'day' | 'week' | 'month';
+  domain_filter?: string[];  // Max 3 domains
+  return_images?: boolean;
+  return_related_questions?: boolean;
+}
 ```
+
+## Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Language | TypeScript (ESM) | Type safety, Node.js 20+ support |
+| AI Abstraction | BaseAgent class | Unified interface for tool use, extensibility |
+| Providers | Claude, ChatGPT, Gemini, Perplexity | Mature SDKs, diverse capabilities |
+| Storage | SQLite (sql.js) | Simple, local, no external dependencies |
+| Mode Pattern | Strategy Pattern | Easy to add new debate modes |
+| Testing | Vitest + Mocks | Fast feedback, no API costs in CI |
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | For Claude agents |
+| `OPENAI_API_KEY` | OpenAI API key for ChatGPT | For ChatGPT agents |
+| `GOOGLE_AI_API_KEY` | Google AI API key for Gemini | For Gemini agents |
+| `PERPLEXITY_API_KEY` | Perplexity API key | For Perplexity agents |
+| `DATABASE_PATH` | SQLite database path | No (default: `./data/roundtable.db`) |
+| `LOG_LEVEL` | Logging verbosity | No (default: `info`) |
 
 ## Documentation
 
-- [Development Guide](docs/DEVELOPMENT.md) - Architecture and contributing
-- [Testing Guide](docs/TESTING.md) - How to write and run tests
-- [API Reference](docs/API.md) - Detailed API documentation
+- [API Reference](docs/API.md) - Complete API documentation
+- [Development Guide](docs/DEVELOPMENT.md) - Architecture and contribution guide
+- [Testing Guide](docs/TESTING.md) - Testing patterns and practices
 
 ## License
 
 MIT
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make changes with tests
+4. Run all checks: `pnpm typecheck && pnpm lint && pnpm test`
+5. Commit with descriptive message
+6. Push and create PR
+
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for contribution guidelines.
