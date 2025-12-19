@@ -206,6 +206,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
           },
           domain_filter: {
             type: 'array',
+            items: { type: 'string' },
             description:
               'Limit search to specific domains (max 3). Examples: ["arxiv.org", "nature.com"] for academic, ' +
               '["reuters.com", "bbc.com"] for news. Omit to search all sources.',
