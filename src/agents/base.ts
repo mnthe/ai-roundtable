@@ -251,15 +251,21 @@ Please provide your response in the following JSON format:
           reasoning?: string;
           confidence?: number;
         };
-        // Use || to catch empty strings (not just null/undefined)
-        return {
-          agentId: this.id,
-          agentName: this.name,
-          position: parsed.position || 'Unable to determine position',
-          reasoning: parsed.reasoning || 'Unable to determine reasoning',
-          confidence: Math.min(1, Math.max(0, parsed.confidence ?? 0.5)),
-          timestamp: new Date(),
-        };
+
+        // Only use parsed JSON if it has expected debate response fields
+        // Otherwise fall through to preserve raw text (important for key points extraction)
+        if ('position' in parsed || 'reasoning' in parsed) {
+          // Use || to catch empty strings (not just null/undefined)
+          return {
+            agentId: this.id,
+            agentName: this.name,
+            position: parsed.position || 'Unable to determine position',
+            reasoning: parsed.reasoning || 'Unable to determine reasoning',
+            confidence: Math.min(1, Math.max(0, parsed.confidence ?? 0.5)),
+            timestamp: new Date(),
+          };
+        }
+        // JSON found but without expected fields - fall through to preserve raw JSON
       }
     } catch {
       // Fall through to fallback parsing

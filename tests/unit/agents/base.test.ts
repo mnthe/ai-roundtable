@@ -267,3 +267,154 @@ describe('MockAgent', () => {
     });
   });
 });
+
+describe('parseResponse', () => {
+  const defaultConfig: AgentConfig = {
+    id: 'test-agent',
+    name: 'Test Agent',
+    provider: 'anthropic',
+    model: 'test-model',
+  };
+
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'Test Topic',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  // Expose protected parseResponse for testing
+  class TestableAgent extends MockAgent {
+    public testParseResponse(raw: string, context: DebateContext) {
+      return this.parseResponse(raw, context);
+    }
+  }
+
+  it('should parse standard JSON response with position/reasoning/confidence', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = JSON.stringify({
+      position: 'Test position',
+      reasoning: 'Test reasoning',
+      confidence: 0.85,
+    });
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    expect(result.position).toBe('Test position');
+    expect(result.reasoning).toBe('Test reasoning');
+    expect(result.confidence).toBe(0.85);
+  });
+
+  it('should use defaults when position/reasoning are empty strings', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = JSON.stringify({
+      position: '',
+      reasoning: '',
+      confidence: 0.5,
+    });
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    expect(result.position).toBe('Unable to determine position');
+    expect(result.reasoning).toBe('Unable to determine reasoning');
+  });
+
+  it('should preserve raw JSON when no position/reasoning fields exist (keyPoints case)', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = JSON.stringify({
+      keyPoints: ['Point 1', 'Point 2', 'Point 3'],
+    });
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    // Should fall back to preserving raw text in reasoning
+    expect(result.reasoning).toContain('keyPoints');
+    expect(result.reasoning).toContain('Point 1');
+    expect(result.reasoning).toContain('Point 2');
+    expect(result.reasoning).toContain('Point 3');
+  });
+
+  it('should preserve arbitrary JSON for downstream processing', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const customData = {
+      analysis: { score: 0.9, category: 'high' },
+      tags: ['important', 'urgent'],
+    };
+    const raw = JSON.stringify(customData);
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    // The raw JSON should be preserved in reasoning
+    expect(result.reasoning).toContain('analysis');
+    expect(result.reasoning).toContain('score');
+    expect(result.reasoning).toContain('0.9');
+  });
+
+  it('should clamp confidence to valid range [0, 1]', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    // Test confidence > 1
+    let result = agent.testParseResponse(
+      JSON.stringify({ position: 'test', reasoning: 'test', confidence: 1.5 }),
+      defaultContext
+    );
+    expect(result.confidence).toBe(1);
+
+    // Test confidence < 0
+    result = agent.testParseResponse(
+      JSON.stringify({ position: 'test', reasoning: 'test', confidence: -0.5 }),
+      defaultContext
+    );
+    expect(result.confidence).toBe(0);
+  });
+
+  it('should handle malformed JSON gracefully', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = 'This is not JSON at all';
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    // Should fallback to raw text
+    expect(result.reasoning).toBe('This is not JSON at all');
+    expect(result.confidence).toBe(0.5);
+  });
+
+  it('should extract JSON from text with surrounding content', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = `Here is my analysis:
+{"position": "Embedded position", "reasoning": "Embedded reasoning", "confidence": 0.7}
+Hope this helps!`;
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    expect(result.position).toBe('Embedded position');
+    expect(result.reasoning).toBe('Embedded reasoning');
+    expect(result.confidence).toBe(0.7);
+  });
+
+  it('should handle JSON with only position field', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = JSON.stringify({
+      position: 'Only position provided',
+    });
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    expect(result.position).toBe('Only position provided');
+    expect(result.reasoning).toBe('Unable to determine reasoning');
+  });
+
+  it('should handle JSON with only reasoning field', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const raw = JSON.stringify({
+      reasoning: 'Only reasoning provided',
+    });
+
+    const result = agent.testParseResponse(raw, defaultContext);
+
+    expect(result.position).toBe('Unable to determine position');
+    expect(result.reasoning).toBe('Only reasoning provided');
+  });
+});
