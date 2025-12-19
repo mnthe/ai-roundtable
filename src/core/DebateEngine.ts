@@ -11,9 +11,11 @@ import type {
 } from '../types/index.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateModeStrategy } from '../modes/base.js';
+import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
 
 export interface DebateEngineOptions {
   toolkit?: AgentToolkit;
+  aiConsensusAnalyzer?: AIConsensusAnalyzer;
 }
 
 /**
@@ -23,11 +25,12 @@ export interface DebateEngineOptions {
  * - Manages rounds of debate
  * - Coordinates agent responses
  * - Applies debate mode strategies
- * - Analyzes consensus
+ * - Analyzes consensus (using AI when available, falling back to rule-based)
  */
 export class DebateEngine {
   private toolkit: AgentToolkit;
   private modeStrategies: Map<string, DebateModeStrategy> = new Map();
+  private aiConsensusAnalyzer?: AIConsensusAnalyzer;
 
   constructor(options: DebateEngineOptions = {}) {
     // Toolkit must be provided as it's an interface
@@ -35,6 +38,7 @@ export class DebateEngine {
       throw new Error('AgentToolkit must be provided');
     }
     this.toolkit = options.toolkit;
+    this.aiConsensusAnalyzer = options.aiConsensusAnalyzer;
   }
 
   /**
@@ -57,7 +61,7 @@ export class DebateEngine {
     if (!strategy) {
       // Fall back to simple round-robin if no strategy found
       const responses = await this.executeSimpleRound(agents, context);
-      const consensus = this.analyzeConsensus(responses);
+      const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
       return {
         roundNumber: context.currentRound,
         responses,
@@ -67,7 +71,7 @@ export class DebateEngine {
 
     // Use the strategy to execute the round
     const responses = await strategy.executeRound(agents, context, this.toolkit);
-    const consensus = this.analyzeConsensus(responses);
+    const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
 
     return {
       roundNumber: context.currentRound,
@@ -139,10 +143,35 @@ export class DebateEngine {
   }
 
   /**
-   * Analyze consensus from agent responses
+   * Analyze consensus with AI when available, falling back to rule-based
+   *
+   * @param responses - Agent responses to analyze
+   * @param topic - Debate topic for context
+   * @returns Consensus analysis result
+   */
+  async analyzeConsensusWithAI(
+    responses: AgentResponse[],
+    topic: string
+  ): Promise<ConsensusResult> {
+    // Try AI analysis first if available
+    if (this.aiConsensusAnalyzer) {
+      try {
+        return await this.aiConsensusAnalyzer.analyzeConsensus(responses, topic);
+      } catch (error) {
+        // Fall back to rule-based on error
+        console.warn('[DebateEngine] AI consensus analysis failed, falling back to rule-based:', error);
+      }
+    }
+
+    // Fall back to rule-based analysis
+    return this.analyzeConsensus(responses);
+  }
+
+  /**
+   * Analyze consensus from agent responses (rule-based fallback)
    *
    * This is a simple implementation that looks for common themes
-   * A more sophisticated version could use NLP or another AI model
+   * Use analyzeConsensusWithAI for better semantic analysis
    */
   analyzeConsensus(responses: AgentResponse[]): ConsensusResult {
     if (responses.length === 0) {

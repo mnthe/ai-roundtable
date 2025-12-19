@@ -80,7 +80,6 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
   const sessionManager = options.sessionManager || new SessionManager();
   const agentRegistry = options.agentRegistry || new AgentRegistry();
   const toolkit = new DefaultAgentToolkit();
-  const debateEngine = options.debateEngine || new DebateEngine({ toolkit });
 
   // Initialize AI-based consensus analyzer (will be set up after agents are registered)
   let aiConsensusAnalyzer: AIConsensusAnalyzer | null = null;
@@ -107,6 +106,12 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
       fallbackToRuleBased: true,
     });
   }
+
+  // Create debate engine with AI consensus analyzer
+  const debateEngine = options.debateEngine || new DebateEngine({
+    toolkit,
+    aiConsensusAnalyzer: aiConsensusAnalyzer ?? undefined,
+  });
 
   // Create server instance
   const server = new Server(
@@ -269,7 +274,7 @@ function extractKeyPoints(reasoning: string): string[] {
       const cleaned = match
         .replace(/^\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?/, '')
         .trim();
-      if (cleaned.length > 10 && cleaned.length < 200) {
+      if (cleaned.length > 10) {
         keyPoints.push(cleaned);
       }
     }
@@ -280,7 +285,7 @@ function extractKeyPoints(reasoning: string): string[] {
     const sentences = reasoning.split(/[.!?]+/).filter((s) => s.trim().length > 20);
     for (const sentence of sentences.slice(0, 3)) {
       const cleaned = sentence.trim();
-      if (cleaned.length > 10 && cleaned.length < 200) {
+      if (cleaned.length > 10) {
         keyPoints.push(cleaned);
       }
     }
@@ -288,7 +293,7 @@ function extractKeyPoints(reasoning: string): string[] {
 
   // Ensure we have at least something
   if (keyPoints.length === 0) {
-    keyPoints.push(reasoning.substring(0, 150) + (reasoning.length > 150 ? '...' : ''));
+    keyPoints.push(reasoning.trim() || 'No reasoning provided');
   }
 
   return keyPoints;
