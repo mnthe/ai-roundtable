@@ -52,6 +52,8 @@ export class DelphiMode implements DebateModeStrategy {
     const anonymizedContext: DebateContext = {
       ...context,
       previousResponses: this.anonymizeResponses(context.previousResponses),
+      // Add mode-specific prompt
+      modePrompt: this.buildAgentPrompt(context),
     };
 
     // Execute all agents in parallel for independent opinions

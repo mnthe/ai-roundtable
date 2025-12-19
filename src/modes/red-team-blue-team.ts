@@ -96,10 +96,20 @@ export class RedTeamBlueTeamMode implements DebateModeStrategy {
       return [];
     }
 
+    // Build team-specific prompt
+    const teamPrompt =
+      team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context);
+
+    // Build context with team-specific mode prompt
+    const teamContext: DebateContext = {
+      ...context,
+      modePrompt: teamPrompt,
+    };
+
     // All team members see the same context and respond in parallel
     const responsePromises = teamAgents.map((agent) => {
       agent.setToolkit(toolkit);
-      return agent.generateResponse(context);
+      return agent.generateResponse(teamContext);
     });
 
     return Promise.all(responsePromises);

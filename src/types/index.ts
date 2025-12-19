@@ -84,6 +84,8 @@ export interface DebateContext {
   totalRounds: number;
   previousResponses: AgentResponse[];
   focusQuestion?: string;
+  /** Mode-specific prompt additions (set by the mode strategy) */
+  modePrompt?: string;
 }
 
 // ============================================

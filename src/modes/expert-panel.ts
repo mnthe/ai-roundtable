@@ -37,10 +37,16 @@ export class ExpertPanelMode implements DebateModeStrategy {
       return [];
     }
 
+    // Build context with mode-specific prompt
+    const contextWithModePrompt: DebateContext = {
+      ...context,
+      modePrompt: this.buildAgentPrompt(context),
+    };
+
     // Execute all experts in parallel for independent opinions
     const responsePromises = agents.map((agent) => {
       agent.setToolkit(toolkit);
-      return agent.generateResponse(context);
+      return agent.generateResponse(contextWithModePrompt);
     });
 
     const responses = await Promise.all(responsePromises);

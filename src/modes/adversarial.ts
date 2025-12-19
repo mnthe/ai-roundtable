@@ -41,13 +41,18 @@ export class AdversarialMode implements DebateModeStrategy {
 
     // Execute agents sequentially so each can challenge the previous
     for (const agent of agents) {
-      // Build context with responses from current round
+      // Build context with responses from current round and mode-specific prompt
       const currentContext: DebateContext = {
         ...context,
         previousResponses: [
           ...context.previousResponses,
           ...responses, // Include current round responses
         ],
+        // Add mode-specific prompt
+        modePrompt: this.buildAgentPrompt({
+          ...context,
+          previousResponses: [...context.previousResponses, ...responses],
+        }),
       };
 
       agent.setToolkit(toolkit);

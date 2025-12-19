@@ -41,13 +41,18 @@ export class SocraticMode implements DebateModeStrategy {
 
     // Execute agents sequentially for dialogic questioning
     for (const agent of agents) {
-      // Build context with current round responses for ongoing dialogue
+      // Build context with current round responses and mode-specific prompt
       const currentContext: DebateContext = {
         ...context,
         previousResponses: [
           ...context.previousResponses,
           ...responses,
         ],
+        // Add mode-specific prompt
+        modePrompt: this.buildAgentPrompt({
+          ...context,
+          previousResponses: [...context.previousResponses, ...responses],
+        }),
       };
 
       agent.setToolkit(toolkit);

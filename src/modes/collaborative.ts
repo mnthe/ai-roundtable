@@ -37,12 +37,18 @@ export class CollaborativeMode implements DebateModeStrategy {
       return [];
     }
 
+    // Build context with mode-specific prompt
+    const contextWithModePrompt: DebateContext = {
+      ...context,
+      modePrompt: this.buildAgentPrompt(context),
+    };
+
     // Execute all agents in parallel
     // In collaborative mode, agents see the same context (previous rounds only)
     const responsePromises = agents.map((agent) => {
       // Ensure each agent has the toolkit
       agent.setToolkit(toolkit);
-      return agent.generateResponse(context);
+      return agent.generateResponse(contextWithModePrompt);
     });
 
     // Wait for all agents to respond

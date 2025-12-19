@@ -47,13 +47,18 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
       const agent = agents[i];
       if (!agent) continue;
 
-      // Build context with responses from current round
+      // Build context with responses from current round and mode-specific prompt
       const currentContext: DebateContext = {
         ...context,
         previousResponses: [
           ...context.previousResponses,
           ...responses,
         ],
+        // Add mode-specific prompt based on agent role
+        modePrompt: this.buildAgentPrompt({
+          ...context,
+          previousResponses: [...context.previousResponses, ...responses],
+        }),
       };
 
       agent.setToolkit(toolkit);
