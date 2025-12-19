@@ -316,7 +316,7 @@ export class PerplexityAgent extends BaseAgent {
   /**
    * Health check: Test Perplexity API connection with minimal request
    */
-  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+  override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
       await this.client.chat.completions.create({
         model: this.model,

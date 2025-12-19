@@ -331,6 +331,101 @@ describe('AgentRegistry', () => {
       expect(agent2).toBeDefined();
     });
   });
+
+  describe('agent health status tracking', () => {
+    beforeEach(() => {
+      registry.createAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'claude',
+      });
+    });
+
+    it('should track agent active state', () => {
+      expect(registry.isAgentActive('test-agent')).toBe(true);
+
+      registry.deactivateAgent('test-agent', 'Test error');
+
+      expect(registry.isAgentActive('test-agent')).toBe(false);
+    });
+
+    it('should reactivate agent', () => {
+      registry.deactivateAgent('test-agent');
+      expect(registry.isAgentActive('test-agent')).toBe(false);
+
+      registry.activateAgent('test-agent');
+      expect(registry.isAgentActive('test-agent')).toBe(true);
+    });
+
+    it('should store health check error', () => {
+      registry.deactivateAgent('test-agent', 'Connection timeout');
+
+      const healthStatus = registry.getAgentHealthStatus();
+      const testAgentStatus = healthStatus.find((s) => s.id === 'test-agent');
+
+      expect(testAgentStatus?.active).toBe(false);
+      expect(testAgentStatus?.error).toBe('Connection timeout');
+    });
+
+    it('should get only active agents', () => {
+      registry.createAgent({
+        id: 'active-agent',
+        name: 'Active Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+      });
+
+      registry.deactivateAgent('test-agent');
+
+      const activeAgents = registry.getActiveAgents();
+      const activeIds = registry.getActiveAgentIds();
+
+      expect(activeAgents).toHaveLength(1);
+      expect(activeIds).toEqual(['active-agent']);
+    });
+
+    it('should get active agent info list', () => {
+      registry.createAgent({
+        id: 'inactive-agent',
+        name: 'Inactive Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+      });
+
+      registry.deactivateAgent('inactive-agent');
+
+      const activeInfo = registry.getActiveAgentInfoList();
+
+      expect(activeInfo).toHaveLength(1);
+      expect(activeInfo[0]?.id).toBe('test-agent');
+      expect(activeInfo[0]?.active).toBe(true);
+    });
+
+    it('should return health status for all agents', () => {
+      registry.createAgent({
+        id: 'unhealthy-agent',
+        name: 'Unhealthy Agent',
+        provider: 'openai',
+        model: 'gpt-4',
+      });
+
+      registry.deactivateAgent('unhealthy-agent', 'API key invalid');
+
+      const healthStatus = registry.getAgentHealthStatus();
+
+      expect(healthStatus).toHaveLength(2);
+
+      const healthyAgent = healthStatus.find((s) => s.id === 'test-agent');
+      const unhealthyAgent = healthStatus.find((s) => s.id === 'unhealthy-agent');
+
+      expect(healthyAgent?.active).toBe(true);
+      expect(healthyAgent?.error).toBeUndefined();
+
+      expect(unhealthyAgent?.active).toBe(false);
+      expect(unhealthyAgent?.error).toBe('API key invalid');
+    });
+  });
 });
 
 describe('Global Registry', () => {

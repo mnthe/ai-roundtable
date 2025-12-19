@@ -18,7 +18,7 @@ const SERVER_VERSION = '0.1.0';
 
 async function main() {
   // Create MCP server with all tools registered
-  const server = createServer({
+  const server = await createServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
   });

@@ -50,7 +50,7 @@ export interface ServerOptions {
 /**
  * Create and configure the MCP server
  */
-export function createServer(options: ServerOptions = {}): Server {
+export async function createServer(options: ServerOptions = {}): Promise<Server> {
   const serverName = options.name || 'ai-roundtable';
   const serverVersion = options.version || '0.1.0';
   const autoSetup = options.autoSetup !== false; // Default to true
@@ -66,7 +66,7 @@ export function createServer(options: ServerOptions = {}): Server {
 
   // Auto-setup agents based on available API keys
   if (autoSetup) {
-    const setupResult = setupAgents(agentRegistry, options.apiKeys);
+    const setupResult = await setupAgents(agentRegistry, options.apiKeys);
 
     if (options.showAvailabilityReport) {
       logger.info(getAvailabilityReport(setupResult));
@@ -337,7 +337,8 @@ async function handleGetConsensus(
  */
 async function handleGetAgents(agentRegistry: AgentRegistry): Promise<ToolResponse> {
   try {
-    const agents = agentRegistry.getAgentInfoList();
+    // Return only active agents
+    const agents = agentRegistry.getActiveAgentInfoList();
 
     return createSuccessResponse({
       agents,

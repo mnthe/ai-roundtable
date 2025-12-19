@@ -182,7 +182,7 @@ export class GeminiAgent extends BaseAgent {
   /**
    * Health check: Test Gemini API connection with minimal request
    */
-  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+  override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
       const result = await this.genModel.generateContent('test');
       await result.response.text();
