@@ -143,7 +143,7 @@ export const listSessionsTool: Tool = {
       },
       status: {
         type: 'string',
-        enum: ['pending', 'in_progress', 'paused', 'completed', 'error'],
+        enum: ['active', 'paused', 'completed', 'error'],
         description: 'Filter by session status',
       },
       fromDate: {
@@ -335,7 +335,7 @@ export const getCitationsTool: Tool = {
 export const synthesizeDebateTool: Tool = {
   name: 'synthesize_debate',
   description:
-    'AI를 이용해 토론 전체를 분석하고 요약합니다. 토론 완료 후 사용하세요.',
+    'Analyze and summarize the entire debate using AI. Use this after the debate is completed.',
   inputSchema: {
     type: 'object',
     properties: {

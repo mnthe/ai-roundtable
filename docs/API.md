@@ -62,7 +62,14 @@ interface AgentResponse {
 Available debate modes.
 
 ```typescript
-type DebateMode = 'collaborative' | 'adversarial' | 'socratic' | 'expert-panel';
+type DebateMode =
+  | 'collaborative'      // Parallel - Find common ground, build consensus
+  | 'adversarial'        // Sequential - Challenge opposing viewpoints
+  | 'socratic'           // Sequential - Explore through questioning
+  | 'expert-panel'       // Parallel - Independent expert assessments
+  | 'devils-advocate'    // Sequential - Structured opposition and challenge
+  | 'delphi'             // Parallel - Anonymized iterative consensus building
+  | 'red-team-blue-team'; // Parallel (teams) - Attack/defense team analysis
 ```
 
 ### DebateConfig
@@ -92,6 +99,7 @@ interface DebateContext {
   totalRounds: number;
   previousResponses: AgentResponse[];
   focusQuestion?: string;
+  modePrompt?: string;    // Mode-specific prompt additions (set by mode strategy)
 }
 ```
 
@@ -148,6 +156,161 @@ Image from search results.
 interface ImageResult {
   url: string;
   description?: string;
+}
+```
+
+### AIConsensusResult
+
+Enhanced AI-based consensus result with semantic analysis.
+
+```typescript
+interface AIConsensusResult extends ConsensusResult {
+  /** Position clusters identified by AI */
+  clusters?: {
+    theme: string;
+    agentIds: string[];
+    summary: string;
+  }[];
+  /** Nuanced aspects that rule-based analysis would miss */
+  nuances?: {
+    partialAgreements: string[];
+    conditionalPositions: string[];
+    uncertainties: string[];
+  };
+  /** AI's reasoning for the analysis */
+  reasoning?: string;
+  /** ID of the agent that performed the analysis */
+  analyzerId?: string;
+}
+```
+
+### SynthesisResult
+
+Result of AI-powered debate synthesis.
+
+```typescript
+interface SynthesisResult {
+  commonGround: string[];
+  keyDifferences: string[];
+  evolutionSummary: string;
+  conclusion: string;
+  recommendation: string;
+  confidence: number;
+  synthesizerId: string;
+  timestamp: Date;
+}
+```
+
+---
+
+## 4-Layer Response Types
+
+Enhanced response structure for MCP tool outputs, designed for efficient main agent decision-making.
+
+### ConsensusLevel
+
+```typescript
+type ConsensusLevel = 'high' | 'medium' | 'low';
+// high: agreementScore >= 0.7
+// medium: agreementScore >= 0.4
+// low: agreementScore < 0.4
+```
+
+### ActionRecommendationType
+
+```typescript
+type ActionRecommendationType = 'proceed' | 'verify' | 'query_detail';
+```
+
+### RoundtableResponse
+
+Main 4-layer response structure.
+
+```typescript
+interface RoundtableResponse {
+  sessionId: string;
+  topic: string;
+  mode: DebateMode;
+  roundNumber: number;
+  totalRounds: number;
+
+  decision: DecisionLayer;           // Layer 1: Quick decision info
+  agentResponses: AgentResponseSummary[];  // Layer 2: Per-agent summaries
+  evidence: EvidenceLayer;           // Layer 3: Aggregated evidence
+  metadata: MetadataLayer;           // Layer 4: Deep dive references
+}
+```
+
+### DecisionLayer (Layer 1)
+
+Quick decision-making information.
+
+```typescript
+interface DecisionLayer {
+  consensusLevel: ConsensusLevel;
+  agreementScore: number;           // 0.0-1.0
+  actionRecommendation: {
+    type: ActionRecommendationType;
+    reason: string;
+  };
+}
+```
+
+### AgentResponseSummary (Layer 2)
+
+Per-agent reasoning information.
+
+```typescript
+interface AgentResponseSummary {
+  agentId: string;
+  agentName: string;
+  position: string;
+  keyPoints: string[];              // 2-3 key reasoning points
+  confidence: number;
+  confidenceChange?: {
+    delta: number;
+    previousRound: number;
+    reason: string;
+  };
+  evidenceUsed: {
+    webSearches: number;
+    citations: number;
+    toolCalls: string[];
+  };
+}
+```
+
+### EvidenceLayer (Layer 3)
+
+Aggregated evidence information.
+
+```typescript
+interface EvidenceLayer {
+  totalCitations: number;
+  conflicts: {
+    issue: string;
+    positions: { agentId: string; stance: string }[];
+  }[];
+  consensusSummary: string;
+}
+```
+
+### MetadataLayer (Layer 4)
+
+References for deep dive analysis.
+
+```typescript
+interface MetadataLayer {
+  detailReference: {
+    tool: string;
+    params: Record<string, unknown>;
+  };
+  verificationHints: {
+    field: string;
+    reason: string;
+    suggestedTool: string;
+  }[];
+  hasMoreDetails: boolean;
 }
 ```
 

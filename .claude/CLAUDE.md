@@ -143,6 +143,7 @@ interface DebateContext {
   totalRounds: number;
   previousResponses: AgentResponse[];
   focusQuestion?: string;
+  modePrompt?: string;    // Mode-specific prompt additions (set by mode strategy)
 }
 ```
 

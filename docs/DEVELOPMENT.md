@@ -22,7 +22,10 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  │  ├─ Claude       │      │  ├─ Collaborative    │     │
 │  │  ├─ ChatGPT      │      │  ├─ Adversarial      │     │
 │  │  ├─ Gemini       │      │  ├─ Socratic         │     │
-│  │  └─ Perplexity   │      │  └─ Expert Panel     │     │
+│  │  └─ Perplexity   │      │  ├─ Expert Panel     │     │
+│  │                  │      │  ├─ Devil's Advocate │     │
+│  │                  │      │  ├─ Delphi           │     │
+│  │                  │      │  └─ Red Team/Blue Team│    │
 │  └──────────────────┘      └──────────────────────┘     │
 ├─────────────────────────────────────────────────────────┤
 │  Tools Layer                    Storage Layer           │
@@ -114,12 +117,15 @@ interface DebateModeStrategy {
 
 **Mode Execution Patterns:**
 
-| Mode          | Execution  | Description                         |
-| ------------- | ---------- | ----------------------------------- |
-| Collaborative | Sequential | Agents build on each other's ideas  |
-| Adversarial   | Sequential | Agents challenge previous positions |
-| Socratic      | Sequential | Dialogue through questioning        |
-| Expert Panel  | Parallel   | Independent expert assessments      |
+| Mode            | Execution  | Description                              |
+| --------------- | ---------- | ---------------------------------------- |
+| Collaborative   | Parallel   | Find common ground, build consensus      |
+| Adversarial     | Sequential | Challenge opposing viewpoints            |
+| Socratic        | Sequential | Dialogue through questioning             |
+| Expert Panel    | Parallel   | Independent expert assessments           |
+| Devil's Advocate| Sequential | Structured opposition and challenge      |
+| Delphi          | Parallel   | Anonymized iterative consensus building  |
+| Red Team/Blue Team | Parallel (teams) | Attack/defense team analysis     |
 
 ## Adding a New AI Provider
 
