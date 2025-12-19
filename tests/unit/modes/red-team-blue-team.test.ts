@@ -1,0 +1,345 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { RedTeamBlueTeamMode } from '../../../src/modes/red-team-blue-team.js';
+import { MockAgent } from '../../../src/agents/base.js';
+import type { AgentToolkit } from '../../../src/agents/base.js';
+import type { DebateContext } from '../../../src/types/index.js';
+
+describe('RedTeamBlueTeamMode', () => {
+  let mode: RedTeamBlueTeamMode;
+  let mockToolkit: AgentToolkit;
+
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'Proposed security architecture for the new system',
+    mode: 'red-team-blue-team',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  beforeEach(() => {
+    mode = new RedTeamBlueTeamMode();
+    mockToolkit = {
+      getTools: () => [],
+      executeTool: vi.fn(),
+      setContext: vi.fn(),
+    };
+  });
+
+  describe('properties', () => {
+    it('should have correct name', () => {
+      expect(mode.name).toBe('red-team-blue-team');
+    });
+  });
+
+  describe('executeRound', () => {
+    it('should return empty array for no agents', async () => {
+      const responses = await mode.executeRound([], defaultContext, mockToolkit);
+      expect(responses).toEqual([]);
+    });
+
+    it('should divide agents into red and blue teams by index', async () => {
+      const agents = [
+        new MockAgent({ id: 'agent-0', name: 'Red 1', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-1', name: 'Blue 1', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Red 2', provider: 'google', model: 'mock' }),
+        new MockAgent({ id: 'agent-3', name: 'Blue 2', provider: 'perplexity', model: 'mock' }),
+      ];
+
+      agents.forEach((agent) => {
+        vi.spyOn(agent, 'generateResponse').mockResolvedValue({
+          agentId: agent.id,
+          agentName: agent.name,
+          position: `Position from ${agent.name}`,
+          reasoning: `Reasoning from ${agent.name}`,
+          confidence: 0.8,
+          timestamp: new Date(),
+        });
+      });
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      expect(responses).toHaveLength(4);
+      // Verify all agents were called
+      for (const agent of agents) {
+        expect(agent.generateResponse).toHaveBeenCalled();
+      }
+    });
+
+    it('should execute both teams in parallel', async () => {
+      const startTimes: Map<string, number> = new Map();
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red 1', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue 1', provider: 'openai', model: 'mock' }),
+      ];
+
+      for (const agent of agents) {
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async () => {
+          startTimes.set(agent.id, Date.now());
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return {
+            agentId: agent.id,
+            agentName: agent.name,
+            position: `Position from ${agent.name}`,
+            reasoning: `Reasoning from ${agent.name}`,
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+      }
+
+      await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Both teams should start at approximately the same time (parallel)
+      const times = Array.from(startTimes.values());
+      const maxTimeDiff = Math.max(...times) - Math.min(...times);
+      expect(maxTimeDiff).toBeLessThan(50); // Within 50ms of each other
+    });
+
+    it('should handle single agent gracefully', async () => {
+      const agent = new MockAgent({
+        id: 'agent-1',
+        name: 'Solo Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockResolvedValue({
+        agentId: 'agent-1',
+        agentName: 'Solo Agent',
+        position: 'Defense position',
+        reasoning: 'Defense reasoning',
+        confidence: 0.8,
+        timestamp: new Date(),
+      });
+
+      const responses = await mode.executeRound([agent], defaultContext, mockToolkit);
+      expect(responses).toHaveLength(1);
+    });
+
+    it('should set toolkit on each agent', async () => {
+      const agent = new MockAgent({
+        id: 'agent-1',
+        name: 'Agent 1',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      const setToolkitSpy = vi.spyOn(agent, 'setToolkit');
+      vi.spyOn(agent, 'generateResponse').mockResolvedValue({
+        agentId: 'agent-1',
+        agentName: 'Agent 1',
+        position: 'Position',
+        reasoning: 'Reasoning',
+        confidence: 0.8,
+        timestamp: new Date(),
+      });
+
+      await mode.executeRound([agent], defaultContext, mockToolkit);
+      expect(setToolkitSpy).toHaveBeenCalledWith(mockToolkit);
+    });
+
+    it('should interleave responses to maintain agent order', async () => {
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red 1', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue 1', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'red-2', name: 'Red 2', provider: 'google', model: 'mock' }),
+        new MockAgent({ id: 'blue-2', name: 'Blue 2', provider: 'perplexity', model: 'mock' }),
+      ];
+
+      agents.forEach((agent) => {
+        vi.spyOn(agent, 'generateResponse').mockResolvedValue({
+          agentId: agent.id,
+          agentName: agent.name,
+          position: 'Position',
+          reasoning: 'Reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        });
+      });
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Responses should be interleaved: red-1, blue-1, red-2, blue-2
+      expect(responses).toHaveLength(4);
+      expect(responses[0]?.agentId).toBe('red-1');
+      expect(responses[1]?.agentId).toBe('blue-1');
+      expect(responses[2]?.agentId).toBe('red-2');
+      expect(responses[3]?.agentId).toBe('blue-2');
+    });
+  });
+
+  describe('buildAgentPrompt', () => {
+    it('should include red team instructions for even index agents', () => {
+      // First agent (index 0) should get red team prompt
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      expect(prompt.toLowerCase()).toContain('red team');
+      expect(prompt.toLowerCase()).toMatch(/critical|attack|risk|vulnerab/);
+    });
+
+    it('should include blue team instructions for odd index agents', () => {
+      // Second agent (index 1) should get blue team prompt
+      const contextWithOneResponse: DebateContext = {
+        ...defaultContext,
+        previousResponses: [
+          {
+            agentId: 'red-1',
+            agentName: 'Red Team',
+            position: 'Attack',
+            reasoning: 'Critical analysis',
+            confidence: 0.8,
+            timestamp: new Date(),
+          },
+        ],
+      };
+
+      const prompt = mode.buildAgentPrompt(contextWithOneResponse);
+
+      expect(prompt.toLowerCase()).toContain('blue team');
+      expect(prompt.toLowerCase()).toMatch(/constructive|solution|defend|mitigation/);
+    });
+
+    it('should include focus question when provided', () => {
+      const contextWithFocus: DebateContext = {
+        ...defaultContext,
+        focusQuestion: 'Focus on authentication vulnerabilities',
+      };
+
+      const prompt = mode.buildAgentPrompt(contextWithFocus);
+      expect(prompt).toContain('Focus on authentication vulnerabilities');
+    });
+
+    it('should reference previous responses in later rounds', () => {
+      const contextWithPrevious: DebateContext = {
+        ...defaultContext,
+        currentRound: 2,
+        previousResponses: [
+          {
+            agentId: 'blue-1',
+            agentName: 'Blue Team',
+            position: 'Implemented firewall rules',
+            reasoning: 'Block unauthorized access',
+            confidence: 0.85,
+            timestamp: new Date(),
+          },
+          {
+            agentId: 'red-1',
+            agentName: 'Red Team',
+            position: 'Found SQL injection vulnerability',
+            reasoning: 'Input validation missing',
+            confidence: 0.9,
+            timestamp: new Date(),
+          },
+        ],
+      };
+
+      const prompt = mode.buildAgentPrompt(contextWithPrevious);
+
+      // Should mention reviewing other team's responses
+      expect(prompt.toLowerCase()).toMatch(/review|blue team|red team/);
+    });
+  });
+
+  describe('team dynamics', () => {
+    it('should support iterative attack-defense cycles', async () => {
+      // Round 2 with previous responses
+      const contextRound2: DebateContext = {
+        ...defaultContext,
+        currentRound: 2,
+        previousResponses: [
+          {
+            agentId: 'red-1',
+            agentName: 'Red Team',
+            position: 'Initial attack',
+            reasoning: 'Attack reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          },
+          {
+            agentId: 'blue-1',
+            agentName: 'Blue Team',
+            position: 'Initial defense',
+            reasoning: 'Defense reasoning',
+            confidence: 0.85,
+            timestamp: new Date(),
+          },
+        ],
+      };
+
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red Team', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue Team', provider: 'openai', model: 'mock' }),
+      ];
+
+      const receivedContexts: DebateContext[] = [];
+
+      agents.forEach((agent) => {
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx) => {
+          receivedContexts.push({ ...ctx });
+          return {
+            agentId: agent.id,
+            agentName: agent.name,
+            position: 'Updated position',
+            reasoning: 'Updated reasoning',
+            confidence: 0.9,
+            timestamp: new Date(),
+          };
+        });
+      });
+
+      await mode.executeRound(agents, contextRound2, mockToolkit);
+
+      // Both teams should have access to previous round
+      expect(receivedContexts.length).toBe(2);
+      expect(receivedContexts[0]?.previousResponses.length).toBe(2);
+    });
+
+    it('should execute unbalanced teams correctly', async () => {
+      // 3 agents: 2 red, 1 blue
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red 1', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue 1', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'red-2', name: 'Red 2', provider: 'google', model: 'mock' }),
+      ];
+
+      agents.forEach((agent) => {
+        vi.spyOn(agent, 'generateResponse').mockResolvedValue({
+          agentId: agent.id,
+          agentName: agent.name,
+          position: 'Position',
+          reasoning: 'Reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        });
+      });
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Should have 3 responses even with unbalanced teams
+      expect(responses).toHaveLength(3);
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle agent failure gracefully', async () => {
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue', provider: 'openai', model: 'mock' }),
+      ];
+
+      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
+        agentId: 'red-1',
+        agentName: 'Red',
+        position: 'Attack',
+        reasoning: 'Reasoning',
+        confidence: 0.8,
+        timestamp: new Date(),
+      });
+
+      vi.spyOn(agents[1], 'generateResponse').mockRejectedValue(new Error('Agent failed'));
+
+      await expect(mode.executeRound(agents, defaultContext, mockToolkit)).rejects.toThrow();
+    });
+  });
+});

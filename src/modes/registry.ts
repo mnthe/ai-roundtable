@@ -8,6 +8,9 @@ import { CollaborativeMode } from './collaborative.js';
 import { AdversarialMode } from './adversarial.js';
 import { SocraticMode } from './socratic.js';
 import { ExpertPanelMode } from './expert-panel.js';
+import { DevilsAdvocateMode } from './devils-advocate.js';
+import { DelphiMode } from './delphi.js';
+import { RedTeamBlueTeamMode } from './red-team-blue-team.js';
 
 /**
  * Registry for debate mode strategies
@@ -36,6 +39,9 @@ export class ModeRegistry {
     this.registerMode('adversarial', new AdversarialMode());
     this.registerMode('socratic', new SocraticMode());
     this.registerMode('expert-panel', new ExpertPanelMode());
+    this.registerMode('devils-advocate', new DevilsAdvocateMode());
+    this.registerMode('delphi', new DelphiMode());
+    this.registerMode('red-team-blue-team', new RedTeamBlueTeamMode());
   }
 
   /**

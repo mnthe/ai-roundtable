@@ -8,11 +8,22 @@ import { CollaborativeMode } from '../../../src/modes/collaborative.js';
 import { AdversarialMode } from '../../../src/modes/adversarial.js';
 import { SocraticMode } from '../../../src/modes/socratic.js';
 import { ExpertPanelMode } from '../../../src/modes/expert-panel.js';
+import { DevilsAdvocateMode } from '../../../src/modes/devils-advocate.js';
+import { DelphiMode } from '../../../src/modes/delphi.js';
+import { RedTeamBlueTeamMode } from '../../../src/modes/red-team-blue-team.js';
 import type { DebateModeStrategy } from '../../../src/modes/base.js';
 import type { DebateMode } from '../../../src/types/index.js';
 
 // All default modes
-const DEFAULT_MODES: DebateMode[] = ['collaborative', 'adversarial', 'socratic', 'expert-panel'];
+const DEFAULT_MODES: DebateMode[] = [
+  'collaborative',
+  'adversarial',
+  'socratic',
+  'expert-panel',
+  'devils-advocate',
+  'delphi',
+  'red-team-blue-team',
+];
 
 describe('ModeRegistry', () => {
   let registry: ModeRegistry;
@@ -34,6 +45,9 @@ describe('ModeRegistry', () => {
       expect(registry.getMode('adversarial')).toBeInstanceOf(AdversarialMode);
       expect(registry.getMode('socratic')).toBeInstanceOf(SocraticMode);
       expect(registry.getMode('expert-panel')).toBeInstanceOf(ExpertPanelMode);
+      expect(registry.getMode('devils-advocate')).toBeInstanceOf(DevilsAdvocateMode);
+      expect(registry.getMode('delphi')).toBeInstanceOf(DelphiMode);
+      expect(registry.getMode('red-team-blue-team')).toBeInstanceOf(RedTeamBlueTeamMode);
     });
   });
 
@@ -110,7 +124,7 @@ describe('ModeRegistry', () => {
   describe('getAvailableModes', () => {
     it('should return array of all default modes', () => {
       const modes = registry.getAvailableModes();
-      expect(modes).toHaveLength(4);
+      expect(modes).toHaveLength(7);
       for (const modeName of DEFAULT_MODES) {
         expect(modes).toContain(modeName);
       }
@@ -135,7 +149,7 @@ describe('ModeRegistry', () => {
       expect(modes).toContain('adversarial');
       expect(modes).toContain('socratic');
       expect(modes).toContain('expert-panel');
-      expect(modes).toHaveLength(4);
+      expect(modes).toHaveLength(7);
     });
   });
 
@@ -157,7 +171,7 @@ describe('ModeRegistry', () => {
 
   describe('clear', () => {
     it('should remove all modes', () => {
-      expect(registry.getAvailableModes()).toHaveLength(4);
+      expect(registry.getAvailableModes()).toHaveLength(7);
 
       registry.clear();
 
@@ -178,7 +192,7 @@ describe('ModeRegistry', () => {
       registry.reset();
 
       // Should have all default modes again
-      expect(registry.getAvailableModes()).toHaveLength(4);
+      expect(registry.getAvailableModes()).toHaveLength(7);
       for (const modeName of DEFAULT_MODES) {
         expect(registry.hasMode(modeName)).toBe(true);
       }
