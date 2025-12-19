@@ -244,6 +244,7 @@ export class PerplexityAgent extends BaseAgent {
 
   /**
    * Perplexity response metadata structure
+   * NOTE: As of 2025, Perplexity API uses 'search_results' instead of deprecated 'citations' field
    */
   private extractPerplexityMetadata(response: OpenAI.Chat.Completions.ChatCompletion): {
     citations: Citation[];
@@ -257,13 +258,24 @@ export class PerplexityAgent extends BaseAgent {
     // Perplexity may include extra metadata in response
     // The exact format depends on the API version
     const anyResponse = response as unknown as {
-      citations?: Array<string | { url: string; title?: string }>;
+      citations?: Array<string | { url: string; title?: string }>; // Deprecated, kept for backward compatibility
+      search_results?: Array<{ url: string; title?: string; date?: string }>; // New format (2025+)
       images?: Array<string | { url: string; description?: string }>;
       related_questions?: string[];
     };
 
-    // Extract citations
-    if (anyResponse.citations && Array.isArray(anyResponse.citations)) {
+    // Extract citations from search_results (new format, preferred)
+    if (anyResponse.search_results && Array.isArray(anyResponse.search_results)) {
+      for (const result of anyResponse.search_results) {
+        citations.push({
+          title: result.title ?? result.url,
+          url: result.url,
+          snippet: result.date ? `Published: ${result.date}` : undefined,
+        });
+      }
+    }
+    // Fallback to deprecated citations field for backward compatibility
+    else if (anyResponse.citations && Array.isArray(anyResponse.citations)) {
       for (const citation of anyResponse.citations) {
         if (typeof citation === 'string') {
           citations.push({
@@ -299,6 +311,25 @@ export class PerplexityAgent extends BaseAgent {
     }
 
     return { citations, images, relatedQuestions };
+  }
+
+  /**
+   * Health check: Test Perplexity API connection with minimal request
+   */
+  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      await this.client.chat.completions.create({
+        model: this.model,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }],
+      });
+      return { healthy: true };
+    } catch (error) {
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   /**

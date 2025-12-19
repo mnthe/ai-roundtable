@@ -9,7 +9,8 @@ import type { AgentToolkit } from '../../../src/agents/base.js';
 
 // Extended mock response metadata for Perplexity
 interface MockPerplexityMetadata {
-  citations?: Array<string | { url: string; title?: string }>;
+  citations?: Array<string | { url: string; title?: string }>; // Deprecated
+  search_results?: Array<{ url: string; title?: string; date?: string }>; // New format (2025+)
   images?: Array<string | { url: string; description?: string }>;
   related_questions?: string[];
 }
@@ -31,6 +32,7 @@ const createMockClient = (
             },
           ],
           citations: metadata?.citations,
+          search_results: metadata?.search_results,
           images: metadata?.images,
           related_questions: metadata?.related_questions,
         }),
@@ -188,7 +190,7 @@ describe('PerplexityAgent', () => {
       expect(response.confidence).toBe(1);
     });
 
-    it('should extract citations from Perplexity response', async () => {
+    it('should extract citations from Perplexity response (deprecated citations field)', async () => {
       const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         citations: [
@@ -207,6 +209,59 @@ describe('PerplexityAgent', () => {
       expect(response.citations).toHaveLength(2);
       expect(response.citations?.[0]?.title).toBe('Source 1');
       expect(response.citations?.[0]?.url).toBe('https://example.com/1');
+    });
+
+    it('should extract citations from Perplexity response (new search_results field)', async () => {
+      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        search_results: [
+          { url: 'https://example.com/ai-article', title: 'AI Regulation Overview', date: '2025-01-15' },
+          { url: 'https://example.com/research', title: 'Research Paper', date: '2024-12-20' },
+          { url: 'https://example.com/news', title: 'Latest AI News' }, // No date
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.citations).toHaveLength(3);
+      expect(response.citations?.[0]?.title).toBe('AI Regulation Overview');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/ai-article');
+      expect(response.citations?.[0]?.snippet).toBe('Published: 2025-01-15');
+      expect(response.citations?.[1]?.title).toBe('Research Paper');
+      expect(response.citations?.[1]?.url).toBe('https://example.com/research');
+      expect(response.citations?.[1]?.snippet).toBe('Published: 2024-12-20');
+      expect(response.citations?.[2]?.title).toBe('Latest AI News');
+      expect(response.citations?.[2]?.url).toBe('https://example.com/news');
+      expect(response.citations?.[2]?.snippet).toBeUndefined();
+    });
+
+    it('should prioritize search_results over deprecated citations field', async () => {
+      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        // Both fields present - should use search_results
+        search_results: [
+          { url: 'https://example.com/new', title: 'New Format Source' },
+        ],
+        citations: [
+          { url: 'https://example.com/old', title: 'Old Format Source' },
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.citations).toHaveLength(1);
+      expect(response.citations?.[0]?.title).toBe('New Format Source');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/new');
     });
 
     it('should extract images from Perplexity response', async () => {
