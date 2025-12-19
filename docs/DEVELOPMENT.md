@@ -313,6 +313,251 @@ private registerDefaultModes(): void {
 export type DebateMode = 'collaborative' | 'adversarial' | 'socratic' | 'expert-panel' | 'my-mode';
 ```
 
+## Testing with MCP Inspector
+
+MCP Inspector is the official tool for testing MCP servers via a web UI. It's useful for real-time testing and debugging during development.
+
+### Quick Start
+
+```bash
+# Build and run Inspector
+pnpm build && npx -y @modelcontextprotocol/inspector node dist/index.js
+```
+
+Once Inspector is running, open `http://localhost:5173` in your browser.
+
+### Environment Setup
+
+API keys must be set before running Inspector:
+
+```bash
+# Option 1: Set environment variables directly
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+export GOOGLE_AI_API_KEY=...
+export PERPLEXITY_API_KEY=pplx-...
+
+pnpm build && npx -y @modelcontextprotocol/inspector node dist/index.js
+
+# Option 2: Use .env file with dotenv-cli
+npx -y dotenv-cli -e .env -- npx -y @modelcontextprotocol/inspector node dist/index.js
+```
+
+### Using MCP Inspector
+
+#### 1. View Available Tools
+
+The left panel shows all available tools:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Tools                                                                │
+├─────────────────────────────────────────────────────────────────────┤
+│ ▸ start_roundtable      - Start a new debate session                │
+│ ▸ continue_roundtable   - Continue existing debate                  │
+│ ▸ get_consensus         - Get consensus analysis                    │
+│ ▸ get_agents            - List available AI agents                  │
+│ ▸ list_sessions         - List all sessions                         │
+│ ▸ get_round_details     - Get detailed round responses              │
+│ ▸ get_response_detail   - Get specific agent response               │
+│ ▸ get_citations         - Get all citations                         │
+│ ▸ synthesize_debate     - AI-powered debate synthesis               │
+│ ▸ get_thoughts          - Get agent reasoning evolution             │
+│ ▸ export_session        - Export in markdown/JSON                   │
+│ ▸ control_session       - Pause/resume/stop session                 │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 2. Basic Test Scenario
+
+**Step 1: Check available agents**
+```json
+// Tool: get_agents
+// Arguments: {}
+```
+
+Expected result:
+```json
+{
+  "agents": [
+    { "id": "claude-1", "name": "Claude", "provider": "anthropic", "model": "claude-sonnet-4-5-20250929" },
+    { "id": "chatgpt-1", "name": "ChatGPT", "provider": "openai", "model": "gpt-5.2" }
+  ]
+}
+```
+
+**Step 2: Start a debate**
+```json
+// Tool: start_roundtable
+// Arguments:
+{
+  "topic": "Should AI be regulated?",
+  "mode": "collaborative",
+  "rounds": 2
+}
+```
+
+**Step 3: Continue the debate**
+```json
+// Tool: continue_roundtable
+// Arguments:
+{
+  "sessionId": "<sessionId from previous response>",
+  "rounds": 1,
+  "focusQuestion": "What specific regulations should be implemented?"
+}
+```
+
+**Step 4: Analyze consensus**
+```json
+// Tool: get_consensus
+// Arguments:
+{
+  "sessionId": "<sessionId>"
+}
+```
+
+#### 3. Testing Different Modes
+
+Test each debate mode:
+
+```json
+// Collaborative (parallel, consensus-focused)
+{ "topic": "...", "mode": "collaborative" }
+
+// Adversarial (sequential, counter-arguments)
+{ "topic": "...", "mode": "adversarial" }
+
+// Socratic (sequential, question-driven)
+{ "topic": "...", "mode": "socratic" }
+
+// Expert Panel (parallel, independent assessments)
+{ "topic": "...", "mode": "expert-panel" }
+
+// Devil's Advocate (sequential, structured opposition)
+{ "topic": "...", "mode": "devils-advocate" }
+
+// Delphi (anonymized iterative consensus)
+{ "topic": "...", "mode": "delphi" }
+
+// Red Team/Blue Team (attack/defense teams)
+{ "topic": "...", "mode": "red-team-blue-team" }
+```
+
+#### 4. Querying Detailed Information
+
+```json
+// Get round details
+// Tool: get_round_details
+{
+  "sessionId": "<sessionId>",
+  "roundNumber": 1
+}
+
+// Get specific agent response
+// Tool: get_response_detail
+{
+  "sessionId": "<sessionId>",
+  "agentId": "claude-1",
+  "roundNumber": 1
+}
+
+// Get citations
+// Tool: get_citations
+{
+  "sessionId": "<sessionId>"
+}
+
+// Get agent reasoning evolution
+// Tool: get_thoughts
+{
+  "sessionId": "<sessionId>",
+  "agentId": "claude-1"
+}
+```
+
+#### 5. Session Control and Export
+
+```json
+// Pause session
+// Tool: control_session
+{
+  "sessionId": "<sessionId>",
+  "action": "pause"
+}
+
+// Export to markdown
+// Tool: export_session
+{
+  "sessionId": "<sessionId>",
+  "format": "markdown"
+}
+
+// Generate AI synthesis
+// Tool: synthesize_debate
+{
+  "sessionId": "<sessionId>"
+}
+```
+
+### Debugging Tips
+
+#### Log Level Configuration
+
+```bash
+# Verbose logging
+LOG_LEVEL=debug npx -y @modelcontextprotocol/inspector node dist/index.js
+
+# Errors only
+LOG_LEVEL=error npx -y @modelcontextprotocol/inspector node dist/index.js
+```
+
+#### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "No agents available" | API keys not set | Check environment variables |
+| "Agent health check failed" | Invalid API key or quota exceeded | Verify API key validity |
+| "Session not found" | Invalid sessionId | Use `list_sessions` to verify |
+| Inspector connection failed | Build not run | Run `pnpm build` first |
+| Timeout | Network or API latency | Retry or reduce number of rounds |
+
+#### Development with Watch Mode
+
+```bash
+# Terminal 1: Watch for changes and auto-build
+pnpm dev
+
+# Terminal 2: Run Inspector (after build completes)
+npx -y @modelcontextprotocol/inspector node dist/index.js
+```
+
+### Testing with Claude Desktop
+
+In addition to MCP Inspector, you can test directly with Claude Desktop:
+
+```json
+// ~/Library/Application Support/Claude/claude_desktop_config.json (macOS)
+// %APPDATA%\Claude\claude_desktop_config.json (Windows)
+{
+  "mcpServers": {
+    "ai-roundtable-dev": {
+      "command": "node",
+      "args": ["/path/to/ai-roundtable/dist/index.js"],
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "OPENAI_API_KEY": "sk-...",
+        "LOG_LEVEL": "debug"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop to use AI Roundtable tools in conversations.
+
+---
+
 ## Code Style Guidelines
 
 ### Naming Conventions

@@ -76,6 +76,13 @@ interface DebateModeStrategy {
 - Constants: UPPER_SNAKE_CASE
 - Filenames: kebab-case.ts
 
+## Documentation
+
+- **All documentation must be written in English**
+- Code comments: English
+- Commit messages: English (Korean body allowed for detailed explanation)
+- README, docs/*, and inline documentation: English only
+
 ## Testing Rules
 
 - Run `pnpm test` before committing
