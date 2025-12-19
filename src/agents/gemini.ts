@@ -187,6 +187,11 @@ export class GeminiAgent extends BaseAgent {
         contents: 'test',
         config: {
           maxOutputTokens: 10,
+          // Disable thinking for health check to get standard text response
+          // Gemini 3 models have thinking enabled by default which changes response structure
+          thinkingConfig: {
+            thinkingBudget: 0,
+          },
         },
       });
       // Check if we got a valid response
