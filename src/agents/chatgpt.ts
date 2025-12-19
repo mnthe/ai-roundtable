@@ -1,5 +1,5 @@
 /**
- * GPT-4 Agent - OpenAI GPT-4 implementation
+ * ChatGPT Agent - OpenAI ChatGPT implementation
  */
 
 import OpenAI from 'openai';
@@ -18,9 +18,9 @@ import type {
 } from '../types/index.js';
 
 /**
- * Configuration options for GPT-4 Agent
+ * Configuration options for ChatGPT Agent
  */
-export interface GPT4AgentOptions {
+export interface ChatGPTAgentOptions {
   /** OpenAI API key (defaults to OPENAI_API_KEY env var) */
   apiKey?: string;
   /** Custom OpenAI client instance (for testing) */
@@ -28,17 +28,17 @@ export interface GPT4AgentOptions {
 }
 
 /**
- * GPT-4 Agent using OpenAI's API
+ * ChatGPT Agent using OpenAI's API
  *
  * Supports:
  * - Function calling (tools)
  * - Structured response parsing
  * - Citation tracking from tool calls
  */
-export class GPT4Agent extends BaseAgent {
+export class ChatGPTAgent extends BaseAgent {
   private client: OpenAI;
 
-  constructor(config: AgentConfig, options?: GPT4AgentOptions) {
+  constructor(config: AgentConfig, options?: ChatGPTAgentOptions) {
     super(config);
 
     if (options?.client) {
@@ -191,14 +191,14 @@ export class GPT4Agent extends BaseAgent {
 }
 
 /**
- * Factory function for creating GPT-4 agents
+ * Factory function for creating ChatGPT agents
  */
-export function createGPT4Agent(
+export function createChatGPTAgent(
   config: AgentConfig,
   toolkit?: AgentToolkit,
-  options?: GPT4AgentOptions
-): GPT4Agent {
-  const agent = new GPT4Agent(config, options);
+  options?: ChatGPTAgentOptions
+): ChatGPTAgent {
+  const agent = new ChatGPTAgent(config, options);
   if (toolkit) {
     agent.setToolkit(toolkit);
   }

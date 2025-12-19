@@ -133,7 +133,7 @@ describe('Setup Module', () => {
       expect(registry.hasProvider('openai')).toBe(false);
       expect(registry.hasProvider('google')).toBe(false);
       expect(registry.hasProvider('perplexity')).toBe(false);
-      expect(result.warnings).toContain('GPT-4 agent not available: OPENAI_API_KEY not set');
+      expect(result.warnings).toContain('ChatGPT agent not available: OPENAI_API_KEY not set');
       expect(result.warnings).toContain('Gemini agent not available: GOOGLE_AI_API_KEY not set');
       expect(result.warnings).toContain('Perplexity agent not available: PERPLEXITY_API_KEY not set');
     });
@@ -288,7 +288,7 @@ describe('Setup Module', () => {
             model: 'gemini-1.5-pro',
           },
         ],
-        warnings: ['GPT-4 agent not available: OPENAI_API_KEY not set'],
+        warnings: ['ChatGPT agent not available: OPENAI_API_KEY not set'],
       };
 
       const report = getAvailabilityReport(result);

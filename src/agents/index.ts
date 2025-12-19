@@ -10,7 +10,7 @@ export {
   type AgentFactory,
 } from './registry.js';
 export { ClaudeAgent, createClaudeAgent, type ClaudeAgentOptions } from './claude.js';
-export { GPT4Agent, createGPT4Agent, type GPT4AgentOptions } from './gpt4.js';
+export { ChatGPTAgent, createChatGPTAgent, type ChatGPTAgentOptions } from './chatgpt.js';
 export { GeminiAgent, createGeminiAgent, type GeminiAgentOptions } from './gemini.js';
 export {
   PerplexityAgent,

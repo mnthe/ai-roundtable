@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { GPT4Agent, createGPT4Agent } from '../../../src/agents/gpt4.js';
+import { ChatGPTAgent, createChatGPTAgent } from '../../../src/agents/chatgpt.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 
@@ -70,10 +70,10 @@ const createMockClientWithToolCalls = (
   };
 };
 
-describe('GPT4Agent', () => {
+describe('ChatGPTAgent', () => {
   const defaultConfig: AgentConfig = {
-    id: 'gpt4-test',
-    name: 'GPT-4 Test',
+    id: 'chatgpt-test',
+    name: 'ChatGPT Test',
     provider: 'openai',
     model: 'gpt-4-turbo',
     temperature: 0.7,
@@ -91,11 +91,11 @@ describe('GPT4Agent', () => {
   describe('constructor', () => {
     it('should create agent with custom client', () => {
       const mockClient = createMockClient('test');
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
-      expect(agent.id).toBe('gpt4-test');
+      expect(agent.id).toBe('chatgpt-test');
       expect(agent.provider).toBe('openai');
     });
   });
@@ -109,14 +109,14 @@ describe('GPT4Agent', () => {
       });
 
       const mockClient = createMockClient(mockResponse);
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(response.agentId).toBe('gpt4-test');
-      expect(response.agentName).toBe('GPT-4 Test');
+      expect(response.agentId).toBe('chatgpt-test');
+      expect(response.agentName).toBe('ChatGPT Test');
       expect(response.position).toBe('AI should be regulated carefully');
       expect(response.reasoning).toBe('To balance innovation and safety');
       expect(response.confidence).toBe(0.8);
@@ -125,8 +125,8 @@ describe('GPT4Agent', () => {
 
     it('should call API with correct parameters', async () => {
       const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
       await agent.generateResponse(defaultContext);
@@ -142,8 +142,8 @@ describe('GPT4Agent', () => {
 
     it('should include system message', async () => {
       const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
       await agent.generateResponse(defaultContext);
@@ -156,8 +156,8 @@ describe('GPT4Agent', () => {
 
     it('should handle non-JSON response gracefully', async () => {
       const mockClient = createMockClient('This is a plain text response');
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
       const response = await agent.generateResponse(defaultContext);
@@ -182,20 +182,20 @@ describe('GPT4Agent', () => {
         },
       };
 
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(response.agentId).toBe('gpt4-test');
+      expect(response.agentId).toBe('chatgpt-test');
       expect(response.confidence).toBe(0.5);
     });
 
     it('should include previous responses in messages', async () => {
       const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
       const contextWithPrevious: DebateContext = {
@@ -244,8 +244,8 @@ describe('GPT4Agent', () => {
         }),
       };
 
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
       agent.setToolkit(mockToolkit);
 
@@ -272,8 +272,8 @@ describe('GPT4Agent', () => {
         executeTool: vi.fn(),
       };
 
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
       agent.setToolkit(mockToolkit);
 
@@ -303,8 +303,8 @@ describe('GPT4Agent', () => {
         executeTool: vi.fn().mockRejectedValue(new Error('Tool failed')),
       };
 
-      const agent = new GPT4Agent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
       agent.setToolkit(mockToolkit);
 
@@ -314,22 +314,22 @@ describe('GPT4Agent', () => {
   });
 });
 
-describe('createGPT4Agent', () => {
+describe('createChatGPTAgent', () => {
   it('should create agent with factory function', () => {
     const mockClient = createMockClient('test');
     const config: AgentConfig = {
-      id: 'factory-gpt4',
-      name: 'Factory GPT-4',
+      id: 'factory-chatgpt',
+      name: 'Factory ChatGPT',
       provider: 'openai',
       model: 'gpt-4',
     };
 
-    const agent = createGPT4Agent(config, undefined, {
-      client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+    const agent = createChatGPTAgent(config, undefined, {
+      client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
     });
 
-    expect(agent.id).toBe('factory-gpt4');
-    expect(agent).toBeInstanceOf(GPT4Agent);
+    expect(agent.id).toBe('factory-chatgpt');
+    expect(agent).toBeInstanceOf(ChatGPTAgent);
   });
 
   it('should set toolkit when provided', () => {
@@ -339,7 +339,7 @@ describe('createGPT4Agent', () => {
       executeTool: vi.fn(),
     };
 
-    const agent = createGPT4Agent(
+    const agent = createChatGPTAgent(
       {
         id: 'test',
         name: 'Test',
@@ -348,10 +348,10 @@ describe('createGPT4Agent', () => {
       },
       mockToolkit,
       {
-        client: mockClient as unknown as ConstructorParameters<typeof GPT4Agent>[1]['client'],
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       }
     );
 
-    expect(agent).toBeInstanceOf(GPT4Agent);
+    expect(agent).toBeInstanceOf(ChatGPTAgent);
   });
 });

@@ -7,7 +7,7 @@
 
 import { AgentRegistry } from './registry.js';
 import { ClaudeAgent } from './claude.js';
-import { GPT4Agent } from './gpt4.js';
+import { ChatGPTAgent } from './chatgpt.js';
 import { GeminiAgent } from './gemini.js';
 import { PerplexityAgent } from './perplexity.js';
 import type { AIProvider, AgentConfig } from '../types/index.js';
@@ -55,7 +55,7 @@ const DEFAULT_MODELS: Record<AIProvider, string> = {
  */
 const DEFAULT_AGENT_NAMES: Record<AIProvider, string> = {
   anthropic: 'Claude',
-  openai: 'GPT-4',
+  openai: 'ChatGPT',
   google: 'Gemini',
   perplexity: 'Perplexity',
 };
@@ -127,15 +127,15 @@ export function setupProviders(
     warnings.push('Claude agent not available: ANTHROPIC_API_KEY not set');
   }
 
-  // Register OpenAI/GPT-4
+  // Register OpenAI/ChatGPT
   if (keys.openai) {
     registry.registerProvider(
       'openai',
-      (config) => new GPT4Agent(config, { apiKey: keys.openai }),
+      (config) => new ChatGPTAgent(config, { apiKey: keys.openai }),
       DEFAULT_MODELS.openai
     );
   } else {
-    warnings.push('GPT-4 agent not available: OPENAI_API_KEY not set');
+    warnings.push('ChatGPT agent not available: OPENAI_API_KEY not set');
   }
 
   // Register Google/Gemini

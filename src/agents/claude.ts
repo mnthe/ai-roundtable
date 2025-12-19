@@ -4,6 +4,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, Tool, ToolUseBlock, TextBlock } from '@anthropic-ai/sdk/resources/messages';
+import { createLogger } from '../utils/logger.js';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import type {
   AgentConfig,
@@ -12,6 +13,8 @@ import type {
   ToolCallRecord,
   Citation,
 } from '../types/index.js';
+
+const logger = createLogger('ClaudeAgent');
 
 /**
  * Configuration options for Claude Agent
@@ -50,28 +53,41 @@ export class ClaudeAgent extends BaseAgent {
    * Generate a response using Claude API
    */
   async generateResponse(context: DebateContext): Promise<AgentResponse> {
-    const systemPrompt = this.buildSystemPrompt(context);
-    const userMessage = this.buildUserMessage(context);
+    const startTime = Date.now();
+    logger.info(
+      {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        agentName: this.name,
+        round: context.currentRound,
+        topic: context.topic,
+      },
+      'Starting agent response generation'
+    );
 
-    const messages: MessageParam[] = [
-      { role: 'user', content: userMessage },
-    ];
+    try {
+      const systemPrompt = this.buildSystemPrompt(context);
+      const userMessage = this.buildUserMessage(context);
 
-    const toolCalls: ToolCallRecord[] = [];
-    const citations: Citation[] = [];
+      const messages: MessageParam[] = [
+        { role: 'user', content: userMessage },
+      ];
 
-    // Build tools if toolkit is available
-    const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
+      const toolCalls: ToolCallRecord[] = [];
+      const citations: Citation[] = [];
 
-    // Make the API call
-    let response = await this.client.messages.create({
-      model: this.model,
-      max_tokens: this.maxTokens,
-      system: systemPrompt,
-      messages,
-      tools,
-      temperature: this.temperature,
-    });
+      // Build tools if toolkit is available
+      const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
+
+      // Make the API call
+      let response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: this.maxTokens,
+        system: systemPrompt,
+        messages,
+        tools,
+        temperature: this.temperature,
+      });
 
     // Handle tool use loop
     while (response.stop_reason === 'tool_use') {
@@ -132,19 +148,51 @@ export class ClaudeAgent extends BaseAgent {
     );
     const rawText = textBlocks.map((block) => block.text).join('\n');
 
-    // Parse the response
-    const parsed = this.parseResponse(rawText, context);
+      // Parse the response
+      const parsed = this.parseResponse(rawText, context);
 
-    return {
-      agentId: this.id,
-      agentName: this.name,
-      position: parsed.position ?? 'Unable to determine position',
-      reasoning: parsed.reasoning ?? rawText,
-      confidence: parsed.confidence ?? 0.5,
-      citations: citations.length > 0 ? citations : undefined,
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      timestamp: new Date(),
-    };
+      const result: AgentResponse = {
+        agentId: this.id,
+        agentName: this.name,
+        position: parsed.position ?? 'Unable to determine position',
+        reasoning: parsed.reasoning ?? rawText,
+        confidence: parsed.confidence ?? 0.5,
+        citations: citations.length > 0 ? citations : undefined,
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        timestamp: new Date(),
+      };
+
+      const duration = Date.now() - startTime;
+      logger.info(
+        {
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          duration,
+          confidence: result.confidence,
+          toolCallCount: toolCalls.length,
+          citationCount: citations.length,
+        },
+        'Agent response generation completed'
+      );
+
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error(
+        {
+          err: error,
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          duration,
+        },
+        'Failed to generate agent response'
+      );
+      throw error;
+    }
   }
 
   /**

@@ -8,7 +8,6 @@ import {
   type GenerativeModel,
   type Content,
   type FunctionDeclaration,
-  type FunctionCallingMode,
 } from '@google/generative-ai';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import type {
@@ -76,9 +75,6 @@ export class GeminiAgent extends BaseAgent {
 
     // Build chat history
     const history: Content[] = [];
-    const contents: Content[] = [
-      { role: 'user', parts: [{ text: userMessage }] },
-    ];
 
     // Create chat session with system instruction
     const chat = this.genModel.startChat({

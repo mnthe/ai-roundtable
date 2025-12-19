@@ -131,7 +131,7 @@ Please provide your response in the following JSON format:
   /**
    * Parse the raw response from the AI into structured format
    */
-  protected parseResponse(raw: string, context: DebateContext): Partial<AgentResponse> {
+  protected parseResponse(raw: string, _context: DebateContext): Partial<AgentResponse> {
     try {
       // Try to extract JSON from the response
       const jsonMatch = raw.match(/\{[\s\S]*\}/);

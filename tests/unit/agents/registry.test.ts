@@ -245,8 +245,8 @@ describe('AgentRegistry', () => {
         model: 'claude-3-opus',
       });
       registry.createAgent({
-        id: 'gpt-1',
-        name: 'GPT-4',
+        id: 'chatgpt-1',
+        name: 'ChatGPT',
         provider: 'openai',
         model: 'gpt-4-turbo',
       });
@@ -261,8 +261,8 @@ describe('AgentRegistry', () => {
         model: 'claude-3-opus',
       });
       expect(infoList).toContainEqual({
-        id: 'gpt-1',
-        name: 'GPT-4',
+        id: 'chatgpt-1',
+        name: 'ChatGPT',
         provider: 'openai',
         model: 'gpt-4-turbo',
       });
