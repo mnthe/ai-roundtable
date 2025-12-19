@@ -479,34 +479,34 @@ MCP tool responses (`start_roundtable`, `continue_roundtable`) use a 4-layer str
 ### Overview
 
 ```
-+-----------------------------------------------------------------------+
-|                    4-Layer Response Structure                          |
-+-----------------------------------------------------------------------+
-|                                                                        |
-|  Layer 1: DECISION (Quick Action Guidance)                             |
-|  +------------------------------------------------------------------+  |
-|  | consensusLevel: high | medium | low                               |  |
-|  | agreementScore: 0.0 - 1.0                                         |  |
-|  | actionRecommendation: { type, reason }                            |  |
-|  +------------------------------------------------------------------+  |
-|                                                                        |
-|  Layer 2: AGENT RESPONSES (Per-Agent Summaries)                        |
-|  +------------------------------------------------------------------+  |
-|  | [{ agentId, position, keyPoints[], confidence,                    |  |
-|  |    confidenceChange?, evidenceUsed }]                             |  |
-|  +------------------------------------------------------------------+  |
-|                                                                        |
-|  Layer 3: EVIDENCE (Aggregated Data)                                   |
-|  +------------------------------------------------------------------+  |
-|  | totalCitations, conflicts[], consensusSummary                     |  |
-|  +------------------------------------------------------------------+  |
-|                                                                        |
-|  Layer 4: METADATA (Deep Dive References)                              |
-|  +------------------------------------------------------------------+  |
-|  | detailReference, verificationHints[], hasMoreDetails              |  |
-|  +------------------------------------------------------------------+  |
-|                                                                        |
-+-----------------------------------------------------------------------+
+┌───────────────────────────────────────────────────────────────────────┐
+│                    4-Layer Response Structure                          │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  Layer 1: DECISION (Quick Action Guidance)                             │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ consensusLevel: high | medium | low                               │  │
+│  │ agreementScore: 0.0 - 1.0                                         │  │
+│  │ actionRecommendation: { type, reason }                            │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  Layer 2: AGENT RESPONSES (Per-Agent Summaries)                        │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ [{ agentId, position, keyPoints[], confidence,                    │  │
+│  │    confidenceChange?, evidenceUsed }]                             │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  Layer 3: EVIDENCE (Aggregated Data)                                   │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ totalCitations, conflicts[], consensusSummary                     │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  Layer 4: METADATA (Deep Dive References)                              │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │ detailReference, verificationHints[], hasMoreDetails              │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Layer Details
