@@ -96,9 +96,11 @@ export class DebateEngine {
     focusQuestion?: string
   ): Promise<RoundResult[]> {
     const results: RoundResult[] = [];
+    // Store the starting round to calculate correct round numbers
+    const startingRound = session.currentRound;
 
     for (let i = 0; i < numRounds; i++) {
-      const currentRound = session.currentRound + i + 1;
+      const currentRound = startingRound + i + 1;
       const context: DebateContext = {
         sessionId: session.id,
         topic: session.topic,

@@ -421,6 +421,53 @@ describe('MCP Tools', () => {
       expect(results[0].responses).toHaveLength(2);
     });
 
+    it('should correctly update currentRound after executeRounds (no double increment)', async () => {
+      const config = {
+        topic: 'Round count test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1', 'agent-2'],
+        rounds: 3,
+      };
+
+      // Create session (starts at round 0)
+      const session = await sessionManager.createSession(config);
+      expect(session.currentRound).toBe(0);
+
+      // Get agents
+      const agents = agentRegistry.getAgents(['agent-1', 'agent-2']);
+
+      // Execute 1 round - session.currentRound should be updated to 1 by executeRounds
+      await debateEngine.executeRounds(agents, session, 1);
+      expect(session.currentRound).toBe(1);
+
+      // The correct way to persist: use session.currentRound directly (not session.currentRound + numRounds)
+      await sessionManager.updateSessionRound(session.id, session.currentRound);
+      const savedSession1 = await sessionManager.getSession(session.id);
+      expect(savedSession1?.currentRound).toBe(1);
+
+      // Execute 1 more round
+      await debateEngine.executeRounds(agents, session, 1);
+      expect(session.currentRound).toBe(2);
+
+      await sessionManager.updateSessionRound(session.id, session.currentRound);
+      const savedSession2 = await sessionManager.getSession(session.id);
+      expect(savedSession2?.currentRound).toBe(2);
+
+      // Execute 2 rounds at once
+      const session2 = await sessionManager.createSession({
+        ...config,
+        topic: 'Multi-round test',
+      });
+      const agents2 = agentRegistry.getAgents(['agent-1', 'agent-2']);
+
+      await debateEngine.executeRounds(agents2, session2, 2);
+      expect(session2.currentRound).toBe(2);
+
+      await sessionManager.updateSessionRound(session2.id, session2.currentRound);
+      const savedSession3 = await sessionManager.getSession(session2.id);
+      expect(savedSession3?.currentRound).toBe(2);
+    });
+
     it('should list agents', () => {
       const agents = agentRegistry.getAgentInfoList();
 

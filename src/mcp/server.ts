@@ -595,8 +595,8 @@ async function handleStartRoundtable(
     // Execute first round
     const roundResults = await debateEngine.executeRounds(agents, session, 1);
 
-    // Update session
-    await sessionManager.updateSessionRound(session.id, 1);
+    // Update session (session.currentRound is already updated by executeRounds)
+    await sessionManager.updateSessionRound(session.id, session.currentRound);
     for (const result of roundResults) {
       for (const response of result.responses) {
         await sessionManager.addResponse(session.id, response);
@@ -658,17 +658,16 @@ async function handleContinueRoundtable(
       input.focusQuestion
     );
 
-    // Update session
-    await sessionManager.updateSessionRound(session.id, session.currentRound + numRounds);
+    // Update session (session.currentRound is already updated by executeRounds)
+    await sessionManager.updateSessionRound(session.id, session.currentRound);
     for (const result of roundResults) {
       for (const response of result.responses) {
         await sessionManager.addResponse(session.id, response);
       }
     }
 
-    // Mark as completed if we've reached total rounds
-    const newRound = session.currentRound + numRounds;
-    if (newRound >= session.totalRounds) {
+    // Mark as completed if we've reached total rounds (session.currentRound already updated by executeRounds)
+    if (session.currentRound >= session.totalRounds) {
       await sessionManager.updateSessionStatus(session.id, 'completed');
     }
 
@@ -684,10 +683,9 @@ async function handleContinueRoundtable(
         ? await sessionManager.getResponsesForRound(session.id, session.currentRound)
         : [];
 
-    // Update session object with new totalRounds for response building
+    // Update session object for response building (session.currentRound already updated by executeRounds)
     const updatedSession: Session = {
       ...session,
-      currentRound: newRound,
     };
 
     // Extract key points using AI (if available)
