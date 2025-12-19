@@ -122,8 +122,8 @@ describe('AIConsensusAnalyzer', () => {
         const responses = createSampleResponses();
         const result = await analyzer.analyzeConsensus(responses, 'Test topic');
 
-        // Fallback analysis should indicate it's a fallback
-        expect(result.reasoning).toContain('Fallback');
+        // Fallback analysis should indicate AI was unavailable
+        expect(result.reasoning).toContain('AI unavailable');
       });
     });
 

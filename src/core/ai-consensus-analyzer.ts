@@ -10,6 +10,10 @@ import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
 import { LIGHT_MODELS } from '../agents/setup.js';
+import { ConsensusAnalyzer } from './consensus-analyzer.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('AIConsensusAnalyzer');
 
 /**
  * Configuration for AIConsensusAnalyzer
@@ -122,14 +126,18 @@ export class AIConsensusAnalyzer {
     try {
       const analysisAgent = await this.getAnalysisAgent();
       if (analysisAgent) {
+        logger.debug({ topic, responseCount: responses.length }, 'Attempting AI consensus analysis');
         return await this.performAIAnalysis(analysisAgent, responses, topic);
+      } else {
+        logger.debug('No analysis agent available, falling back to rule-based analysis');
       }
     } catch (error) {
-      console.warn('[AIConsensusAnalyzer] AI analysis failed:', error);
+      logger.warn({ err: error }, 'AI analysis failed, falling back to rule-based analysis');
     }
 
-    // Fallback to basic analysis
+    // Fallback to semantic similarity-based analysis
     if (this.fallbackToRuleBased) {
+      logger.debug('Using ConsensusAnalyzer for fallback analysis');
       return this.performBasicAnalysis(responses);
     }
 
@@ -306,26 +314,20 @@ export class AIConsensusAnalyzer {
   }
 
   /**
-   * Perform basic (non-AI) analysis as fallback
-   * This is a simplified version that provides basic functionality
+   * Perform semantic similarity-based analysis as fallback
+   * Uses ConsensusAnalyzer for sophisticated clustering and agreement detection
    */
   private performBasicAnalysis(responses: AgentResponse[]): AIConsensusResult {
-    // Calculate average confidence as a proxy for agreement
-    const avgConfidence =
-      responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
-
-    // Simple position comparison
-    const positions = responses.map((r) => r.position.toLowerCase());
-    const uniqueCount = new Set(positions).size;
-    const agreementLevel = 1 - (uniqueCount - 1) / responses.length;
+    // Use ConsensusAnalyzer for semantic similarity-based analysis
+    const consensusAnalyzer = new ConsensusAnalyzer();
+    const result = consensusAnalyzer.analyzeConsensus(responses);
 
     return {
-      agreementLevel: Math.max(0, Math.min(1, agreementLevel)),
-      commonPoints: [`${responses.length} agents provided positions`],
-      disagreementPoints:
-        uniqueCount > 1 ? [`${uniqueCount} distinct positions identified`] : [],
-      summary: `Basic analysis: ${(agreementLevel * 100).toFixed(0)}% agreement based on position uniqueness. Average confidence: ${(avgConfidence * 100).toFixed(0)}%.`,
-      reasoning: 'Fallback analysis (AI unavailable)',
+      agreementLevel: result.agreementLevel,
+      commonPoints: result.commonPoints,
+      disagreementPoints: result.disagreementPoints,
+      summary: result.summary,
+      reasoning: 'Semantic similarity analysis (AI unavailable)',
     };
   }
 
