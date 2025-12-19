@@ -271,5 +271,155 @@ describe('DevilsAdvocateMode', () => {
       // Second agent should see first agent's response
       expect(secondAgentContext?.previousResponses).toHaveLength(1);
     });
+
+    it('should assign correct roles for 4+ agents', async () => {
+      const receivedPrompts: string[] = [];
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'agent-3', name: 'Evaluator1', provider: 'google', model: 'mock' }),
+        new MockAgent({ id: 'agent-4', name: 'Evaluator2', provider: 'perplexity', model: 'mock' }),
+      ];
+
+      // Mock each agent to capture the modePrompt it receives
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockImplementation(async (ctx) => {
+          receivedPrompts.push(ctx.modePrompt ?? '');
+          // Simulate different timestamps (sequential execution)
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          return {
+            agentId: agents[i].id,
+            agentName: agents[i].name,
+            position: `Position from ${agents[i].name}`,
+            reasoning: `Reasoning from ${agents[i].name}`,
+            confidence: 0.75,
+            timestamp: new Date(),
+          };
+        });
+      }
+
+      await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      expect(receivedPrompts).toHaveLength(4);
+      // Agent 0: Primary Position
+      expect(receivedPrompts[0]).toContain('Primary Position');
+      expect(receivedPrompts[0]).not.toContain('Opposition');
+      expect(receivedPrompts[0]).not.toContain('Evaluator');
+
+      // Agent 1: Opposition Role
+      expect(receivedPrompts[1]).toContain('Opposition Role');
+      expect(receivedPrompts[1]).not.toContain('Primary Position');
+      expect(receivedPrompts[1]).not.toContain('Evaluator');
+
+      // Agent 2: Evaluator Role (NOT Opposition!)
+      expect(receivedPrompts[2]).toContain('Evaluator Role');
+      expect(receivedPrompts[2]).not.toContain('Opposition');
+      expect(receivedPrompts[2]).not.toContain('Primary Position');
+
+      // Agent 3: Evaluator Role (NOT Opposition!)
+      expect(receivedPrompts[3]).toContain('Evaluator Role');
+      expect(receivedPrompts[3]).not.toContain('Opposition');
+      expect(receivedPrompts[3]).not.toContain('Primary Position');
+    });
+
+    it('should maintain correct roles across multiple rounds', async () => {
+      const round1Prompts: string[] = [];
+      const round2Prompts: string[] = [];
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'agent-3', name: 'Evaluator', provider: 'google', model: 'mock' }),
+      ];
+
+      // Round 1
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockImplementationOnce(async (ctx) => {
+          round1Prompts.push(ctx.modePrompt ?? '');
+          return {
+            agentId: agents[i].id,
+            agentName: agents[i].name,
+            position: `Round 1 position from ${agents[i].name}`,
+            reasoning: `Round 1 reasoning from ${agents[i].name}`,
+            confidence: 0.75,
+            timestamp: new Date(),
+          };
+        });
+      }
+
+      const round1Responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Round 2 context includes round 1 responses
+      const round2Context: DebateContext = {
+        ...defaultContext,
+        currentRound: 2,
+        previousResponses: round1Responses,
+      };
+
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockImplementationOnce(async (ctx) => {
+          round2Prompts.push(ctx.modePrompt ?? '');
+          return {
+            agentId: agents[i].id,
+            agentName: agents[i].name,
+            position: `Round 2 position from ${agents[i].name}`,
+            reasoning: `Round 2 reasoning from ${agents[i].name}`,
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+      }
+
+      await mode.executeRound(agents, round2Context, mockToolkit);
+
+      // Verify round 1 role assignment
+      expect(round1Prompts[0]).toContain('Primary Position');
+      expect(round1Prompts[1]).toContain('Opposition Role');
+      expect(round1Prompts[2]).toContain('Evaluator Role');
+
+      // Verify round 2 role assignment (same roles)
+      expect(round2Prompts[0]).toContain('Primary Position');
+      expect(round2Prompts[1]).toContain('Opposition Role');
+      expect(round2Prompts[2]).toContain('Evaluator Role');
+
+      // Verify round 2 prompts mention round number
+      expect(round2Prompts[0]).toContain('round 2');
+      expect(round2Prompts[1]).toContain('round 2');
+      expect(round2Prompts[2]).toContain('round 2');
+    });
+
+    it('should assign correct roles even with different timestamps in responses', async () => {
+      // This test specifically verifies the bug fix where timestamp-based
+      // filtering caused incorrect role assignment
+      const receivedPrompts: string[] = [];
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'agent-3', name: 'Evaluator', provider: 'google', model: 'mock' }),
+      ];
+
+      // Mock with explicit time delays to ensure different timestamps
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockImplementation(async (ctx) => {
+          receivedPrompts.push(ctx.modePrompt ?? '');
+          // Simulate varying delays (sequential execution with different timestamps)
+          await new Promise((resolve) => setTimeout(resolve, 50 + i * 20));
+          return {
+            agentId: agents[i].id,
+            agentName: agents[i].name,
+            position: `Position from ${agents[i].name}`,
+            reasoning: `Reasoning from ${agents[i].name}`,
+            confidence: 0.75,
+            timestamp: new Date(), // Each will have a different timestamp
+          };
+        });
+      }
+
+      await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // All roles should be correctly assigned despite different timestamps
+      expect(receivedPrompts[0]).toContain('Primary Position');
+      expect(receivedPrompts[1]).toContain('Opposition Role');
+      expect(receivedPrompts[2]).toContain('Evaluator Role');
+    });
   });
 });

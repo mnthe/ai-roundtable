@@ -48,17 +48,15 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
       if (!agent) continue;
 
       // Build context with responses from current round and mode-specific prompt
+      // Pass explicit agent index to ensure correct role assignment
       const currentContext: DebateContext = {
         ...context,
         previousResponses: [
           ...context.previousResponses,
           ...responses,
         ],
-        // Add mode-specific prompt based on agent role
-        modePrompt: this.buildAgentPrompt({
-          ...context,
-          previousResponses: [...context.previousResponses, ...responses],
-        }),
+        // Add mode-specific prompt based on agent role (index i in current round)
+        modePrompt: this.buildAgentPromptForIndex(context, i),
       };
 
       agent.setToolkit(toolkit);
@@ -76,15 +74,25 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
    * - First agent: Present normal position
    * - Second agent: Take opposing stance (devil's advocate)
    * - Remaining agents: Evaluate both perspectives
+   *
+   * Note: This method uses previousResponses.length to infer agent index.
+   * For accurate role assignment during sequential execution, use
+   * buildAgentPromptForIndex() with explicit index instead.
    */
   buildAgentPrompt(context: DebateContext): string {
-    const isFirstRound = context.previousResponses.length === 0;
-    const responseCount = context.previousResponses.filter(
-      (r) => r.timestamp.getTime() === context.previousResponses[0]?.timestamp.getTime()
-    ).length;
+    // Use previousResponses length as agent index (works when called with accumulated responses)
+    const agentIndex = context.previousResponses.length;
+    return this.buildAgentPromptForIndex(context, agentIndex);
+  }
 
-    // Determine role based on position in current round
-    const agentIndex = responseCount;
+  /**
+   * Build devil's advocate-specific prompt with explicit agent index
+   *
+   * This method is used internally by executeRound to ensure correct
+   * role assignment when agents execute sequentially.
+   */
+  private buildAgentPromptForIndex(context: DebateContext, agentIndex: number): string {
+    const isFirstRound = context.currentRound === 1;
 
     if (agentIndex === 0) {
       // First agent: Normal position
