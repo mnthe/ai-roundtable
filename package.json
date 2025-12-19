@@ -27,8 +27,8 @@
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"scripts/**/*.ts\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -36,7 +36,10 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "prepare": "pnpm run build",
-    "prepublishOnly": "pnpm run test && pnpm run lint"
+    "prepublishOnly": "pnpm run test && pnpm run lint",
+    "benchmark": "tsx scripts/benchmark/cli.ts",
+    "benchmark:matrix": "tsx scripts/benchmark/cli.ts matrix",
+    "benchmark:single": "tsx scripts/benchmark/cli.ts single"
   },
   "keywords": [
     "mcp",
@@ -61,10 +64,12 @@
     "@anthropic-ai/sdk": "^0.71.2",
     "@google/genai": "^1.34.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
+    "commander": "^14.0.2",
     "jsonrepair": "^3.13.1",
     "openai": "^6.15.0",
     "pino": "^10.1.0",
     "sql.js": "^1.13.0",
+    "yaml": "^2.8.2",
     "zod": "^4.2.1"
   },
   "devDependencies": {
@@ -79,6 +84,7 @@
     "eslint-plugin-prettier": "^5.5.4",
     "msw": "^2.12.4",
     "prettier": "^3.7.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   }

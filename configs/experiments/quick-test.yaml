@@ -1,0 +1,27 @@
+# Quick Test Experiment
+# Minimal config for testing the benchmark script
+
+name: quick-test
+description: Quick test with minimal configuration
+
+variables:
+  modes:
+    - collaborative
+
+  rounds: [1]
+
+  topics:
+    - "What is the best programming language for beginners?"
+
+  agents:
+    - default
+
+options:
+  parallel: false
+  delay_between: 1000
+  retry_on_failure: 0
+
+output:
+  include_raw_responses: true
+  include_tool_calls: true
+  include_citations: true

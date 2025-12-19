@@ -1,0 +1,30 @@
+# Depth Analysis Experiment
+# Analyzes how consensus evolves with more debate rounds
+
+name: depth-analysis
+description: Analyze consensus evolution across different round depths
+
+variables:
+  modes:
+    - collaborative
+    - adversarial
+
+  rounds: [1, 2, 3, 4, 5]
+
+  topics:
+    - "What is the most important factor in building a successful startup?"
+    - "Should programming languages prioritize safety over performance?"
+    - "Is microservices architecture always better than monoliths?"
+
+  agents:
+    - default
+
+options:
+  parallel: false
+  delay_between: 3000
+  retry_on_failure: 1
+
+output:
+  include_raw_responses: true
+  include_tool_calls: true
+  include_citations: true
