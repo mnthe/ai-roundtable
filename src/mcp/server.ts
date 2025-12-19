@@ -9,6 +9,7 @@ import { createLogger } from '../utils/logger.js';
 import { DebateEngine } from '../core/DebateEngine.js';
 import { SessionManager } from '../core/session-manager.js';
 import { AIConsensusAnalyzer } from '../core/ai-consensus-analyzer.js';
+import { KeyPointsExtractor } from '../core/key-points-extractor.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
 import { DefaultAgentToolkit } from '../tools/toolkit.js';
@@ -83,6 +84,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
 
   // Initialize AI-based consensus analyzer (will be set up after agents are registered)
   let aiConsensusAnalyzer: AIConsensusAnalyzer | null = null;
+  let keyPointsExtractor: KeyPointsExtractor | null = null;
 
   // Set toolkit for agents
   agentRegistry.setToolkit(toolkit);
@@ -102,6 +104,12 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
 
     // Initialize AI consensus analyzer with available agents
     aiConsensusAnalyzer = new AIConsensusAnalyzer({
+      registry: agentRegistry,
+      fallbackToRuleBased: true,
+    });
+
+    // Initialize key points extractor with available agents
+    keyPointsExtractor = new KeyPointsExtractor({
       registry: agentRegistry,
       fallbackToRuleBased: true,
     });
@@ -143,11 +151,11 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
 
       switch (name) {
         case 'start_roundtable':
-          result = await handleStartRoundtable(args, debateEngine, sessionManager, agentRegistry);
+          result = await handleStartRoundtable(args, debateEngine, sessionManager, agentRegistry, keyPointsExtractor);
           break;
 
         case 'continue_roundtable':
-          result = await handleContinueRoundtable(args, debateEngine, sessionManager, agentRegistry);
+          result = await handleContinueRoundtable(args, debateEngine, sessionManager, agentRegistry, keyPointsExtractor);
           break;
 
         case 'get_consensus':
@@ -410,11 +418,17 @@ function buildVerificationHints(
 
 /**
  * Build the 4-layer roundtable response
+ *
+ * @param session - The debate session
+ * @param roundResult - The round result containing responses and consensus
+ * @param previousResponses - Previous round responses for confidence change calculation
+ * @param keyPointsMap - Pre-extracted key points map (agentId -> keyPoints[])
  */
 function buildRoundtableResponse(
   session: Session,
   roundResult: RoundResult,
-  previousResponses: AgentResponse[] = []
+  previousResponses: AgentResponse[] = [],
+  keyPointsMap: Map<string, string[]> = new Map()
 ): RoundtableResponse {
   const responses = roundResult.responses;
   const consensus = roundResult.consensus;
@@ -464,11 +478,14 @@ function buildRoundtableResponse(
     const citations = r.citations?.length || 0;
     const toolCalls = [...new Set(r.toolCalls?.map((tc) => tc.toolName) || [])];
 
+    // Use AI-extracted key points if available, fallback to rule-based
+    const keyPoints = keyPointsMap.get(r.agentId) ?? extractKeyPoints(r.reasoning);
+
     return {
       agentId: r.agentId,
       agentName: r.agentName,
       position: r.position,
-      keyPoints: extractKeyPoints(r.reasoning),
+      keyPoints,
       confidence: r.confidence,
       confidenceChange,
       evidenceUsed: {
@@ -537,7 +554,8 @@ async function handleStartRoundtable(
   args: unknown,
   debateEngine: DebateEngine,
   sessionManager: SessionManager,
-  agentRegistry: AgentRegistry
+  agentRegistry: AgentRegistry,
+  keyPointsExtractor: KeyPointsExtractor | null
 ): Promise<ToolResponse> {
   try {
     // Validate input
@@ -591,7 +609,12 @@ async function handleStartRoundtable(
       return createErrorResponse('No round results available');
     }
 
-    const response = buildRoundtableResponse(session, firstRound);
+    // Extract key points using AI (if available)
+    const keyPointsMap = keyPointsExtractor
+      ? await keyPointsExtractor.extractKeyPointsBatch(firstRound.responses)
+      : new Map<string, string[]>();
+
+    const response = buildRoundtableResponse(session, firstRound, [], keyPointsMap);
     return createSuccessResponse(response);
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -605,7 +628,8 @@ async function handleContinueRoundtable(
   args: unknown,
   debateEngine: DebateEngine,
   sessionManager: SessionManager,
-  agentRegistry: AgentRegistry
+  agentRegistry: AgentRegistry,
+  keyPointsExtractor: KeyPointsExtractor | null
 ): Promise<ToolResponse> {
   try {
     // Validate input
@@ -666,7 +690,12 @@ async function handleContinueRoundtable(
       currentRound: newRound,
     };
 
-    const response = buildRoundtableResponse(updatedSession, latestRound, previousResponses);
+    // Extract key points using AI (if available)
+    const keyPointsMap = keyPointsExtractor
+      ? await keyPointsExtractor.extractKeyPointsBatch(latestRound.responses)
+      : new Map<string, string[]>();
+
+    const response = buildRoundtableResponse(updatedSession, latestRound, previousResponses, keyPointsMap);
     return createSuccessResponse(response);
   } catch (error) {
     return createErrorResponse(error as Error);
