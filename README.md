@@ -1,10 +1,10 @@
 # AI Roundtable
 
-Multi-AI debate platform that enables structured discussions between different AI models (Claude, GPT-4, Gemini, Perplexity) as an MCP server.
+Multi-AI debate platform that enables structured discussions between different AI models (Claude, ChatGPT, Gemini, Perplexity) as an MCP server.
 
 ## Features
 
-- **Multi-AI Debates**: Run structured debates with Claude, GPT-4, Gemini, and Perplexity
+- **Multi-AI Debates**: Run structured debates with Claude, ChatGPT, Gemini, and Perplexity
 - **Multiple Debate Modes**:
   - Collaborative - Build consensus together
   - Adversarial - Challenge opposing viewpoints
@@ -52,7 +52,7 @@ cp .env.example .env
 
 Required keys (at least one):
 - `ANTHROPIC_API_KEY` - For Claude agents
-- `OPENAI_API_KEY` - For GPT-4 agents
+- `OPENAI_API_KEY` - For ChatGPT agents
 - `GOOGLE_AI_API_KEY` - For Gemini agents
 - `PERPLEXITY_API_KEY` - For Perplexity agents
 
@@ -118,7 +118,7 @@ Start a new AI debate.
 
 **Example:**
 ```
-Start a debate on "Should AI development be regulated?" using adversarial mode with Claude and GPT-4
+Start a debate on "Should AI development be regulated?" using adversarial mode with Claude and ChatGPT
 ```
 
 ### continue_roundtable
@@ -212,7 +212,7 @@ ai-roundtable/
 │   ├── agents/       # AI agent implementations
 │   │   ├── base.ts       # BaseAgent abstract class
 │   │   ├── claude.ts     # Claude (Anthropic) agent
-│   │   ├── gpt4.ts       # GPT-4 (OpenAI) agent
+│   │   ├── chatgpt.ts    # ChatGPT (OpenAI) agent
 │   │   ├── gemini.ts     # Gemini (Google) agent
 │   │   ├── perplexity.ts # Perplexity agent
 │   │   └── registry.ts   # Agent registry

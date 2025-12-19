@@ -20,7 +20,7 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  ┌──────────────────┐      ┌──────────────────────┐     │
 │  │  AgentRegistry   │      │    ModeRegistry      │     │
 │  │  ├─ Claude       │      │  ├─ Collaborative    │     │
-│  │  ├─ GPT4         │      │  ├─ Adversarial      │     │
+│  │  ├─ ChatGPT      │      │  ├─ Adversarial      │     │
 │  │  ├─ Gemini       │      │  ├─ Socratic         │     │
 │  │  └─ Perplexity   │      │  └─ Expert Panel     │     │
 │  └──────────────────┘      └──────────────────────┘     │
@@ -43,7 +43,7 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 |----------|--------|-----------|
 | Language | TypeScript (ESM) | Type safety, modern Node.js support |
 | AI Abstraction | BaseAgent class | Tool use support, provider extensibility |
-| Initial Providers | Claude, GPT-4, Gemini, Perplexity | Mature SDKs, diverse capabilities |
+| Initial Providers | Claude, ChatGPT, Gemini, Perplexity | Mature SDKs, diverse capabilities |
 | Storage | SQLite only | Simple, local MCP server use case |
 | Mode Strategy | Strategy Pattern | Easy to add new debate modes |
 | Testing | Vitest + Mock providers | Fast feedback, no API costs in CI |

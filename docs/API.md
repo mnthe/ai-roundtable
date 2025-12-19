@@ -203,25 +203,25 @@ function createClaudeAgent(
 ): ClaudeAgent;
 ```
 
-### GPT4Agent
+### ChatGPTAgent
 
-OpenAI GPT-4 agent with tool use support.
+OpenAI ChatGPT agent with tool use support.
 
 ```typescript
-class GPT4Agent extends BaseAgent {
-  constructor(config: AgentConfig, options?: GPT4AgentOptions);
+class ChatGPTAgent extends BaseAgent {
+  constructor(config: AgentConfig, options?: ChatGPTAgentOptions);
 }
 
-interface GPT4AgentOptions {
+interface ChatGPTAgentOptions {
   apiKey?: string;        // Default: OPENAI_API_KEY env
   client?: OpenAI;        // Custom client (testing)
 }
 
-function createGPT4Agent(
+function createChatGPTAgent(
   config: AgentConfig,
   toolkit?: AgentToolkit,
-  options?: GPT4AgentOptions
-): GPT4Agent;
+  options?: ChatGPTAgentOptions
+): ChatGPTAgent;
 ```
 
 ### GeminiAgent
@@ -754,7 +754,7 @@ await server.start();
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude | For Claude agents |
-| `OPENAI_API_KEY` | OpenAI API key for GPT-4 | For GPT-4 agents |
+| `OPENAI_API_KEY` | OpenAI API key for ChatGPT | For ChatGPT agents |
 | `GOOGLE_AI_API_KEY` | Google AI API key for Gemini | For Gemini agents |
 | `PERPLEXITY_API_KEY` | Perplexity API key | For Perplexity agents |
 | `DATABASE_PATH` | SQLite database path | No (default: `./data/roundtable.db`) |

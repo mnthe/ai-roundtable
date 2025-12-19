@@ -38,7 +38,7 @@ tests/
 │   ├── agents/             # Agent tests
 │   │   ├── base.test.ts
 │   │   ├── claude.test.ts
-│   │   ├── gpt4.test.ts
+│   │   ├── chatgpt.test.ts
 │   │   ├── gemini.test.ts
 │   │   ├── perplexity.test.ts
 │   │   └── registry.test.ts
@@ -504,7 +504,7 @@ it('should handle API errors gracefully', async () => {
     },
   };
 
-  const agent = new GPT4Agent(config, { client: mockClient as any });
+  const agent = new ChatGPTAgent(config, { client: mockClient as any });
 
   // Should not throw
   const response = await agent.generateResponse(context);
