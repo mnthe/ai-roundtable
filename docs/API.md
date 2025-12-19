@@ -751,13 +751,13 @@ await server.start();
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | For Claude agents |
-| `OPENAI_API_KEY` | OpenAI API key for ChatGPT | For ChatGPT agents |
-| `GOOGLE_AI_API_KEY` | Google AI API key for Gemini | For Gemini agents |
-| `PERPLEXITY_API_KEY` | Perplexity API key | For Perplexity agents |
-| `DATABASE_PATH` | SQLite database path | No (default: `./data/roundtable.db`) |
+| Variable             | Description                  | Required                             |
+| -------------------- | ---------------------------- | ------------------------------------ |
+| `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
+| `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
+| `GOOGLE_AI_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
+| `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
+| `DATABASE_PATH`      | SQLite database path         | No (default: `./data/roundtable.db`) |
 
 ---
 

@@ -198,15 +198,15 @@ Control session execution state.
 
 ## Debate Modes
 
-| Mode | Execution | Description |
-|------|-----------|-------------|
-| **Collaborative** | Parallel | Agents build consensus by finding common ground |
-| **Adversarial** | Sequential | Agents challenge and counter-argue positions |
-| **Socratic** | Sequential | Dialogue through probing questions |
-| **Expert Panel** | Parallel | Independent expert assessments |
-| **Devil's Advocate** | Sequential | Structured opposition: propose/oppose/evaluate |
-| **Delphi** | Parallel | Anonymized iterative consensus building |
-| **Red Team/Blue Team** | Parallel | Attack/defense team dynamics |
+| Mode                   | Execution  | Description                                     |
+| ---------------------- | ---------- | ----------------------------------------------- |
+| **Collaborative**      | Parallel   | Agents build consensus by finding common ground |
+| **Adversarial**        | Sequential | Agents challenge and counter-argue positions    |
+| **Socratic**           | Sequential | Dialogue through probing questions              |
+| **Expert Panel**       | Parallel   | Independent expert assessments                  |
+| **Devil's Advocate**   | Sequential | Structured opposition: propose/oppose/evaluate  |
+| **Delphi**             | Parallel   | Anonymized iterative consensus building         |
+| **Red Team/Blue Team** | Parallel   | Attack/defense team dynamics                    |
 
 ### Mode Details
 
@@ -228,20 +228,20 @@ Control session execution state.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    MCP Server Layer                      │
+│                    MCP Server Layer                     │
 │  (src/mcp/server.ts, src/mcp/tools.ts)                  │
 ├─────────────────────────────────────────────────────────┤
-│                    Core Layer                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│  │
-│  └─────────────┘  └─────────────┘  └────────┬────────┘  │
+│                    Core Layer                           │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────┐ │
+│  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│ │
+│  └─────────────┘  └──────────────┘  └───────┬─────────┘ │
 │                                             │           │
 │                            ┌────────────────┴────────┐  │
-│                            │  AIConsensusAnalyzer   │  │
+│                            │  AIConsensusAnalyzer    │  │
 │                            │  (semantic AI analysis) │  │
 │                            └─────────────────────────┘  │
 ├─────────────────────────────────────────────────────────┤
-│         Agents Layer              Modes Layer            │
+│         Agents Layer              Modes Layer           │
 │  ┌──────────────────┐      ┌──────────────────────┐     │
 │  │  AgentRegistry   │      │    ModeRegistry      │     │
 │  │  ├─ Claude       │      │  ├─ Collaborative    │     │
@@ -253,15 +253,15 @@ Control session execution state.
 │  │  (startup verify)│                                   │
 │  └──────────────────┘                                   │
 ├─────────────────────────────────────────────────────────┤
-│  Tools Layer                    Storage Layer            │
-│  ┌──────────────────┐      ┌──────────────────────┐     │
-│  │DefaultAgentToolkit│      │   SQLiteStorage     │     │
-│  │ ├─ get_context   │      │                      │     │
-│  │ ├─ search_web    │      │                      │     │
-│  │ ├─ fact_check    │      │                      │     │
-│  │ └─ perplexity_   │      │                      │     │
-│  │    search        │      │                      │     │
-│  └──────────────────┘      └──────────────────────┘     │
+│  Tools Layer                    Storage Layer           │
+│  ┌───────────────────┐      ┌──────────────────────┐    │
+│  │DefaultAgentToolkit│      │    SQLiteStorage     │    │
+│  │ ├─ get_context    │      │                      │    │
+│  │ ├─ search_web     │      │                      │    │
+│  │ ├─ fact_check     │      │                      │    │
+│  │ └─ perplexity_    │      │                      │    │
+│  │    search         │      │                      │    │
+│  └───────────────────┘      └──────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -269,10 +269,10 @@ Control session execution state.
 
 AI Roundtable uses different model tiers for different purposes:
 
-| Tier | Purpose | Models |
-|------|---------|--------|
+| Tier      | Purpose              | Models                                                        |
+| --------- | -------------------- | ------------------------------------------------------------- |
 | **Heavy** | Debate participation | claude-sonnet-4-5, gpt-5.2, gemini-3-flash-preview, sonar-pro |
-| **Light** | Consensus analysis | claude-haiku-4-5, gpt-5-mini, gemini-2.5-flash-lite, sonar |
+| **Light** | Consensus analysis   | claude-haiku-4-5, gpt-5-mini, gemini-2.5-flash-lite, sonar    |
 
 Light models are automatically used for `AIConsensusAnalyzer` and `synthesize_debate` to reduce costs and latency.
 
@@ -280,12 +280,12 @@ Light models are automatically used for `AIConsensusAnalyzer` and `synthesize_de
 
 Roundtable responses are structured in 4 progressive layers, optimized for agentic workflows where the main agent needs to make decisions efficiently:
 
-| Layer | Name | Purpose |
-|-------|------|---------|
-| **1** | Decision | Quick consensus level (high/medium/low), action recommendation |
-| **2** | Agent Responses | Per-agent position summaries with key points and confidence |
-| **3** | Evidence | Aggregated citations, identified conflicts, consensus summary |
-| **4** | Metadata | References for deep dive, verification hints |
+| Layer | Name            | Purpose                                                        |
+| ----- | --------------- | -------------------------------------------------------------- |
+| **1** | Decision        | Quick consensus level (high/medium/low), action recommendation |
+| **2** | Agent Responses | Per-agent position summaries with key points and confidence    |
+| **3** | Evidence        | Aggregated citations, identified conflicts, consensus summary  |
+| **4** | Metadata        | References for deep dive, verification hints                   |
 
 **Action Recommendations:**
 - `proceed` - High consensus, safe to act on results
@@ -432,12 +432,12 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed guide.
 
 During debates, agents have access to these tools:
 
-| Tool | Description |
-|------|-------------|
-| `get_context` | Get current debate context (topic, round, previous responses) |
-| `submit_response` | Submit structured response with position, reasoning, confidence |
-| `search_web` | Basic web search for evidence |
-| `fact_check` | Verify claims with web and debate evidence |
+| Tool                | Description                                                            |
+| ------------------- | ---------------------------------------------------------------------- |
+| `get_context`       | Get current debate context (topic, round, previous responses)          |
+| `submit_response`   | Submit structured response with position, reasoning, confidence        |
+| `search_web`        | Basic web search for evidence                                          |
+| `fact_check`        | Verify claims with web and debate evidence                             |
 | `perplexity_search` | Advanced search with recency/domain filters, images, related questions |
 
 ### Perplexity Search Options
@@ -454,25 +454,25 @@ During debates, agents have access to these tools:
 
 ## Key Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Language | TypeScript (ESM) | Type safety, Node.js 20+ support |
-| AI Abstraction | BaseAgent class | Unified interface for tool use, extensibility |
-| Providers | Claude, ChatGPT, Gemini, Perplexity | Mature SDKs, diverse capabilities |
-| Storage | SQLite (sql.js) | Simple, local, no external dependencies |
-| Mode Pattern | Strategy Pattern | Easy to add new debate modes |
-| Testing | Vitest + Mocks | Fast feedback, no API costs in CI |
+| Decision       | Choice                              | Rationale                                     |
+| -------------- | ----------------------------------- | --------------------------------------------- |
+| Language       | TypeScript (ESM)                    | Type safety, Node.js 20+ support              |
+| AI Abstraction | BaseAgent class                     | Unified interface for tool use, extensibility |
+| Providers      | Claude, ChatGPT, Gemini, Perplexity | Mature SDKs, diverse capabilities             |
+| Storage        | SQLite (sql.js)                     | Simple, local, no external dependencies       |
+| Mode Pattern   | Strategy Pattern                    | Easy to add new debate modes                  |
+| Testing        | Vitest + Mocks                      | Fast feedback, no API costs in CI             |
 
 ## Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude | For Claude agents |
-| `OPENAI_API_KEY` | OpenAI API key for ChatGPT | For ChatGPT agents |
-| `GOOGLE_AI_API_KEY` | Google AI API key for Gemini | For Gemini agents |
-| `PERPLEXITY_API_KEY` | Perplexity API key | For Perplexity agents |
-| `DATABASE_PATH` | SQLite database path | No (default: `./data/roundtable.db`) |
-| `LOG_LEVEL` | Logging verbosity | No (default: `info`) |
+| Variable             | Description                  | Required                             |
+| -------------------- | ---------------------------- | ------------------------------------ |
+| `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
+| `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
+| `GOOGLE_AI_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
+| `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
+| `DATABASE_PATH`      | SQLite database path         | No (default: `./data/roundtable.db`) |
+| `LOG_LEVEL`          | Logging verbosity            | No (default: `info`)                 |
 
 ## Documentation
 

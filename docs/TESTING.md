@@ -433,12 +433,12 @@ pnpm test:coverage
 
 The project aims for these coverage targets:
 
-| Metric | Target |
-|--------|--------|
-| Statements | 80% |
-| Branches | 75% |
-| Functions | 80% |
-| Lines | 80% |
+| Metric     | Target |
+| ---------- | ------ |
+| Statements | 80%    |
+| Branches   | 75%    |
+| Functions  | 80%    |
+| Lines      | 80%    |
 
 ### Viewing Reports
 

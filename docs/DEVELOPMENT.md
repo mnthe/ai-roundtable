@@ -8,15 +8,15 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    MCP Server Layer                      │
+│                    MCP Server Layer                     │
 │  (src/mcp/server.ts, src/mcp/tools.ts)                  │
 ├─────────────────────────────────────────────────────────┤
-│                    Core Layer                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐  │
-│  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│  │
-│  └─────────────┘  └─────────────┘  └─────────────────┘  │
+│                    Core Layer                           │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────┐ │
+│  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│ │
+│  └─────────────┘  └──────────────┘  └─────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
-│         Agents Layer              Modes Layer            │
+│         Agents Layer              Modes Layer           │
 │  ┌──────────────────┐      ┌──────────────────────┐     │
 │  │  AgentRegistry   │      │    ModeRegistry      │     │
 │  │  ├─ Claude       │      │  ├─ Collaborative    │     │
@@ -25,28 +25,28 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  │  └─ Perplexity   │      │  └─ Expert Panel     │     │
 │  └──────────────────┘      └──────────────────────┘     │
 ├─────────────────────────────────────────────────────────┤
-│  Tools Layer                    Storage Layer            │
-│  ┌──────────────────┐      ┌──────────────────────┐     │
-│  │DefaultAgentToolkit│      │   SQLiteStorage     │     │
-│  │ ├─ get_context   │      │                      │     │
-│  │ ├─ search_web    │      │                      │     │
-│  │ ├─ fact_check    │      │                      │     │
-│  │ └─ perplexity_   │      │                      │     │
-│  │    search        │      │                      │     │
-│  └──────────────────┘      └──────────────────────┘     │
+│  Tools Layer                    Storage Layer           │
+│  ┌───────────────────┐      ┌──────────────────────┐    │
+│  │DefaultAgentToolkit│      │   SQLiteStorage      │    │
+│  │ ├─ get_context    │      │                      │    │
+│  │ ├─ search_web     │      │                      │    │
+│  │ ├─ fact_check     │      │                      │    │
+│  │ └─ perplexity_    │      │                      │    │
+│  │    search         │      │                      │    │
+│  └───────────────────┘      └──────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## Key Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Language | TypeScript (ESM) | Type safety, modern Node.js support |
-| AI Abstraction | BaseAgent class | Tool use support, provider extensibility |
-| Initial Providers | Claude, ChatGPT, Gemini, Perplexity | Mature SDKs, diverse capabilities |
-| Storage | SQLite only | Simple, local MCP server use case |
-| Mode Strategy | Strategy Pattern | Easy to add new debate modes |
-| Testing | Vitest + Mock providers | Fast feedback, no API costs in CI |
+| Decision          | Choice                              | Rationale                                |
+| ----------------- | ----------------------------------- | ---------------------------------------- |
+| Language          | TypeScript (ESM)                    | Type safety, modern Node.js support      |
+| AI Abstraction    | BaseAgent class                     | Tool use support, provider extensibility |
+| Initial Providers | Claude, ChatGPT, Gemini, Perplexity | Mature SDKs, diverse capabilities        |
+| Storage           | SQLite only                         | Simple, local MCP server use case        |
+| Mode Strategy     | Strategy Pattern                    | Easy to add new debate modes             |
+| Testing           | Vitest + Mock providers             | Fast feedback, no API costs in CI        |
 
 ## Core Components
 
@@ -114,12 +114,12 @@ interface DebateModeStrategy {
 
 **Mode Execution Patterns:**
 
-| Mode | Execution | Description |
-|------|-----------|-------------|
-| Collaborative | Sequential | Agents build on each other's ideas |
-| Adversarial | Sequential | Agents challenge previous positions |
-| Socratic | Sequential | Dialogue through questioning |
-| Expert Panel | Parallel | Independent expert assessments |
+| Mode          | Execution  | Description                         |
+| ------------- | ---------- | ----------------------------------- |
+| Collaborative | Sequential | Agents build on each other's ideas  |
+| Adversarial   | Sequential | Agents challenge previous positions |
+| Socratic      | Sequential | Dialogue through questioning        |
+| Expert Panel  | Parallel   | Independent expert assessments      |
 
 ## Adding a New AI Provider
 
@@ -317,13 +317,13 @@ export type DebateMode = 'collaborative' | 'adversarial' | 'socratic' | 'expert-
 
 ### Naming Conventions
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Files | kebab-case | `my-agent.ts` |
-| Classes | PascalCase | `MyProviderAgent` |
-| Functions/Methods | camelCase | `generateResponse` |
-| Constants | UPPER_SNAKE_CASE | `DEFAULT_TIMEOUT` |
-| Types/Interfaces | PascalCase | `AgentConfig` |
+| Type              | Convention       | Example            |
+| ----------------- | ---------------- | ------------------ |
+| Files             | kebab-case       | `my-agent.ts`      |
+| Classes           | PascalCase       | `MyProviderAgent`  |
+| Functions/Methods | camelCase        | `generateResponse` |
+| Constants         | UPPER_SNAKE_CASE | `DEFAULT_TIMEOUT`  |
+| Types/Interfaces  | PascalCase       | `AgentConfig`      |
 
 ### Import Order
 
