@@ -217,7 +217,8 @@ export class PerplexityAgent extends BaseAgent {
     const rawText = choice?.message?.content ?? '';
 
     // Extract metadata from Perplexity's response (citations, images, related questions)
-    const perplexityMetadata = this.extractPerplexityMetadata(response);
+    // Pass rawText to filter citations to only those actually referenced
+    const perplexityMetadata = this.extractPerplexityMetadata(response, rawText);
     if (perplexityMetadata.citations.length > 0) {
       citations.push(...perplexityMetadata.citations);
     }
@@ -274,15 +275,62 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
+   * Extract domain name from URL for use as a readable title
+   * @example "https://www.example.com/path" -> "example.com"
+   */
+  private extractDomainFromUrl(url: string): string {
+    try {
+      const hostname = new URL(url).hostname;
+      // Remove 'www.' prefix for cleaner titles
+      return hostname.replace(/^www\./, '');
+    } catch {
+      // If URL parsing fails, return the original string
+      return url;
+    }
+  }
+
+  /**
+   * Extract citation reference numbers from response text
+   * Looks for patterns like [1], [2], [3], etc.
+   * @returns Set of referenced citation indices (1-based)
+   */
+  private extractCitedIndices(responseText: string): Set<number> {
+    const citedIndices = new Set<number>();
+    // Match citation markers like [1], [2], [1,2], [1][2], [1, 2, 3]
+    const markerPattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+    let match;
+
+    while ((match = markerPattern.exec(responseText)) !== null) {
+      // match[1] is guaranteed to exist by the regex pattern
+      const captured = match[1];
+      if (captured) {
+        // Split by comma to handle [1,2,3] format
+        const numbers = captured.split(/\s*,\s*/);
+        for (const num of numbers) {
+          const index = parseInt(num, 10);
+          if (!isNaN(index) && index > 0) {
+            citedIndices.add(index);
+          }
+        }
+      }
+    }
+
+    return citedIndices;
+  }
+
+  /**
    * Perplexity response metadata structure
    * NOTE: As of 2025, Perplexity API uses 'search_results' instead of deprecated 'citations' field
    */
-  private extractPerplexityMetadata(response: OpenAI.Chat.Completions.ChatCompletion): {
+  private extractPerplexityMetadata(
+    response: OpenAI.Chat.Completions.ChatCompletion,
+    responseText?: string
+  ): {
     citations: Citation[];
     images: ImageResult[];
     relatedQuestions: string[];
   } {
-    const citations: Citation[] = [];
+    const allCitations: Citation[] = [];
     const images: ImageResult[] = [];
     const relatedQuestions: string[] = [];
 
@@ -298,8 +346,8 @@ export class PerplexityAgent extends BaseAgent {
     // Extract citations from search_results (new format, preferred)
     if (anyResponse.search_results && Array.isArray(anyResponse.search_results)) {
       for (const result of anyResponse.search_results) {
-        citations.push({
-          title: result.title ?? result.url,
+        allCitations.push({
+          title: result.title ?? this.extractDomainFromUrl(result.url),
           url: result.url,
           snippet: result.date ? `Published: ${result.date}` : undefined,
         });
@@ -309,17 +357,32 @@ export class PerplexityAgent extends BaseAgent {
     else if (anyResponse.citations && Array.isArray(anyResponse.citations)) {
       for (const citation of anyResponse.citations) {
         if (typeof citation === 'string') {
-          citations.push({
-            title: citation,
+          allCitations.push({
+            title: this.extractDomainFromUrl(citation),
             url: citation,
           });
         } else {
-          citations.push({
-            title: citation.title ?? citation.url,
+          allCitations.push({
+            title: citation.title ?? this.extractDomainFromUrl(citation.url),
             url: citation.url,
           });
         }
       }
+    }
+
+    // Filter citations to only those actually referenced in the response text
+    let citations: Citation[];
+    if (responseText && allCitations.length > 0) {
+      const citedIndices = this.extractCitedIndices(responseText);
+      if (citedIndices.size > 0) {
+        // Only include citations that are actually referenced (1-based index)
+        citations = allCitations.filter((_, index) => citedIndices.has(index + 1));
+      } else {
+        // No citation markers found - include all for backward compatibility
+        citations = allCitations;
+      }
+    } else {
+      citations = allCitations;
     }
 
     // Extract images

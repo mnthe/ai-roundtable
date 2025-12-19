@@ -191,7 +191,7 @@ describe('PerplexityAgent', () => {
     });
 
     it('should extract citations from Perplexity response (deprecated citations field)', async () => {
-      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+      const mockResponse = '{"position":"test [1] [2]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         citations: [
           { url: 'https://example.com/1', title: 'Source 1' },
@@ -211,8 +211,97 @@ describe('PerplexityAgent', () => {
       expect(response.citations?.[0]?.url).toBe('https://example.com/1');
     });
 
+    it('should extract domain from URL when citation is a string (deprecated format)', async () => {
+      const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        citations: [
+          'https://www.jsonapi.org/format/',
+          'https://example.com/article',
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should extract domain as title, not use URL directly
+      expect(response.citations?.[0]?.title).toBe('jsonapi.org');
+      expect(response.citations?.[0]?.url).toBe('https://www.jsonapi.org/format/');
+    });
+
+    it('should filter citations to only those referenced in response text', async () => {
+      // Response only references [1] and [3], not [2]
+      const mockResponse = '{"position":"According to [1], this is true. Also see [3].","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        citations: [
+          { url: 'https://example.com/1', title: 'Source 1' },
+          { url: 'https://example.com/2', title: 'Source 2' },
+          { url: 'https://example.com/3', title: 'Source 3' },
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should only include citations [1] and [3]
+      expect(response.citations).toHaveLength(2);
+      expect(response.citations?.[0]?.title).toBe('Source 1');
+      expect(response.citations?.[1]?.title).toBe('Source 3');
+    });
+
+    it('should include all citations when no reference markers found', async () => {
+      // Response has no citation markers like [1], [2]
+      const mockResponse = '{"position":"AI should be regulated","reasoning":"For safety reasons","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        citations: [
+          { url: 'https://example.com/1', title: 'Source 1' },
+          { url: 'https://example.com/2', title: 'Source 2' },
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should include all citations for backward compatibility
+      expect(response.citations).toHaveLength(2);
+    });
+
+    it('should handle comma-separated citation markers like [1,2,3]', async () => {
+      const mockResponse = '{"position":"Multiple sources agree [1, 2, 3]","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        citations: [
+          { url: 'https://example.com/1', title: 'Source 1' },
+          { url: 'https://example.com/2', title: 'Source 2' },
+          { url: 'https://example.com/3', title: 'Source 3' },
+          { url: 'https://example.com/4', title: 'Source 4' },
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should include citations 1, 2, 3 but not 4
+      expect(response.citations).toHaveLength(3);
+      expect(response.citations?.map(c => c.title)).toEqual(['Source 1', 'Source 2', 'Source 3']);
+    });
+
     it('should extract citations from Perplexity response (new search_results field)', async () => {
-      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+      const mockResponse = '{"position":"test [1] [2] [3]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         search_results: [
           { url: 'https://example.com/ai-article', title: 'AI Regulation Overview', date: '2025-01-15' },
@@ -238,6 +327,25 @@ describe('PerplexityAgent', () => {
       expect(response.citations?.[2]?.title).toBe('Latest AI News');
       expect(response.citations?.[2]?.url).toBe('https://example.com/news');
       expect(response.citations?.[2]?.snippet).toBeUndefined();
+    });
+
+    it('should use domain as title fallback for search_results without title', async () => {
+      const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        search_results: [
+          { url: 'https://www.nature.com/articles/ai-study' }, // No title
+        ],
+      };
+
+      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.citations?.[0]?.title).toBe('nature.com');
+      expect(response.citations?.[0]?.url).toBe('https://www.nature.com/articles/ai-study');
     });
 
     it('should prioritize search_results over deprecated citations field', async () => {
