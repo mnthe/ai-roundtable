@@ -8,8 +8,21 @@
   "bin": {
     "ai-roundtable": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mnthe/ai-roundtable.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mnthe/ai-roundtable/issues"
+  },
+  "homepage": "https://github.com/mnthe/ai-roundtable#readme",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
@@ -22,7 +35,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepublishOnly": "pnpm run build"
+    "prepare": "pnpm run build",
+    "prepublishOnly": "pnpm run test && pnpm run lint"
   },
   "keywords": [
     "mcp",
