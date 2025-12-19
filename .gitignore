@@ -36,4 +36,8 @@ coverage/
 tmp/
 temp/
 
+# Worktrees
+.worktrees/
+
+# MCP config
 .mcp.json
