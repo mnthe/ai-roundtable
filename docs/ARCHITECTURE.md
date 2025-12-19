@@ -19,37 +19,35 @@ This document visualizes the debate flow and system architecture of AI Roundtabl
 ## System Overview
 
 ```
-
-```
-+-----------------------------------------------------------------------------+
-|                              MCP Client                                     |
-|                    (Claude Desktop, IDE, Custom App)                        |
-+---------------------------------+-------------------------------------------+
-                                  | MCP Protocol
-                                  v
-+-----------------------------------------------------------------------------+
-|                           AI Roundtable Server                              |
-|  +--------------+  +--------------+  +--------------+  +--------------+     |
-|  |  MCP Server  |  | DebateEngine |  |   Session    |  |  Consensus   |     |
-|  |   (tools)    |--|              |--|   Manager    |--|   Analyzer   |     |
-|  +--------------+  +------+-------+  +--------------+  +--------------+     |
-|                           |                                                 |
-|         +-----------------+-----------------+                               |
-|         |                 |                 |                               |
-|         v                 v                 v                               |
-|  +-------------+   +--------------+  +------------+                         |
-|  |Mode Registry|   |Agent Registry|  |   SQLite   |                         |
-|  |  (7 modes)  |   | (4 providers)|  |  Storage   |                         |
-|  +-------------+   +------+-------+  +------------+                         |
-+--------------------------+--------------------------------------------------+
-                           |
-         +-----------------+-----------------+-----------------+
-         |                 |                 |                 |
-         v                 v                 v                 v
-   +-----------+     +----------+      +----------+      +----------+
-   |  Claude   |     | ChatGPT  |      |  Gemini  |      |Perplexity|
-   |(Anthropic)|     | (OpenAI) |      | (Google) |      |          |
-   +-----------+     +----------+      +----------+      +----------+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              MCP Client                                     │
+│                    (Claude Desktop, IDE, Custom App)                        │
+└─────────────────────────────────┬───────────────────────────────────────────┘
+                                  │ MCP Protocol
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           AI Roundtable Server                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │  MCP Server  │  │ DebateEngine │  │   Session    │  │  Consensus   │     │
+│  │   (tools)    │──│              │──│   Manager    │──│   Analyzer   │     │
+│  └──────────────┘  └──────┬───────┘  └──────────────┘  └──────────────┘     │
+│                           │                                                 │
+│         ┌─────────────────┼─────────────────┐                               │
+│         │                 │                 │                               │
+│         ▼                 ▼                 ▼                               │
+│  ┌─────────────┐   ┌──────────────┐  ┌────────────┐                         │
+│  │Mode Registry│   │Agent Registry│  │   SQLite   │                         │
+│  │  (7 modes)  │   │ (4 providers)│  │  Storage   │                         │
+│  └─────────────┘   └──────┬───────┘  └────────────┘                         │
+└───────────────────────────┼─────────────────────────────────────────────────┘
+                            │
+         ┌──────────────────┼─────────────────┬─────────────────┐
+         │                  │                 │                 │
+         ▼                  ▼                 ▼                 ▼
+   ┌───────────┐      ┌──────────┐      ┌──────────┐      ┌──────────┐
+   │   Claude  │      │ ChatGPT  │      │  Gemini  │      │Perplexity│
+   │(Anthropic)│      │ (OpenAI) │      │ (Google) │      │          │
+   └───────────┘      └──────────┘      └──────────┘      └──────────┘
 ```
 
 ---
@@ -158,50 +156,50 @@ sequenceDiagram
 ### Agent Response Generation
 
 ```
-+-----------------------------------------------------------------------------+
-|                        Agent Response Generation                             |
-+-----------------------------------------------------------------------------+
-|                                                                              |
-|   +-----------------+                                                        |
-|   |  Build Prompt   |                                                        |
-|   |  (system +      |                                                        |
-|   |   user + prev)  |                                                        |
-|   +--------+--------+                                                        |
-|            |                                                                 |
-|            v                                                                 |
-|   +-----------------+     +-----------------+                               |
-|   |   API Call      |---->|  Tool Calls?    |                               |
-|   |   (Provider)    |     +--------+--------+                               |
-|   +-----------------+              |                                         |
-|                           +--------+--------+                               |
-|                           |                 |                               |
-|                     Yes   v           No    v                               |
-|              +-----------------+  +-----------------+                       |
-|              |  Execute Tools  |  |  Parse Response |                       |
-|              |  - web_search   |  |                 |                       |
-|              |  - fact_check   |  |                 |                       |
-|              |  - submit_resp  |  |                 |                       |
-|              +--------+--------+  +--------+--------+                       |
-|                       |                    |                                 |
-|                       v                    |                                 |
-|              +-----------------+           |                                 |
-|              |  Continue with  |           |                                 |
-|              |  Tool Results   |           |                                 |
-|              +--------+--------+           |                                 |
-|                       |                    |                                 |
-|                       +--------+-----------+                                 |
-|                                |                                             |
-|                                v                                             |
-|                       +-----------------+                                   |
-|                       | AgentResponse   |                                   |
-|                       | {position,      |                                   |
-|                       |  reasoning,     |                                   |
-|                       |  confidence,    |                                   |
-|                       |  citations,     |                                   |
-|                       |  toolCalls}     |                                   |
-|                       +-----------------+                                   |
-|                                                                              |
-+-----------------------------------------------------------------------------+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Agent Response Generation                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────────┐                                                       │
+│   │  Build Prompt   │                                                       │
+│   │  (system +      │                                                       │
+│   │   user + prev)  │                                                       │
+│   └────────┬────────┘                                                       │
+│            │                                                                │
+│            ▼                                                                │
+│   ┌─────────────────┐     ┌─────────────────┐                               │
+│   │   API Call      │────▶│  Tool Calls?    │                               │
+│   │   (Provider)    │     └────────┬────────┘                               │
+│   └─────────────────┘              │                                        │
+│                           ┌────────┴────────┐                               │
+│                           │                 │                               │
+│                     Yes   ▼           No    ▼                               │
+│              ┌─────────────────┐  ┌─────────────────┐                       │
+│              │  Execute Tools  │  │  Parse Response │                       │
+│              │  - web_search   │  │                 │                       │
+│              │  - fact_check   │  │                 │                       │
+│              │  - submit_resp  │  │                 │                       │
+│              └────────┬────────┘  └────────┬────────┘                       │
+│                       │                    │                                │
+│                       ▼                    │                                │
+│              ┌─────────────────┐           │                                │
+│              │  Continue with  │           │                                │
+│              │  Tool Results   │           │                                │
+│              └────────┬────────┘           │                                │
+│                       │                    │                                │
+│                       └────────┬───────────┘                                │
+│                                │                                            │
+│                                ▼                                            │
+│                       ┌─────────────────┐                                   │
+│                       │ AgentResponse   │                                   │
+│                       │ {position,      │                                   │
+│                       │  reasoning,     │                                   │
+│                       │  confidence,    │                                   │
+│                       │  citations,     │                                   │
+│                       │  toolCalls}     │                                   │
+│                       └─────────────────┘                                   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -256,69 +254,69 @@ flowchart LR
 
 ```
 Round 1:
-+---------+  +---------+  +---------+
-| Claude  |  | ChatGPT |  | Gemini  |
-+----+----+  +----+----+  +----+----+
-     |            |            |
-     +------------+------------+
-                  |
-                  v (parallel)
-           +--------------+
-           |  Consensus   |
-           |   Analysis   |
-           +--------------+
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│ Claude  │  │ ChatGPT │  │ Gemini  │
+└────┬────┘  └────┬────┘  └────┬────┘
+     │            │            │
+     └────────────┼────────────┘
+                  │
+                  ▼ (parallel)
+           ┌──────────────┐
+           │  Consensus   │
+           │   Analysis   │
+           └──────────────┘
 
 Round 2 (all agents see Round 1 responses):
-+---------+  +---------+  +---------+
-| Claude  |  | ChatGPT |  | Gemini  |
-| +R1 ctx |  | +R1 ctx |  | +R1 ctx |
-+----+----+  +----+----+  +----+----+
-     |            |            |
-     +------------+------------+
-                  v
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│ Claude  │  │ ChatGPT │  │ Gemini  │
+│ +R1 ctx │  │ +R1 ctx │  │ +R1 ctx │
+└────┬────┘  └────┬────┘  └────┬────┘
+     │            │            │
+     └────────────┼────────────┘
+                  ▼
 ```
 
 ### Adversarial Mode
 
 ```
 Round 1:
-+---------+
-| Claude  | --> Position A
-+---------+
-     |
-     v (Claude's response in context)
-+---------+
-| ChatGPT | --> Challenge A, Position B
-+---------+
-     |
-     v (Both responses in context)
-+---------+
-| Gemini  | --> Challenge B, Position C
-+---------+
+┌─────────┐
+│ Claude  │ ──▶ Position A
+└─────────┘
+     │
+     ▼ (Claude's response in context)
+┌─────────┐
+│ ChatGPT │ ──▶ Challenge A, Position B
+└─────────┘
+     │
+     ▼ (Both responses in context)
+┌─────────┐
+│ Gemini  │ ──▶ Challenge B, Position C
+└─────────┘
 ```
 
 ### Delphi Mode (Anonymous Consensus Building)
 
 ```
 Round 1: Initial Positions (Parallel)
-+---------+  +---------+  +---------+
-| Claude  |  | ChatGPT |  | Gemini  |
-+----+----+  +----+----+  +----+----+
-     |            |            |
-     +------------+------------+
-                  v
-         +---------------+
-         |   Anonymize   |
-         |   & Summarize |
-         +-------+-------+
-                 |
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│ Claude  │  │ ChatGPT │  │ Gemini  │
+└────┬────┘  └────┬────┘  └────┬────┘
+     │            │            │
+     └────────────┼────────────┘
+                  ▼
+         ┌───────────────┐
+         │   Anonymize   │
+         │   & Summarize │
+         └───────┬───────┘
+                 │
 Round 2: Revision Based on Anonymous Summary
-+---------+  +---------+  +---------+
-| Claude  |  | ChatGPT |  | Gemini  |
-|+summary |  |+summary |  |+summary |
-+----+----+  +----+----+  +----+----+
-     |            |            |
-     v            v            v
+┌─────────┐  ┌─────────┐  ┌─────────┐
+│ Claude  │  │ ChatGPT │  │ Gemini  │
+│+summary │  │+summary │  │+summary │
+└────┬────┘  └────┬────┘  └────┬────┘
+     │            │            │
+     ▼            ▼            ▼
    Revise      Revise       Revise
    Position    Position     Position
 ```
@@ -330,66 +328,66 @@ Round 2: Revision Based on Anonymous Summary
 ### Rule-Based vs AI-Based Analysis
 
 ```
-+-----------------------------------------------------------------------------+
-|                        Consensus Analysis Flow                               |
-+-----------------------------------------------------------------------------+
-|                                                                              |
-|   Input: AgentResponse[]                                                     |
-|                                                                              |
-|   +---------------------------------------------------------------------+   |
-|   |                    AIConsensusAnalyzer                               |   |
-|   |                                                                       |   |
-|   |   +-------------------+     +-------------------+                   |   |
-|   |   | AI Agent Available| Yes |  Semantic Analysis |                   |   |
-|   |   |       ?           |---->|  (Light Model)     |                   |   |
-|   |   +---------+---------+     |                    |                   |   |
-|   |             | No            |  * Understand      |                   |   |
-|   |             v               |    meaning         |                   |   |
-|   |   +-------------------+     |  * Detect negation |                   |   |
-|   |   |  Fallback to      |     |  * Find nuances    |                   |   |
-|   |   |  Rule-Based       |     |  * Cluster themes  |                   |   |
-|   |   +-------------------+     +-------------------+                   |   |
-|   |                                                                       |   |
-|   +---------------------------------------------------------------------+   |
-|                                                                              |
-|   Output: AIConsensusResult                                                  |
-|   {                                                                          |
-|     agreementLevel: 0.75,                                                    |
-|     clusters: [{theme, agentIds, summary}],                                  |
-|     commonGround: ["Point A", "Point B"],                                    |
-|     disagreementPoints: ["Difference 1"],                                    |
-|     nuances: {                                                               |
-|       partialAgreements: [...],                                              |
-|       conditionalPositions: [...],                                           |
-|       uncertainties: [...]                                                   |
-|     },                                                                       |
-|     reasoning: "AI's analysis explanation"                                   |
-|   }                                                                          |
-|                                                                              |
-+-----------------------------------------------------------------------------+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Consensus Analysis Flow                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Input: AgentResponse[]                                                    │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │                    AIConsensusAnalyzer                              │   │
+│   │                                                                     │   │
+│   │   ┌───────────────────┐     ┌────────────────────┐                  │   │
+│   │   │ AI Agent Available│ Yes │  Semantic Analysis │                  │   │
+│   │   │       ?           │────▶│  (Light Model)     │                  │   │
+│   │   └─────────┬─────────┘     │                    │                  │   │
+│   │             │ No            │  • Understand      │                  │   │
+│   │             ▼               │    meaning         │                  │   │
+│   │   ┌───────────────────┐     │  • Detect negation │                  │   │
+│   │   │  Fallback to      │     │  • Find nuances    │                  │   │
+│   │   │  Rule-Based       │     │  • Cluster themes  │                  │   │
+│   │   └───────────────────┘     └────────────────────┘                  │   │
+│   │                                                                     │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│   Output: AIConsensusResult                                                 │
+│   {                                                                         │
+│     agreementLevel: 0.75,                                                   │
+│     clusters: [{theme, agentIds, summary}],                                 │
+│     commonGround: ["Point A", "Point B"],                                   │
+│     disagreementPoints: ["Difference 1"],                                   │
+│     nuances: {                                                              │
+│       partialAgreements: [...],                                             │
+│       conditionalPositions: [...],                                          │
+│       uncertainties: [...]                                                  │
+│     },                                                                      │
+│     reasoning: "AI's analysis explanation"                                  │
+│   }                                                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### AI Semantic Analysis Advantages
 
 ```
-+-------------------------------------+----------------------------------------+
-|         Rule-Based                  |           AI-Based                      |
-+-------------------------------------+----------------------------------------+
-|                                     |                                         |
-|  "developers" ≠ "software engineers"|  "developers" = "software engineers"   |
-|  (different keywords)               |  (same meaning)                         |
-|                                     |                                         |
-|  "AI is dangerous"                  |  "AI is dangerous"                      |
-|       =                             |       ≠                                 |
-|  "AI is not dangerous"              |  "AI is not dangerous"                  |
-|  (keyword overlap)                  |  (negation detected)                    |
-|                                     |                                         |
-|  Binary: agree/disagree             |  Nuanced: partial, conditional,         |
-|                                     |           uncertain                     |
-|                                     |                                         |
-|  Template summaries                 |  Natural language summaries             |
-|                                     |                                         |
-+-------------------------------------+----------------------------------------+
+┌─────────────────────────────────────┬────────────────────────────────────────┐
+│         Rule-Based                  │           AI-Based                     │
+├─────────────────────────────────────┼────────────────────────────────────────┤
+│                                     │                                        │
+│  "developers" ≠ "software engineers"│  "developers" = "software engineers"   │
+│  (different keywords)               │  (same meaning)                        │
+│                                     │                                        │
+│  "AI is dangerous"                  │  "AI is dangerous"                     │
+│       =                             │       ≠                                │
+│  "AI is not dangerous"              │  "AI is not dangerous"                 │
+│  (keyword overlap)                  │  (negation detected)                   │
+│                                     │                                        │
+│  Binary: agree/disagree             │  Nuanced: partial, conditional,        │
+│                                     │           uncertain                    │
+│                                     │                                        │
+│  Template summaries                 │  Natural language summaries            │
+│                                     │                                        │
+└─────────────────────────────────────┴────────────────────────────────────────┘
 ```
 
 ---
@@ -432,44 +430,44 @@ flowchart TB
 ### Tool Call Flow
 
 ```
-+----------------------------------------------------------------------------+
-|                          MCP Tool Call Flow                                  |
-+----------------------------------------------------------------------------+
-|                                                                              |
-|   User Request                                                               |
-|        |                                                                     |
-|        v                                                                     |
-|   +---------------------+                                                   |
-|   |  MCP Client         |                                                   |
-|   |  (Claude Desktop)   |                                                   |
-|   +----------+----------+                                                   |
-|              | tool call                                                     |
-|              v                                                               |
-|   +---------------------+      +---------------------+                     |
-|   |  AI Roundtable      |      |  Tool Definitions   |                     |
-|   |  MCP Server         |<---->|  (12 tools)         |                     |
-|   +----------+----------+      +---------------------+                     |
-|              |                                                               |
-|              v                                                               |
-|   +-------------------------------------------------+                       |
-|   |              Tool Handlers                       |                       |
-|   |                                                  |                       |
-|   |  start_roundtable --> handleStartRoundtable     |                       |
-|   |  get_consensus    --> handleGetConsensus        |                       |
-|   |  synthesize_debate--> handleSynthesizeDebate    |                       |
-|   |  ...                                             |                       |
-|   +----------+--------------------------------------+                       |
-|              |                                                               |
-|              v                                                               |
-|   +---------------------+                                                   |
-|   |  Core Services      |                                                   |
-|   |  * DebateEngine     |                                                   |
-|   |  * SessionManager   |                                                   |
-|   |  * AgentRegistry    |                                                   |
-|   |  * AIConsensus      |                                                   |
-|   +---------------------+                                                   |
-|                                                                              |
-+----------------------------------------------------------------------------+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          MCP Tool Call Flow                                │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   User Request                                                             │
+│        │                                                                   │
+│        ▼                                                                   │
+│   ┌─────────────────────┐                                                  │
+│   │  MCP Client         │                                                  │
+│   │  (Claude Desktop)   │                                                  │
+│   └──────────┬──────────┘                                                  │
+│              │ tool call                                                   │
+│              ▼                                                             │
+│   ┌─────────────────────┐      ┌─────────────────────┐                     │
+│   │  AI Roundtable      │      │  Tool Definitions   │                     │
+│   │  MCP Server         │◀────▶│  (12 tools)         │                     │
+│   └──────────┬──────────┘      └─────────────────────┘                     │
+│              │                                                             │
+│              ▼                                                             │
+│   ┌─────────────────────────────────────────────────┐                      │
+│   │              Tool Handlers                      │                      │
+│   │                                                 │                      │
+│   │  start_roundtable ──▶ handleStartRoundtable     │                      │
+│   │  get_consensus    ──▶ handleGetConsensus        │                      │
+│   │  synthesize_debate──▶ handleSynthesizeDebate    │                      │
+│   │  ...                                            │                      │
+│   └──────────┬──────────────────────────────────────┘                      │
+│              │                                                             │
+│              ▼                                                             │
+│   ┌─────────────────────┐                                                  │
+│   │  Core Services      │                                                  │
+│   │  • DebateEngine     │                                                  │
+│   │  • SessionManager   │                                                  │
+│   │  • AgentRegistry    │                                                  │
+│   │  • AIConsensus      │                                                  │
+│   └─────────────────────┘                                                  │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -674,94 +672,94 @@ flowchart TD
 ## Data Flow Summary
 
 ```
-+-----------------------------------------------------------------------------+
-|                              Complete Data Flow                              |
-+-----------------------------------------------------------------------------+
-|                                                                              |
-|  1. START                                                                    |
-|     User --> start_roundtable(topic, mode, rounds)                          |
-|                     |                                                        |
-|  2. SETUP           v                                                        |
-|     +-----------------------------+                                         |
-|     | * Create Session            |                                         |
-|     | * Select Active Agents      |                                         |
-|     | * Load Mode Strategy        |                                         |
-|     +--------------+--------------+                                         |
-|                    |                                                         |
-|  3. EXECUTE        v                                                        |
-|     +-----------------------------+                                         |
-|     | For each round:             |<--+                                     |
-|     |   * Build context           |   |                                     |
-|     |   * Execute mode strategy   |   |                                     |
-|     |   * Collect responses       |   | continue_roundtable                 |
-|     |   * Analyze consensus       |   |                                     |
-|     |   * Store results           |---+                                     |
-|     +--------------+--------------+                                         |
-|                    |                                                         |
-|  4. ANALYZE        v                                                        |
-|     +-----------------------------+                                         |
-|     | * get_consensus             |                                         |
-|     | * get_round_details         |                                         |
-|     | * get_thoughts              |                                         |
-|     | * synthesize_debate         |                                         |
-|     +--------------+--------------+                                         |
-|                    |                                                         |
-|  5. EXPORT         v                                                        |
-|     +-----------------------------+                                         |
-|     | export_session(format)      |                                         |
-|     |   * Markdown                |                                         |
-|     |   * JSON                    |                                         |
-|     +-----------------------------+                                         |
-|                                                                              |
-+-----------------------------------------------------------------------------+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Complete Data Flow                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. START                                                                   │
+│     User ──▶ start_roundtable(topic, mode, rounds)                          │
+│                     │                                                       │
+│  2. SETUP           ▼                                                       │
+│     ┌─────────────────────────────┐                                         │
+│     │ • Create Session            │                                         │
+│     │ • Select Active Agents      │                                         │
+│     │ • Load Mode Strategy        │                                         │
+│     └──────────────┬──────────────┘                                         │
+│                    │                                                        │
+│  3. EXECUTE        ▼                                                        │
+│     ┌─────────────────────────────┐                                         │
+│     │ For each round:             │◀──┐                                     │
+│     │   • Build context           │   │                                     │
+│     │   • Execute mode strategy   │   │                                     │
+│     │   • Collect responses       │   │ continue_roundtable                 │
+│     │   • Analyze consensus       │   │                                     │
+│     │   • Store results           │───┘                                     │
+│     └──────────────┬──────────────┘                                         │
+│                    │                                                        │
+│  4. ANALYZE        ▼                                                        │
+│     ┌─────────────────────────────┐                                         │
+│     │ • get_consensus             │                                         │
+│     │ • get_round_details         │                                         │
+│     │ • get_thoughts              │                                         │
+│     │ • synthesize_debate         │                                         │
+│     └──────────────┬──────────────┘                                         │
+│                    │                                                        │
+│  5. EXPORT         ▼                                                        │
+│     ┌─────────────────────────────┐                                         │
+│     │ export_session(format)      │                                         │
+│     │   • Markdown                │                                         │
+│     │   • JSON                    │                                         │
+│     └─────────────────────────────┘                                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## File Structure
 
 ```
 src/
-+-- agents/              # AI Agent implementations
-|   +-- base.ts          # BaseAgent abstract class
-|   +-- claude.ts        # Anthropic Claude
-|   +-- chatgpt.ts       # OpenAI ChatGPT
-|   +-- gemini.ts        # Google Gemini
-|   +-- perplexity.ts    # Perplexity
-|   +-- registry.ts      # Agent registration & health tracking
-|   +-- setup.ts         # Auto-setup with API keys
-|
-+-- core/                # Core business logic
-|   +-- DebateEngine.ts  # Main orchestrator
-|   +-- session-manager.ts
-|   +-- consensus-analyzer.ts      # Rule-based
-|   +-- ai-consensus-analyzer.ts   # AI-based
-|
-+-- modes/               # Debate mode strategies
-|   +-- collaborative.ts
-|   +-- adversarial.ts
-|   +-- socratic.ts
-|   +-- expert-panel.ts
-|   +-- devils-advocate.ts
-|   +-- delphi.ts
-|   +-- red-team-blue-team.ts
-|
-+-- mcp/                 # MCP server interface
-|   +-- server.ts        # Server setup & handlers
-|   +-- tools.ts         # Tool definitions
-|
-+-- storage/             # Persistence
-|   +-- sqlite.ts        # SQLite storage
-|
-+-- tools/               # Agent tools
-|   +-- toolkit.ts       # Web search, fact check
-|
-+-- types/               # TypeScript definitions
-|   +-- index.ts
-|   +-- schemas.ts       # Zod schemas
-|
-+-- utils/               # Utilities
-|   +-- logger.ts
-|   +-- retry.ts
-|
-+-- errors/              # Custom error types
-    +-- index.ts
+├── agents/              # AI Agent implementations
+│   ├── base.ts          # BaseAgent abstract class
+│   ├── claude.ts        # Anthropic Claude
+│   ├── chatgpt.ts       # OpenAI ChatGPT
+│   ├── gemini.ts        # Google Gemini
+│   ├── perplexity.ts    # Perplexity
+│   ├── registry.ts      # Agent registration & health tracking
+│   └── setup.ts         # Auto-setup with API keys
+│
+├── core/                # Core business logic
+│   ├── DebateEngine.ts  # Main orchestrator
+│   ├── session-manager.ts
+│   ├── consensus-analyzer.ts      # Rule-based
+│   └── ai-consensus-analyzer.ts   # AI-based
+│
+├── modes/               # Debate mode strategies
+│   ├── collaborative.ts
+│   ├── adversarial.ts
+│   ├── socratic.ts
+│   ├── expert-panel.ts
+│   ├── devils-advocate.ts
+│   ├── delphi.ts
+│   └── red-team-blue-team.ts
+│
+├── mcp/                 # MCP server interface
+│   ├── server.ts        # Server setup & handlers
+│   └── tools.ts         # Tool definitions
+│
+├── storage/             # Persistence
+│   └── sqlite.ts        # SQLite storage
+│
+├── tools/               # Agent tools
+│   └── toolkit.ts       # Web search, fact check
+│
+├── types/               # TypeScript definitions
+│   ├── index.ts
+│   └── schemas.ts       # Zod schemas
+│
+├── utils/               # Utilities
+│   ├── logger.ts
+│   └── retry.ts
+│
+└── errors/              # Custom error types
+    └── index.ts
 ```
