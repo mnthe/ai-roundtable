@@ -289,6 +289,66 @@ describe('ClaudeAgent', () => {
       const response = await agent.generateResponse(defaultContext);
       expect(response.toolCalls?.[0]?.output).toEqual({ error: 'Tool failed' });
     });
+
+    it('should extract position/reasoning from submit_response tool call', async () => {
+      // Simulate Claude calling submit_response tool with actual position/reasoning
+      // Then returning meta-commentary in text response
+      const mockClient = createMockClientWithToolUse(
+        'submit_response',
+        {
+          position: 'AI should be carefully regulated to balance innovation and safety',
+          reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
+          confidence: 0.85,
+        },
+        {
+          success: true,
+          data: {
+            position: 'AI should be carefully regulated to balance innovation and safety',
+            reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
+            confidence: 0.85,
+          },
+        },
+        '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.'
+      );
+
+      const mockToolkit: AgentToolkit = {
+        getTools: () => [
+          {
+            name: 'submit_response',
+            description: 'Submit your response',
+            parameters: {
+              position: { type: 'string' },
+              reasoning: { type: 'string' },
+              confidence: { type: 'number' },
+            },
+          },
+        ],
+        executeTool: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            position: 'AI should be carefully regulated to balance innovation and safety',
+            reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
+            confidence: 0.85,
+          },
+        }),
+      };
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+      });
+      agent.setToolkit(mockToolkit);
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should extract from tool call, NOT from text response
+      expect(response.position).toBe('AI should be carefully regulated to balance innovation and safety');
+      expect(response.reasoning).toBe('Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.');
+      expect(response.confidence).toBe(0.85);
+
+      // Should record the tool call
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls?.[0]?.toolName).toBe('submit_response');
+    });
   });
 });
 

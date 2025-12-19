@@ -151,6 +151,25 @@ export class ChatGPTAgent extends BaseAgent {
   }
 
   /**
+   * Health check: Test OpenAI API connection with minimal request
+   */
+  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      await this.client.chat.completions.create({
+        model: this.model,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }],
+      });
+      return { healthy: true };
+    } catch (error) {
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
    * Execute a tool call using the toolkit
    */
   private async executeTool(name: string, input: unknown): Promise<unknown> {

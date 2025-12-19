@@ -201,16 +201,53 @@ export function createDefaultAgents(registry: AgentRegistry): AgentConfig[] {
 }
 
 /**
+ * Run health checks on all agents in the registry
+ *
+ * @param registry - Agent registry to check
+ * @returns Array of health check results
+ */
+export async function runHealthChecks(
+  registry: AgentRegistry
+): Promise<Array<{ id: string; name: string; healthy: boolean; error?: string }>> {
+  const agents = registry.getAllAgents();
+  const results: Array<{ id: string; name: string; healthy: boolean; error?: string }> = [];
+
+  for (const agent of agents) {
+    const info = agent.getInfo();
+    const result = await agent.healthCheck();
+
+    results.push({
+      id: info.id,
+      name: info.name,
+      healthy: result.healthy,
+      error: result.error,
+    });
+
+    // Update registry status based on health check
+    if (!result.healthy) {
+      registry.deactivateAgent(info.id, result.error);
+      console.warn(
+        `[ai-roundtable] Agent "${info.name}" (${info.provider}) health check failed: ${result.error}`
+      );
+    }
+  }
+
+  return results;
+}
+
+/**
  * Full setup: register providers and create default agents
  *
  * @param registry - Agent registry to configure
  * @param apiKeys - Optional API key configuration
+ * @param options - Setup options
  * @returns Complete setup result
  */
-export function setupAgents(
+export async function setupAgents(
   registry: AgentRegistry,
-  apiKeys?: ApiKeyConfig
-): SetupResult {
+  apiKeys?: ApiKeyConfig,
+  options?: { runHealthCheck?: boolean }
+): Promise<SetupResult> {
   // First, setup providers
   const result = setupProviders(registry, apiKeys);
 
@@ -224,6 +261,28 @@ export function setupAgents(
       'No agents available. Please set at least one API key: ' +
         'ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY, or PERPLEXITY_API_KEY'
     );
+    return result;
+  }
+
+  // Run health checks if requested (default: true)
+  if (options?.runHealthCheck !== false) {
+    const healthResults = await runHealthChecks(registry);
+
+    // Add warnings for failed health checks
+    const failedAgents = healthResults.filter((r) => !r.healthy);
+    for (const failed of failedAgents) {
+      result.warnings.push(
+        `Agent "${failed.name}" health check failed and has been deactivated: ${failed.error}`
+      );
+    }
+
+    // Check if any agents are healthy
+    const healthyAgents = healthResults.filter((r) => r.healthy);
+    if (healthyAgents.length === 0) {
+      result.warnings.push(
+        'All agents failed health checks. Please verify API keys and network connectivity.'
+      );
+    }
   }
 
   return result;

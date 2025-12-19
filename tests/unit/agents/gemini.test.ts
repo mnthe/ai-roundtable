@@ -240,6 +240,78 @@ describe('GeminiAgent', () => {
       const response = await agent.generateResponse(defaultContext);
       expect(response.toolCalls?.[0]?.output).toEqual({ error: 'Tool failed' });
     });
+
+    it('should extract position/reasoning from submit_response tool call', async () => {
+      let callCount = 0;
+      const mockModel = {
+        startChat: vi.fn().mockReturnValue({
+          sendMessage: vi.fn().mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
+              return Promise.resolve({
+                response: {
+                  text: () => '',
+                  functionCalls: () => [
+                    {
+                      name: 'submit_response',
+                      args: {
+                        position: 'AI should be carefully regulated to balance innovation and safety',
+                        reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
+                        confidence: 0.85,
+                      },
+                    },
+                  ],
+                },
+              });
+            }
+            return Promise.resolve({
+              response: {
+                text: () => '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.',
+                functionCalls: () => null,
+              },
+            });
+          }),
+        }),
+      };
+
+      const mockToolkit: AgentToolkit = {
+        getTools: () => [
+          {
+            name: 'submit_response',
+            description: 'Submit your response',
+            parameters: {
+              position: { type: 'string', description: 'Position' },
+              reasoning: { type: 'string', description: 'Reasoning' },
+              confidence: { type: 'number', description: 'Confidence' },
+            },
+          },
+        ],
+        executeTool: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            position: 'AI should be carefully regulated to balance innovation and safety',
+            reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
+            confidence: 0.85,
+          },
+        }),
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        model: mockModel as unknown as ConstructorParameters<typeof GeminiAgent>[1]['model'],
+      });
+      agent.setToolkit(mockToolkit);
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should extract from tool call, NOT from text response
+      expect(response.position).toBe('AI should be carefully regulated to balance innovation and safety');
+      expect(response.reasoning).toBe('Regulation is necessary to prevent misuse while ensuring technological progress continues.');
+      expect(response.confidence).toBe(0.85);
+
+      // Should record the tool call
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls?.[0]?.toolName).toBe('submit_response');
+    });
   });
 });
 

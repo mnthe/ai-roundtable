@@ -20,6 +20,15 @@ interface ProviderRegistration {
 }
 
 /**
+ * Agent status tracking
+ */
+interface AgentStatus {
+  agent: BaseAgent;
+  active: boolean;
+  healthCheckError?: string;
+}
+
+/**
  * Agent Registry
  *
  * Manages the registration and creation of AI agents.
@@ -27,10 +36,11 @@ interface ProviderRegistration {
  * - Register new agent types (providers)
  * - Create agent instances
  * - List available agents
+ * - Track agent health status
  */
 export class AgentRegistry {
   private providers: Map<AIProvider, ProviderRegistration> = new Map();
-  private agents: Map<string, BaseAgent> = new Map();
+  private agents: Map<string, AgentStatus> = new Map();
   private toolkit?: AgentToolkit;
 
   /**
@@ -39,8 +49,8 @@ export class AgentRegistry {
   setToolkit(toolkit: AgentToolkit): void {
     this.toolkit = toolkit;
     // Update existing agents with the new toolkit
-    for (const agent of this.agents.values()) {
-      agent.setToolkit(toolkit);
+    for (const status of this.agents.values()) {
+      status.agent.setToolkit(toolkit);
     }
   }
 
@@ -100,7 +110,10 @@ export class AgentRegistry {
     if (this.toolkit) {
       agent.setToolkit(this.toolkit);
     }
-    this.agents.set(config.id, agent);
+    this.agents.set(config.id, {
+      agent,
+      active: true, // Assume active until health check proves otherwise
+    });
     return agent;
   }
 
@@ -108,18 +121,18 @@ export class AgentRegistry {
    * Get an agent by ID
    */
   getAgent(id: string): BaseAgent | undefined {
-    return this.agents.get(id);
+    return this.agents.get(id)?.agent;
   }
 
   /**
    * Get an agent by ID, throwing if not found
    */
   getAgentOrThrow(id: string): BaseAgent {
-    const agent = this.agents.get(id);
-    if (!agent) {
+    const status = this.agents.get(id);
+    if (!status) {
       throw new Error(`Agent "${id}" not found`);
     }
-    return agent;
+    return status.agent;
   }
 
   /**
@@ -137,6 +150,35 @@ export class AgentRegistry {
   }
 
   /**
+   * Check if an agent is active (healthy)
+   */
+  isAgentActive(id: string): boolean {
+    return this.agents.get(id)?.active ?? false;
+  }
+
+  /**
+   * Mark an agent as inactive
+   */
+  deactivateAgent(id: string, error?: string): void {
+    const status = this.agents.get(id);
+    if (status) {
+      status.active = false;
+      status.healthCheckError = error;
+    }
+  }
+
+  /**
+   * Mark an agent as active
+   */
+  activateAgent(id: string): void {
+    const status = this.agents.get(id);
+    if (status) {
+      status.active = true;
+      status.healthCheckError = undefined;
+    }
+  }
+
+  /**
    * Remove an agent
    */
   removeAgent(id: string): boolean {
@@ -151,10 +193,28 @@ export class AgentRegistry {
   }
 
   /**
+   * Get all active agent IDs
+   */
+  getActiveAgentIds(): string[] {
+    return Array.from(this.agents.entries())
+      .filter(([, status]) => status.active)
+      .map(([id]) => id);
+  }
+
+  /**
    * Get all registered agents
    */
   getAllAgents(): BaseAgent[] {
-    return Array.from(this.agents.values());
+    return Array.from(this.agents.values()).map((status) => status.agent);
+  }
+
+  /**
+   * Get all active agents
+   */
+  getActiveAgents(): BaseAgent[] {
+    return Array.from(this.agents.values())
+      .filter((status) => status.active)
+      .map((status) => status.agent);
   }
 
   /**
@@ -167,6 +227,42 @@ export class AgentRegistry {
     model: string;
   }> {
     return this.getAllAgents().map((agent) => agent.getInfo());
+  }
+
+  /**
+   * Get agent info for all active agents only
+   */
+  getActiveAgentInfoList(): Array<{
+    id: string;
+    name: string;
+    provider: AIProvider;
+    model: string;
+    active: boolean;
+  }> {
+    return Array.from(this.agents.values())
+      .filter((status) => status.active)
+      .map((status) => ({
+        ...status.agent.getInfo(),
+        active: true,
+      }));
+  }
+
+  /**
+   * Get health status for all agents
+   */
+  getAgentHealthStatus(): Array<{
+    id: string;
+    name: string;
+    provider: AIProvider;
+    model: string;
+    active: boolean;
+    error?: string;
+  }> {
+    return Array.from(this.agents.entries()).map(([, status]) => ({
+      ...status.agent.getInfo(),
+      active: status.active,
+      error: status.healthCheckError,
+    }));
   }
 
   /**

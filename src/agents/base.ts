@@ -69,6 +69,36 @@ export abstract class BaseAgent {
   abstract generateResponse(context: DebateContext): Promise<AgentResponse>;
 
   /**
+   * Health check: Test if the agent's API connection is working
+   * Returns true if the agent is healthy, false otherwise
+   *
+   * Default implementation attempts a simple API call with minimal tokens.
+   * Override if provider requires specific health check logic.
+   */
+  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
+    try {
+      // Create a minimal test context
+      const testContext: DebateContext = {
+        sessionId: 'health-check',
+        topic: 'test',
+        mode: 'collaborative',
+        currentRound: 1,
+        totalRounds: 1,
+        previousResponses: [],
+      };
+
+      // Attempt to generate a response with minimal input
+      await this.generateResponse(testContext);
+      return { healthy: true };
+    } catch (error) {
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  /**
    * Build the system prompt for the debate
    */
   protected buildSystemPrompt(context: DebateContext): string {

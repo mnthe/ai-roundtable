@@ -73,14 +73,18 @@ export class ConsensusAnalyzer {
   /**
    * Calculate agreement level based on confidence variance and position similarity
    *
-   * Uses a simple heuristic:
-   * - Lower confidence variance = higher agreement
-   * - Position keyword overlap = higher agreement
+   * Uses a clustering-based approach:
+   * - Single cluster = high agreement
+   * - Multiple clusters = lower agreement based on cluster sizes
+   * - Confidence variance affects the score within clusters
    *
    * @param responses - Agent responses
    * @returns Agreement level from 0 to 1
    */
   private calculateAgreementLevel(responses: AgentResponse[]): number {
+    if (responses.length === 0) return 0;
+    if (responses.length === 1) return 1;
+
     // Calculate confidence variance component
     const confidences = responses.map((r) => r.confidence);
     const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
@@ -88,16 +92,33 @@ export class ConsensusAnalyzer {
       confidences.reduce((sum, c) => sum + Math.pow(c - avgConfidence, 2), 0) /
       confidences.length;
 
-    // Lower variance = higher agreement
-    // Normalize variance (assume max reasonable variance is 0.25)
+    // Lower variance = higher agreement (normalize with max variance of 0.25)
     const confidenceScore = Math.max(0, 1 - variance / 0.25);
 
-    // Calculate position similarity component
-    const positions = responses.map((r) => r.position.toLowerCase());
-    const positionScore = this.calculatePositionSimilarity(positions);
+    // Cluster responses by position similarity
+    const clusters = this.clusterPositionsBySimilarity(responses);
 
-    // Combine scores (weighted average)
-    const agreementLevel = 0.4 * confidenceScore + 0.6 * positionScore;
+    // Calculate position agreement based on clustering
+    let positionScore: number;
+    if (clusters.length === 1) {
+      // All responses in one cluster - high agreement
+      positionScore = 1.0;
+    } else if (clusters.length === responses.length) {
+      // Each response in its own cluster - no agreement
+      positionScore = 0.0;
+    } else {
+      // Partial clustering - score based on largest cluster size
+      const largestCluster = clusters.reduce(
+        (max, cluster) => (cluster.length > max.length ? cluster : max),
+        clusters[0] || []
+      );
+      // Score = proportion in largest cluster
+      positionScore = largestCluster.length / responses.length;
+    }
+
+    // Combine scores: Position similarity is primary (70%), confidence is secondary (30%)
+    // Position similarity matters more for determining agreement
+    const agreementLevel = 0.7 * positionScore + 0.3 * confidenceScore;
 
     return Math.max(0, Math.min(1, agreementLevel));
   }
@@ -198,10 +219,284 @@ export class ConsensusAnalyzer {
    * @returns Array of common themes/points
    */
   private findCommonPoints(responses: AgentResponse[]): string[] {
-    const positions = responses.map((r) => r.position.toLowerCase());
+    const commonPoints: string[] = [];
 
-    // Find common keywords
+    // Cluster positions by similarity
+    const clusters = this.clusterPositionsBySimilarity(responses);
+
+    // If there's a dominant cluster (contains majority of responses), extract common themes
+    const largestCluster = clusters.reduce(
+      (max, cluster) => (cluster.length > max.length ? cluster : max),
+      clusters[0] || []
+    );
+
+    const majorityThreshold = Math.ceil(responses.length / 2);
+    if (largestCluster.length >= majorityThreshold) {
+      // Extract common keywords from the largest cluster
+      const positions = largestCluster.map((r) => r.position.toLowerCase());
+      const commonKeywords = this.extractCommonKeywords(positions);
+
+      if (commonKeywords.length > 0) {
+        commonPoints.push(`Common themes: ${commonKeywords.slice(0, 5).join(', ')}`);
+      }
+
+      // Add a representative position from the cluster
+      const representativeResponse = largestCluster.reduce((highest, r) =>
+        r.confidence > highest.confidence ? r : highest
+      );
+      const positionSummary =
+        representativeResponse.position.length > 100
+          ? representativeResponse.position.slice(0, 100) + '...'
+          : representativeResponse.position;
+
+      commonPoints.push(
+        `Consensus view (${largestCluster.length}/${responses.length} agents): ${positionSummary}`
+      );
+    } else {
+      // No clear majority - find keywords that appear across multiple responses
+      const positions = responses.map((r) => r.position.toLowerCase());
+      const commonKeywords = this.extractCommonKeywords(positions);
+
+      if (commonKeywords.length > 0) {
+        commonPoints.push(`Shared concepts: ${commonKeywords.slice(0, 5).join(', ')}`);
+      } else {
+        commonPoints.push('Multiple perspectives on the topic');
+      }
+    }
+
+    // Add high-confidence points as additional common points
+    const highConfidencePoints = this.extractHighConfidencePoints(responses);
+    commonPoints.push(...highConfidencePoints);
+
+    return commonPoints;
+  }
+
+  /**
+   * Extract common keywords from positions
+   *
+   * @param positions - Array of position strings (already lowercased)
+   * @returns Array of common keywords sorted by frequency
+   */
+  private extractCommonKeywords(positions: string[]): string[] {
     const wordFrequency = new Map<string, number>();
+    const stopWords = new Set([
+      'the',
+      'a',
+      'an',
+      'and',
+      'or',
+      'but',
+      'in',
+      'on',
+      'at',
+      'to',
+      'for',
+      'of',
+      'with',
+      'by',
+      'from',
+      'is',
+      'are',
+      'was',
+      'were',
+      'be',
+      'been',
+      'being',
+      'have',
+      'has',
+      'had',
+      'do',
+      'does',
+      'did',
+      'will',
+      'would',
+      'should',
+      'could',
+      'may',
+      'might',
+      'must',
+      'can',
+      'this',
+      'that',
+      'these',
+      'those',
+      'not',
+    ]);
+
+    for (const position of positions) {
+      const words = position
+        .replace(/[^\w\s]/g, ' ')
+        .split(/\s+/)
+        .filter((w) => w.length > 3 && !stopWords.has(w));
+
+      // Use Set to count each word only once per position
+      const uniqueWords = new Set(words);
+      for (const word of uniqueWords) {
+        wordFrequency.set(word, (wordFrequency.get(word) || 0) + 1);
+      }
+    }
+
+    // Find words that appear in at least half of responses
+    const threshold = Math.ceil(positions.length / 2);
+    const commonWords = Array.from(wordFrequency.entries())
+      .filter(([_, count]) => count >= threshold)
+      .sort((a, b) => b[1] - a[1])
+      .map(([word]) => word);
+
+    return commonWords;
+  }
+
+  /**
+   * Extract points where agents have high confidence
+   *
+   * @param responses - Agent responses
+   * @returns Array of high-confidence points
+   */
+  private extractHighConfidencePoints(responses: AgentResponse[]): string[] {
+    return responses
+      .filter((r) => r.confidence >= 0.8)
+      .slice(0, 2)
+      .map((r) => `${r.agentName} (${(r.confidence * 100).toFixed(0)}%): ${r.position.slice(0, 100)}${r.position.length > 100 ? '...' : ''}`);
+  }
+
+  /**
+   * Find disagreement points by comparing position semantics
+   *
+   * @param responses - Agent responses
+   * @returns Array of disagreement themes
+   */
+  private findDisagreementPoints(responses: AgentResponse[]): string[] {
+    const disagreements: string[] = [];
+
+    // If only one or two responses, check for low confidence
+    if (responses.length <= 2) {
+      const uncertainResponses = responses.filter((r) => r.confidence < 0.5);
+      if (uncertainResponses.length > 0) {
+        disagreements.push(
+          `${uncertainResponses.length} agent(s) expressed uncertainty (confidence < 50%)`
+        );
+      }
+      return disagreements;
+    }
+
+    // Identify semantic position clusters using pairwise similarity
+    const clusters = this.clusterPositionsBySimilarity(responses);
+
+    // If we have multiple distinct clusters, there's disagreement
+    if (clusters.length > 1) {
+      // Describe each cluster's position
+      for (let i = 0; i < clusters.length; i++) {
+        const cluster = clusters[i];
+        if (!cluster || cluster.length === 0) continue;
+
+        const agentNames = cluster.map((r) => r.agentName).join(', ');
+        const avgConfidence =
+          cluster.reduce((sum, r) => sum + r.confidence, 0) / cluster.length;
+
+        // Extract key position summary from the first response in cluster
+        const firstResponse = cluster[0];
+        if (!firstResponse) continue;
+        const positionSummary =
+          firstResponse.position.length > 80
+            ? firstResponse.position.slice(0, 80) + '...'
+            : firstResponse.position;
+
+        disagreements.push(
+          `Position ${i + 1} (${agentNames}, avg confidence: ${(avgConfidence * 100).toFixed(0)}%): ${positionSummary}`
+        );
+      }
+    } else {
+      // Single cluster - check for low confidence or uncertainty
+      const uncertainResponses = responses.filter((r) => r.confidence < 0.5);
+      if (uncertainResponses.length > 0) {
+        disagreements.push(
+          `${uncertainResponses.length} agent(s) expressed uncertainty despite similar positions`
+        );
+      }
+
+      // Check for confidence variance within the cluster
+      const confidences = responses.map((r) => r.confidence);
+      const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
+      const variance =
+        confidences.reduce((sum, c) => sum + Math.pow(c - avgConfidence, 2), 0) /
+        confidences.length;
+
+      if (variance > 0.1) {
+        const outliers = responses.filter((r) => Math.abs(r.confidence - avgConfidence) > 0.25);
+        if (outliers.length > 0) {
+          disagreements.push(
+            `Divergent confidence levels: ${outliers.map((r) => `${r.agentName} (${(r.confidence * 100).toFixed(0)}%)`).join(', ')}`
+          );
+        }
+      }
+    }
+
+    return disagreements;
+  }
+
+  /**
+   * Cluster responses by position similarity
+   *
+   * Uses a simple greedy clustering algorithm based on semantic similarity
+   *
+   * @param responses - Agent responses
+   * @returns Array of response clusters
+   */
+  private clusterPositionsBySimilarity(
+    responses: AgentResponse[]
+  ): AgentResponse[][] {
+    if (responses.length === 0) return [];
+    if (responses.length === 1) return [responses];
+
+    const clusters: AgentResponse[][] = [];
+    const assigned = new Set<number>();
+
+    // Similarity threshold for considering positions as similar
+    const SIMILARITY_THRESHOLD = 0.5;
+
+    for (let i = 0; i < responses.length; i++) {
+      if (assigned.has(i)) continue;
+
+      const response1 = responses[i];
+      if (!response1) continue;
+
+      const cluster: AgentResponse[] = [response1];
+      assigned.add(i);
+
+      // Find similar responses
+      for (let j = i + 1; j < responses.length; j++) {
+        if (assigned.has(j)) continue;
+
+        const response2 = responses[j];
+        if (!response2) continue;
+
+        const similarity = this.calculatePairwiseSimilarity(
+          response1.position,
+          response2.position
+        );
+
+        if (similarity >= SIMILARITY_THRESHOLD) {
+          cluster.push(response2);
+          assigned.add(j);
+        }
+      }
+
+      clusters.push(cluster);
+    }
+
+    return clusters;
+  }
+
+  /**
+   * Calculate similarity between two position strings
+   *
+   * Uses Jaccard similarity coefficient on word sets
+   *
+   * @param pos1 - First position
+   * @param pos2 - Second position
+   * @returns Similarity score from 0 to 1
+   */
+  private calculatePairwiseSimilarity(pos1: string, pos2: string): number {
     const stopWords = new Set([
       'the',
       'a',
@@ -245,82 +540,27 @@ export class ConsensusAnalyzer {
       'those',
     ]);
 
-    for (const position of positions) {
-      const words = position
-        .replace(/[^\w\s]/g, ' ')
-        .split(/\s+/)
-        .filter((w) => w.length > 3 && !stopWords.has(w));
+    const words1 = pos1
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !stopWords.has(w));
 
-      for (const word of words) {
-        wordFrequency.set(word, (wordFrequency.get(word) || 0) + 1);
-      }
-    }
+    const words2 = pos2
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !stopWords.has(w));
 
-    // Find words that appear in at least half of responses
-    const threshold = Math.ceil(responses.length / 2);
-    const commonWords = Array.from(wordFrequency.entries())
-      .filter(([_, count]) => count >= threshold)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([word]) => word);
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
 
-    if (commonWords.length === 0) {
-      return ['Multiple perspectives on the topic'];
-    }
+    const intersection = new Set([...set1].filter((x) => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
 
-    return [
-      `Common themes: ${commonWords.join(', ')}`,
-      ...this.extractHighConfidencePoints(responses),
-    ];
-  }
+    if (union.size === 0) return 0;
 
-  /**
-   * Extract points where agents have high confidence
-   *
-   * @param responses - Agent responses
-   * @returns Array of high-confidence points
-   */
-  private extractHighConfidencePoints(responses: AgentResponse[]): string[] {
-    return responses
-      .filter((r) => r.confidence >= 0.8)
-      .slice(0, 2)
-      .map((r) => `${r.agentName} (${(r.confidence * 100).toFixed(0)}%): ${r.position.slice(0, 100)}${r.position.length > 100 ? '...' : ''}`);
-  }
-
-  /**
-   * Find disagreement points
-   *
-   * @param responses - Agent responses
-   * @returns Array of disagreement themes
-   */
-  private findDisagreementPoints(responses: AgentResponse[]): string[] {
-    const disagreements: string[] = [];
-
-    // Identify low confidence responses (uncertainty)
-    const uncertainResponses = responses.filter((r) => r.confidence < 0.5);
-    if (uncertainResponses.length > 0) {
-      disagreements.push(
-        `${uncertainResponses.length} agent(s) expressed uncertainty (confidence < 50%)`
-      );
-    }
-
-    // Identify outlier positions (simple approach: very different confidence levels)
-    const confidences = responses.map((r) => r.confidence);
-    const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-    const outliers = responses.filter((r) => Math.abs(r.confidence - avgConfidence) > 0.3);
-
-    if (outliers.length > 0) {
-      disagreements.push(
-        `Divergent confidence levels: ${outliers.map((r) => `${r.agentName} (${(r.confidence * 100).toFixed(0)}%)`).join(', ')}`
-      );
-    }
-
-    // If no specific disagreements found but agreement level is low
-    if (disagreements.length === 0 && this.calculateAgreementLevel(responses) < 0.5) {
-      disagreements.push('Agents provided diverse perspectives with limited overlap');
-    }
-
-    return disagreements;
+    return intersection.size / union.size;
   }
 
   /**
