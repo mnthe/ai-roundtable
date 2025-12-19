@@ -22,9 +22,17 @@ export const startRoundtableTool: Tool = {
       },
       mode: {
         type: 'string',
-        enum: ['collaborative', 'adversarial', 'socratic', 'expert-panel'],
+        enum: [
+          'collaborative',
+          'adversarial',
+          'socratic',
+          'expert-panel',
+          'devils-advocate',
+          'delphi',
+          'red-team-blue-team',
+        ],
         description:
-          'Debate mode: collaborative (find common ground), adversarial (challenge positions), socratic (question-driven), expert-panel (independent expert opinions)',
+          'Debate mode: collaborative (find common ground), adversarial (challenge positions), socratic (question-driven), expert-panel (independent expert opinions), devils-advocate (challenge assumptions), delphi (anonymous consensus building), red-team-blue-team (opposing team analysis)',
         default: 'collaborative',
       },
       agents: {
