@@ -5,6 +5,17 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/integration/**/*.test.ts'],
-    testTimeout: 60000, // 실제 API 호출은 시간이 걸림
+    setupFiles: ['tests/integration/setup.ts'],
+    testTimeout: 120000, // 2 minutes for real API calls
+    env: {
+      NODE_ENV: 'test',
+    },
+    // Run integration tests sequentially to avoid API rate limits
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
   },
 });

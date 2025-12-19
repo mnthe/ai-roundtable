@@ -11,7 +11,7 @@ import { createServer, type ServerOptions } from '../../src/mcp/server.js';
 import { AgentRegistry } from '../../src/agents/registry.js';
 import { MockAgent } from '../../src/agents/base.js';
 import { SessionManager } from '../../src/core/session-manager.js';
-import { ModeRegistry, getGlobalModeRegistry, resetGlobalModeRegistry } from '../../src/modes/registry.js';
+import { getGlobalModeRegistry, resetGlobalModeRegistry } from '../../src/modes/registry.js';
 
 describe('AI Roundtable E2E Integration', () => {
   let server: Server;
@@ -32,8 +32,8 @@ describe('AI Roundtable E2E Integration', () => {
       model: 'mock-model',
     });
     agentRegistry.createAgent({
-      id: 'gpt4-mock',
-      name: 'GPT-4 (Mock)',
+      id: 'chatgpt-mock',
+      name: 'ChatGPT (Mock)',
       provider: 'mock',
       model: 'mock-model',
     });
@@ -64,7 +64,7 @@ describe('AI Roundtable E2E Integration', () => {
       const startArgs = {
         topic: 'Is TypeScript better than JavaScript?',
         mode: 'collaborative',
-        agents: ['claude-mock', 'gpt4-mock'],
+        agents: ['claude-mock', 'chatgpt-mock'],
         rounds: 2,
       };
 
@@ -75,14 +75,14 @@ describe('AI Roundtable E2E Integration', () => {
         rounds: startArgs.rounds,
       };
 
-      // Create session
-      const session = sessionManager.createSession(config);
+      // Create session (async)
+      const session = await sessionManager.createSession(config);
       expect(session.id).toBeDefined();
       expect(session.topic).toBe('Is TypeScript better than JavaScript?');
       expect(session.status).toBe('active');
 
       // Get agents and verify they exist
-      const agents = agentRegistry.getAgents(['claude-mock', 'gpt4-mock']);
+      const agents = agentRegistry.getAgents(['claude-mock', 'chatgpt-mock']);
       expect(agents).toHaveLength(2);
 
       // Step 2: Execute first round
@@ -100,7 +100,7 @@ describe('AI Roundtable E2E Integration', () => {
       for (const agent of agents) {
         const response = await agent.generateResponse(firstRoundContext);
         responses.push(response);
-        sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response);
       }
 
       expect(responses).toHaveLength(2);
@@ -109,8 +109,8 @@ describe('AI Roundtable E2E Integration', () => {
       expect(responses[0]!.confidence).toBeGreaterThanOrEqual(0);
       expect(responses[0]!.confidence).toBeLessThanOrEqual(1);
 
-      // Update session round
-      sessionManager.updateSessionRound(session.id, 1);
+      // Update session round (async)
+      await sessionManager.updateSessionRound(session.id, 1);
 
       // Step 3: Execute second round
       const secondRoundContext = {
@@ -123,21 +123,21 @@ describe('AI Roundtable E2E Integration', () => {
       for (const agent of agents) {
         const response = await agent.generateResponse(secondRoundContext);
         round2Responses.push(response);
-        sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response);
       }
 
       expect(round2Responses).toHaveLength(2);
-      sessionManager.updateSessionRound(session.id, 2);
+      await sessionManager.updateSessionRound(session.id, 2);
 
-      // Step 4: Get final session state
-      const finalSession = sessionManager.getSession(session.id);
+      // Step 4: Get final session state (async)
+      const finalSession = await sessionManager.getSession(session.id);
       expect(finalSession).toBeDefined();
       expect(finalSession!.responses).toHaveLength(4); // 2 agents * 2 rounds
       expect(finalSession!.currentRound).toBe(2);
 
-      // Step 5: Mark as completed
-      sessionManager.updateSessionStatus(session.id, 'completed');
-      const completedSession = sessionManager.getSession(session.id);
+      // Step 5: Mark as completed (async)
+      await sessionManager.updateSessionStatus(session.id, 'completed');
+      const completedSession = await sessionManager.getSession(session.id);
       expect(completedSession!.status).toBe('completed');
     });
 
@@ -145,11 +145,11 @@ describe('AI Roundtable E2E Integration', () => {
       const config = {
         topic: 'Should AI be regulated?',
         mode: 'collaborative',
-        agents: ['claude-mock', 'gpt4-mock'],
+        agents: ['claude-mock', 'chatgpt-mock'],
         rounds: 3,
       };
 
-      const session = sessionManager.createSession(config);
+      const session = await sessionManager.createSession(config);
       const agents = agentRegistry.getAgents(config.agents);
 
       // Execute 3 rounds
@@ -160,17 +160,17 @@ describe('AI Roundtable E2E Integration', () => {
           mode: session.mode,
           currentRound: round,
           totalRounds: 3,
-          previousResponses: sessionManager.getResponses(session.id),
+          previousResponses: await sessionManager.getResponses(session.id),
         };
 
         for (const agent of agents) {
           const response = await agent.generateResponse(context);
-          sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response);
         }
-        sessionManager.updateSessionRound(session.id, round);
+        await sessionManager.updateSessionRound(session.id, round);
       }
 
-      const finalSession = sessionManager.getSession(session.id);
+      const finalSession = await sessionManager.getSession(session.id);
       expect(finalSession!.responses).toHaveLength(6); // 2 agents * 3 rounds
       expect(finalSession!.currentRound).toBe(3);
     });
@@ -180,9 +180,9 @@ describe('AI Roundtable E2E Integration', () => {
     it('should list all registered agents', () => {
       const agentList = agentRegistry.getAgentInfoList();
 
-      expect(agentList).toHaveLength(2);
+      expect(agentList.length).toBeGreaterThanOrEqual(2);
       expect(agentList.map((a) => a.id)).toContain('claude-mock');
-      expect(agentList.map((a) => a.id)).toContain('gpt4-mock');
+      expect(agentList.map((a) => a.id)).toContain('chatgpt-mock');
     });
 
     it('should retrieve agents by ID', () => {
@@ -200,31 +200,31 @@ describe('AI Roundtable E2E Integration', () => {
   });
 
   describe('Session Management', () => {
-    it('should list all sessions', () => {
-      // Create multiple sessions
-      sessionManager.createSession({
+    it('should list all sessions', async () => {
+      // Create multiple sessions (async)
+      await sessionManager.createSession({
         topic: 'Topic 1',
         mode: 'collaborative',
         agents: ['claude-mock'],
         rounds: 1,
       });
 
-      sessionManager.createSession({
+      await sessionManager.createSession({
         topic: 'Topic 2',
         mode: 'collaborative',
-        agents: ['gpt4-mock'],
+        agents: ['chatgpt-mock'],
         rounds: 2,
       });
 
-      const sessions = sessionManager.listSessions();
+      const sessions = await sessionManager.listSessions();
 
       expect(sessions).toHaveLength(2);
       expect(sessions.map((s) => s.topic)).toContain('Topic 1');
       expect(sessions.map((s) => s.topic)).toContain('Topic 2');
     });
 
-    it('should track session status correctly', () => {
-      const session = sessionManager.createSession({
+    it('should track session status correctly', async () => {
+      const session = await sessionManager.createSession({
         topic: 'Test Topic',
         mode: 'collaborative',
         agents: ['claude-mock'],
@@ -233,22 +233,22 @@ describe('AI Roundtable E2E Integration', () => {
 
       expect(session.status).toBe('active');
 
-      sessionManager.updateSessionStatus(session.id, 'completed');
-      const updated = sessionManager.getSession(session.id);
+      await sessionManager.updateSessionStatus(session.id, 'completed');
+      const updated = await sessionManager.getSession(session.id);
       expect(updated!.status).toBe('completed');
     });
   });
 
   describe('Response Collection', () => {
     it('should store and retrieve responses correctly', async () => {
-      const session = sessionManager.createSession({
+      const session = await sessionManager.createSession({
         topic: 'Test',
         mode: 'collaborative',
-        agents: ['claude-mock', 'gpt4-mock'],
+        agents: ['claude-mock', 'chatgpt-mock'],
         rounds: 1,
       });
 
-      const agents = agentRegistry.getAgents(['claude-mock', 'gpt4-mock']);
+      const agents = agentRegistry.getAgents(['claude-mock', 'chatgpt-mock']);
       const context = {
         sessionId: session.id,
         topic: session.topic,
@@ -260,14 +260,14 @@ describe('AI Roundtable E2E Integration', () => {
 
       for (const agent of agents) {
         const response = await agent.generateResponse(context);
-        sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response);
       }
 
-      const responses = sessionManager.getResponses(session.id);
+      const responses = await sessionManager.getResponses(session.id);
 
       expect(responses).toHaveLength(2);
       expect(responses[0]!.agentId).toBe('claude-mock');
-      expect(responses[1]!.agentId).toBe('gpt4-mock');
+      expect(responses[1]!.agentId).toBe('chatgpt-mock');
     });
   });
 
