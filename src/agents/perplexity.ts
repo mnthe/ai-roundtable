@@ -151,6 +151,9 @@ export class PerplexityAgent extends BaseAgent {
       messages.push(assistantMessage);
 
       for (const toolCall of currentToolCalls ?? []) {
+        // Skip non-function tool calls (e.g., custom tool calls in v6+)
+        if (toolCall.type !== 'function') continue;
+
         const functionName = toolCall.function.name;
         const functionArgs = JSON.parse(toolCall.function.arguments);
 

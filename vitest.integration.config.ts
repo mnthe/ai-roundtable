@@ -12,10 +12,7 @@ export default defineConfig({
     },
     // Run integration tests sequentially to avoid API rate limits
     pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
+    maxWorkers: 1,
+    isolate: false,
   },
 });
