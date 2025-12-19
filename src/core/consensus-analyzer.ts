@@ -452,7 +452,8 @@ export class ConsensusAnalyzer {
     const assigned = new Set<number>();
 
     // Similarity threshold for considering positions as similar
-    const SIMILARITY_THRESHOLD = 0.5;
+    // 0.35 allows for similar positions with different vocabulary
+    const SIMILARITY_THRESHOLD = 0.35;
 
     for (let i = 0; i < responses.length; i++) {
       if (assigned.has(i)) continue;
@@ -490,7 +491,7 @@ export class ConsensusAnalyzer {
   /**
    * Calculate similarity between two position strings
    *
-   * Uses Jaccard similarity coefficient on word sets
+   * Uses Jaccard similarity coefficient on word sets with basic stemming
    *
    * @param pos1 - First position
    * @param pos2 - Second position
@@ -540,17 +541,29 @@ export class ConsensusAnalyzer {
       'those',
     ]);
 
+    const normalizeWord = (word: string): string => {
+      // Simple stemming: remove common suffixes
+      word = word.replace(/ing$/, ''); // replacing -> replac
+      word = word.replace(/ed$/, ''); // replaced -> replac
+      word = word.replace(/s$/, ''); // developers -> developer
+      word = word.replace(/es$/, ''); // fixes -> fix
+      word = word.replace(/er$/, ''); // developer -> develop
+      return word;
+    };
+
     const words1 = pos1
       .toLowerCase()
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
-      .filter((w) => w.length > 3 && !stopWords.has(w));
+      .filter((w) => w.length > 3 && !stopWords.has(w))
+      .map(normalizeWord);
 
     const words2 = pos2
       .toLowerCase()
       .replace(/[^\w\s]/g, ' ')
       .split(/\s+/)
-      .filter((w) => w.length > 3 && !stopWords.has(w));
+      .filter((w) => w.length > 3 && !stopWords.has(w))
+      .map(normalizeWord);
 
     const set1 = new Set(words1);
     const set2 = new Set(words2);
