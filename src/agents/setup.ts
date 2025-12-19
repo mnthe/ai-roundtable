@@ -44,10 +44,10 @@ export interface SetupResult {
  * Default models for each provider
  */
 const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-3-5-sonnet-20241022',
-  openai: 'gpt-4-turbo',
-  google: 'gemini-1.5-pro',
-  perplexity: 'llama-3.1-sonar-large-128k-online',
+  anthropic: 'claude-sonnet-4-5-20250929',
+  openai: 'gpt-5.2',
+  google: 'gemini-2.5-flash',
+  perplexity: 'sonar-pro',
 };
 
 /**
