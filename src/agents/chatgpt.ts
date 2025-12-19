@@ -249,6 +249,31 @@ export class ChatGPTAgent extends BaseAgent {
   }
 
   /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer to get raw JSON responses
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const response = await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_completion_tokens: this.maxTokens,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          temperature: this.temperature,
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
+
+    return response.choices[0]?.message?.content ?? '';
+  }
+
+  /**
    * Health check: Test OpenAI API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

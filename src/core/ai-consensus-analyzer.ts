@@ -306,54 +306,49 @@ export class AIConsensusAnalyzer {
       positionsText
     );
 
-    // Create a minimal debate context for the agent
-    const analysisContext = {
-      sessionId: 'consensus-analysis',
-      topic: 'Analyze the following debate positions',
-      mode: 'collaborative' as const,
-      currentRound: 1,
-      totalRounds: 1,
-      previousResponses: [],
-    };
+    // System prompt for JSON-only output
+    const systemPrompt =
+      'You are an AI assistant that analyzes debate positions. ' +
+      'You must respond with valid JSON only, no additional text before or after the JSON object. ' +
+      'Do not include markdown code fences or any other formatting.';
 
-    // Override the agent's prompt temporarily
-    const originalResponse = await agent.generateResponse({
-      ...analysisContext,
-      topic: prompt,
-    });
+    // Use generateRawCompletion to get raw JSON without parsing
+    const rawResponse = await agent.generateRawCompletion(prompt, systemPrompt);
 
-    // Parse the AI response
-    return this.parseAIResponse(originalResponse, agent.getInfo().id);
+    // Parse the raw JSON response
+    return this.parseRawAIResponse(rawResponse, agent.getInfo().id);
   }
 
   /**
-   * Parse the AI's JSON response into AIConsensusResult
+   * Parse raw AI response string into AIConsensusResult
+   * Used with generateRawCompletion which returns unparsed text
    */
-  private parseAIResponse(
-    response: AgentResponse,
-    analyzerId: string
-  ): AIConsensusResult {
+  private parseRawAIResponse(rawResponse: string, analyzerId: string): AIConsensusResult {
     try {
+      // Strip markdown code fences if present (```json ... ```)
+      let cleanedResponse = rawResponse.trim();
+      const codeBlockMatch = cleanedResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch && codeBlockMatch[1]) {
+        cleanedResponse = codeBlockMatch[1].trim();
+      }
+
       // Try to extract JSON from the response
-      const jsonMatch = response.position.match(/\{[\s\S]*\}/);
+      const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        // Try reasoning field as fallback
-        const reasoningMatch = response.reasoning.match(/\{[\s\S]*\}/);
-        if (!reasoningMatch) {
-          throw new Error('No JSON found in response');
-        }
-        return this.parseJsonToResult(reasoningMatch[0], analyzerId);
+        throw new Error('No JSON found in response');
       }
       return this.parseJsonToResult(jsonMatch[0], analyzerId);
     } catch (error) {
-      console.warn('[AIConsensusAnalyzer] Failed to parse AI response:', error);
-      // Return a basic result from the response
-      // Use generous limits to avoid truncating important content
+      logger.warn(
+        { err: error, responseLength: rawResponse.length, responsePreview: rawResponse.slice(0, 200) },
+        'Failed to parse raw AI response'
+      );
+      // Return a basic result with the raw response as summary
       return {
-        agreementLevel: response.confidence,
-        commonPoints: [response.position.slice(0, 5000)],
+        agreementLevel: 0.5,
+        commonPoints: ['Unable to determine common points'],
         disagreementPoints: [],
-        summary: response.reasoning.slice(0, 10000),
+        summary: rawResponse.slice(0, 5000) || 'Analysis failed',
         analyzerId,
       };
     }
@@ -364,8 +359,15 @@ export class AIConsensusAnalyzer {
    * Uses jsonrepair to handle malformed JSON from AI models
    */
   private parseJsonToResult(json: string, analyzerId: string): AIConsensusResult {
-    // Use jsonrepair to fix common JSON issues (trailing commas, unquoted keys, etc.)
-    const repairedJson = jsonrepair(json);
+    // Clean up common issues before repair
+    let cleanedJson = json
+      // Remove trailing commas before closing brackets
+      .replace(/,(\s*[}\]])/g, '$1')
+      // Remove any BOM or zero-width characters
+      .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
+
+    // Use jsonrepair to fix remaining JSON issues
+    const repairedJson = jsonrepair(cleanedJson);
     const parsed = JSON.parse(repairedJson);
 
     return {

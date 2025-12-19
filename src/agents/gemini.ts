@@ -242,6 +242,29 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer to get raw JSON responses
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const response = await withRetry(
+      () =>
+        this.ai.models.generateContent({
+          model: this.model,
+          contents: prompt,
+          config: {
+            systemInstruction:
+              systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+            temperature: this.temperature,
+            maxOutputTokens: this.maxTokens,
+          },
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
+
+    return response.text ?? '';
+  }
+
+  /**
    * Health check: Test Gemini API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

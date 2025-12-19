@@ -306,6 +306,32 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer to get raw JSON responses
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
+
+    const response = await withRetry(
+      () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: this.temperature,
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
+
+    // Extract text from response without any parsing
+    const textBlocks = response.content.filter(
+      (block): block is TextBlock => block.type === 'text'
+    );
+    return textBlocks.map((block) => block.text).join('\n');
+  }
+
+  /**
    * Health check: Test Claude API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

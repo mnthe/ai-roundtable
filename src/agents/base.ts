@@ -89,6 +89,20 @@ export abstract class BaseAgent {
   abstract generateResponse(context: DebateContext): Promise<AgentResponse>;
 
   /**
+   * Generate a raw text completion without parsing into structured format
+   *
+   * This method is designed for use cases like AI consensus analysis where
+   * the raw AI response (e.g., JSON) needs to be preserved without transformation.
+   *
+   * Must be implemented by each provider-specific agent.
+   *
+   * @param prompt - The prompt to send to the AI model
+   * @param systemPrompt - Optional system prompt for context
+   * @returns Raw text response from the AI model
+   */
+  abstract generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string>;
+
+  /**
    * Health check: Test if the agent's API connection is working
    * Returns true if the agent is healthy, false otherwise
    *
@@ -339,5 +353,19 @@ export class MockAgent extends BaseAgent {
       confidence: 0.75,
       timestamp: new Date(),
     };
+  }
+
+  async generateRawCompletion(prompt: string, _systemPrompt?: string): Promise<string> {
+    if (this.responseDelay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.responseDelay));
+    }
+
+    // Return a mock JSON response for testing
+    return JSON.stringify({
+      agreementLevel: 0.8,
+      commonGround: ['Mock common point'],
+      disagreementPoints: [],
+      summary: `Mock analysis of: ${prompt.slice(0, 50)}...`,
+    });
   }
 }

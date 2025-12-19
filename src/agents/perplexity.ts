@@ -12,6 +12,7 @@ import type {
 } from 'openai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
+import { createLogger } from '../utils/logger.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -20,6 +21,8 @@ import type {
   Citation,
   ImageResult,
 } from '../types/index.js';
+
+const logger = createLogger('PerplexityAgent');
 
 /** Perplexity API error types that should be retried (uses OpenAI SDK) */
 const RETRYABLE_ERRORS = [
@@ -433,6 +436,32 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer to get raw JSON responses
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const response = await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          temperature: this.temperature,
+          // Disable web search for raw completion (consensus analysis doesn't need it)
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
+
+    return response.choices[0]?.message?.content ?? '';
+  }
+
+  /**
    * Health check: Test Perplexity API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
@@ -475,6 +504,60 @@ export class PerplexityAgent extends BaseAgent {
         },
       },
     }));
+  }
+
+  /**
+   * Override buildUserMessage for Perplexity to prioritize topic-related search
+   *
+   * Perplexity automatically searches the web based on the prompt content.
+   * By structuring the prompt to emphasize the debate topic FIRST and
+   * placing format instructions LAST, we ensure that Perplexity's search
+   * focuses on the actual topic rather than "JSON format" keywords.
+   */
+  protected override buildUserMessage(context: DebateContext): string {
+    const parts: string[] = [];
+
+    // CRITICAL: Put the main topic query FIRST for Perplexity's search to pick up
+    parts.push(`TOPIC FOR ANALYSIS: ${context.topic}`);
+    parts.push('');
+
+    // Add search guidance to help Perplexity focus on relevant sources
+    parts.push(
+      'Please search for and cite recent, authoritative sources on this topic. ' +
+        'Focus on academic papers, news articles, expert opinions, and official reports.'
+    );
+    parts.push('');
+
+    // Add previous responses context if any
+    if (context.previousResponses.length > 0) {
+      parts.push('Previous responses in this round:');
+      for (const response of context.previousResponses) {
+        parts.push(`
+--- ${response.agentName} ---
+Position: ${response.position}
+Reasoning: ${response.reasoning}
+Confidence: ${(response.confidence * 100).toFixed(0)}%
+${response.citations?.length ? `Sources: ${response.citations.map((c) => c.title).join(', ')}` : ''}
+`);
+      }
+      parts.push('');
+    }
+
+    // Put format instructions LAST (after topic-focused content)
+    // This prevents Perplexity from searching for "JSON format" related content
+    parts.push('Provide your response with the following structure:');
+    parts.push('- position: Your clear position statement on the topic');
+    parts.push('- reasoning: Your detailed reasoning and arguments with citations');
+    parts.push('- confidence: A number from 0.0 to 1.0 indicating your confidence');
+    parts.push('');
+    parts.push('Format as JSON: {"position": "...", "reasoning": "...", "confidence": 0.0-1.0}');
+
+    logger.debug(
+      { topic: context.topic, promptLength: parts.join('\n').length },
+      'Built Perplexity-optimized user message'
+    );
+
+    return parts.join('\n');
   }
 }
 
