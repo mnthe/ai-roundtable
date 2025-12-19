@@ -226,3 +226,115 @@ export interface SynthesizeDebateInput {
   sessionId: string;
   synthesizer?: string;
 }
+
+// ============================================
+// 4-Layer Response Types (MCP Response Enhancement)
+// ============================================
+
+/**
+ * Consensus level classification for quick decision making
+ */
+export type ConsensusLevel = 'high' | 'medium' | 'low';
+
+/**
+ * Action recommendation type for main agent decision flow
+ */
+export type ActionRecommendationType = 'proceed' | 'verify' | 'query_detail';
+
+/**
+ * Layer 1: Decision - Quick decision-making information
+ */
+export interface DecisionLayer {
+  /** Classified consensus level (high >= 0.7, medium >= 0.4, low < 0.4) */
+  consensusLevel: ConsensusLevel;
+  /** Numeric agreement level (0-1) */
+  agreementScore: number;
+  /** Recommended next action for main agent */
+  actionRecommendation: {
+    type: ActionRecommendationType;
+    reason: string;
+  };
+}
+
+/**
+ * Layer 2: Agent Response Summary - Per-agent reasoning information
+ */
+export interface AgentResponseSummary {
+  agentId: string;
+  agentName: string;
+  /** Full position statement */
+  position: string;
+  /** 2-3 key reasoning points extracted from full reasoning */
+  keyPoints: string[];
+  /** Confidence score (0-1) */
+  confidence: number;
+  /** Confidence change from previous round (if applicable) */
+  confidenceChange?: {
+    delta: number;
+    previousRound: number;
+    reason: string;
+  };
+  /** Summary of evidence/tools used */
+  evidenceUsed: {
+    webSearches: number;
+    citations: number;
+    toolCalls: string[];
+  };
+}
+
+/**
+ * Layer 3: Evidence Summary - Aggregated evidence information
+ */
+export interface EvidenceLayer {
+  /** Total citations across all agents */
+  totalCitations: number;
+  /** Identified conflicts between agents */
+  conflicts: {
+    issue: string;
+    positions: { agentId: string; stance: string }[];
+  }[];
+  /** Brief consensus summary */
+  consensusSummary: string;
+}
+
+/**
+ * Layer 4: Metadata - References for deep dive
+ */
+export interface MetadataLayer {
+  /** Reference to get full details */
+  detailReference: {
+    tool: string;
+    params: Record<string, unknown>;
+  };
+  /** Hints for what to verify if confidence is low */
+  verificationHints: {
+    field: string;
+    reason: string;
+    suggestedTool: string;
+  }[];
+  /** Flag indicating more detailed data is available */
+  hasMoreDetails: boolean;
+}
+
+/**
+ * Enhanced roundtable response with 4-layer structure
+ */
+export interface RoundtableResponse {
+  sessionId: string;
+  topic: string;
+  mode: DebateMode;
+  roundNumber: number;
+  totalRounds: number;
+
+  /** Layer 1: Quick decision info */
+  decision: DecisionLayer;
+
+  /** Layer 2: Per-agent summaries with key points */
+  agentResponses: AgentResponseSummary[];
+
+  /** Layer 3: Aggregated evidence */
+  evidence: EvidenceLayer;
+
+  /** Layer 4: Deep dive references */
+  metadata: MetadataLayer;
+}
