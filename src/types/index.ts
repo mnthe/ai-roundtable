@@ -151,6 +151,19 @@ export interface AIConsensusResult extends ConsensusResult {
 // Synthesis Types
 // ============================================
 
+/**
+ * Context for debate synthesis
+ * Used by agents to generate synthesis responses with correct format
+ */
+export interface SynthesisContext {
+  sessionId: string;
+  topic: string;
+  mode: DebateMode;
+  responses: AgentResponse[];
+  /** The full synthesis prompt with instructions */
+  synthesisPrompt: string;
+}
+
 export interface SynthesisResult {
   commonGround: string[];
   keyDifferences: string[];

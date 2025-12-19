@@ -327,4 +327,77 @@ describe('Synthesize Debate Tool', () => {
       expect(parsed.error).toBe(errorMsg);
     });
   });
+
+  describe('Agent generateSynthesis Method', () => {
+    it('should call generateSynthesis with synthesis-specific context', async () => {
+      // Create mock agent that tracks what prompts it receives
+      const mockAgent = new MockAgent({
+        id: 'synthesis-test',
+        name: 'Synthesis Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+
+      // Override the generateSynthesisInternal to return synthesis format JSON
+      const synthesisJson = JSON.stringify({
+        commonGround: ['Both agree on point A', 'Both agree on point B'],
+        keyDifferences: ['Agent 1 prefers X, Agent 2 prefers Y'],
+        evolutionSummary: 'Positions converged over rounds',
+        conclusion: 'The debate reached a productive outcome',
+        recommendation: 'Consider both perspectives',
+        confidence: 0.85,
+      });
+
+      // We can't easily mock generateSynthesisInternal since it's protected,
+      // but we can test that the method exists and returns a string
+      const synthesisContext = {
+        sessionId: 'test-session',
+        topic: 'Test topic',
+        mode: 'collaborative' as const,
+        responses: [
+          {
+            agentId: 'agent-1',
+            agentName: 'Agent 1',
+            position: 'Position A',
+            reasoning: 'Reasoning A',
+            confidence: 0.8,
+            timestamp: new Date(),
+          },
+        ],
+        synthesisPrompt: 'Please analyze this debate and provide synthesis...',
+      };
+
+      // MockAgent inherits from BaseAgent, so generateSynthesis should exist
+      expect(typeof mockAgent.generateSynthesis).toBe('function');
+
+      // The MockAgent's generateSynthesis will call generateSynthesisInternal
+      // which falls back to generateResponse in the base implementation
+      const result = await mockAgent.generateSynthesis(synthesisContext);
+
+      // Result should be a string (the mock response reasoning)
+      expect(typeof result).toBe('string');
+    });
+
+    it('should use synthesis system prompt that requests JSON format', async () => {
+      const mockAgent = new MockAgent({
+        id: 'prompt-test',
+        name: 'Prompt Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+
+      // Access the protected method via bracket notation for testing
+      const buildSynthesisSystemPrompt = (
+        mockAgent as unknown as { buildSynthesisSystemPrompt: () => string }
+      ).buildSynthesisSystemPrompt;
+
+      expect(typeof buildSynthesisSystemPrompt).toBe('function');
+
+      const prompt = buildSynthesisSystemPrompt.call(mockAgent);
+
+      // The system prompt should mention JSON and synthesis
+      expect(prompt).toContain('JSON');
+      expect(prompt).toContain('synthe'); // synthesis or synthesizing
+    });
+  });
 });

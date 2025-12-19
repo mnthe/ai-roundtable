@@ -224,6 +224,31 @@ export class ChatGPTAgent extends BaseAgent {
   }
 
   /**
+   * Generate synthesis by calling OpenAI API directly with synthesis-specific prompts
+   * This bypasses the standard debate prompt building to use synthesis format
+   */
+  protected override async generateSynthesisInternal(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
+    const response = await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_completion_tokens: this.maxTokens,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: this.temperature,
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
+
+    return response.choices[0]?.message?.content ?? '';
+  }
+
+  /**
    * Health check: Test OpenAI API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

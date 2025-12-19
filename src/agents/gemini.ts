@@ -217,6 +217,31 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
+   * Generate synthesis by calling Gemini API directly with synthesis-specific prompts
+   * This bypasses the standard debate prompt building to use synthesis format
+   */
+  protected override async generateSynthesisInternal(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
+    const response = await withRetry(
+      () =>
+        this.ai.models.generateContent({
+          model: this.model,
+          contents: userMessage,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: this.temperature,
+            maxOutputTokens: this.maxTokens,
+          },
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
+
+    return response.text ?? '';
+  }
+
+  /**
    * Health check: Test Gemini API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

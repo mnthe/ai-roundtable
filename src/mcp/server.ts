@@ -43,7 +43,7 @@ import {
 import type {
   DebateConfig,
   SynthesisResult,
-  DebateContext,
+  SynthesisContext,
   RoundResult,
   AgentResponse,
   RoundtableResponse,
@@ -1345,21 +1345,21 @@ async function handleSynthesizeDebate(
     // Build synthesis prompt
     const synthesisPrompt = buildSynthesisPrompt(session.topic, responses, session.mode);
 
-    // Create a debate context for the synthesizer
-    const synthesisContext: DebateContext = {
+    // Create synthesis context with the proper format
+    const synthesisContext: SynthesisContext = {
       sessionId: session.id,
-      topic: synthesisPrompt,
+      topic: session.topic,
       mode: session.mode,
-      currentRound: 1,
-      totalRounds: 1,
-      previousResponses: [],
+      responses: responses,
+      synthesisPrompt: synthesisPrompt,
     };
 
-    // Generate synthesis using the agent
-    const agentResponse = await synthesizerAgent.generateResponse(synthesisContext);
+    // Generate synthesis using the dedicated synthesis method
+    // This ensures the synthesis-specific prompts are used (not debate format)
+    const synthesisResponse = await synthesizerAgent.generateSynthesis(synthesisContext);
 
     // Parse the agent response to extract synthesis result
-    const synthesis = parseSynthesisResponse(agentResponse.reasoning, synthesizerId);
+    const synthesis = parseSynthesisResponse(synthesisResponse, synthesizerId);
 
     return createSuccessResponse({
       sessionId: input.sessionId,

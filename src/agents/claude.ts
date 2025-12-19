@@ -266,6 +266,46 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
+   * Generate synthesis by calling Claude API directly with synthesis-specific prompts
+   * This bypasses the standard debate prompt building to use synthesis format
+   */
+  protected override async generateSynthesisInternal(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
+    logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
+
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
+
+      // Extract text from response
+      const textBlocks = response.content.filter(
+        (block): block is TextBlock => block.type === 'text'
+      );
+      const rawText = textBlocks.map((block) => block.text).join('\n');
+
+      logger.info({ agentId: this.id, agentName: this.name }, 'Synthesis generation completed');
+      return rawText;
+    } catch (error) {
+      logger.error(
+        { err: error, agentId: this.id, agentName: this.name },
+        'Failed to generate synthesis'
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Health check: Test Claude API connection with minimal request
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {

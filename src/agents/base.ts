@@ -8,6 +8,7 @@ import type {
   AgentResponse,
   DebateContext,
   AIProvider,
+  SynthesisContext,
 } from '../types/index.js';
 
 /**
@@ -115,6 +116,56 @@ export abstract class BaseAgent {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  /**
+   * Generate a synthesis of debate responses
+   *
+   * Unlike generateResponse(), this method uses synthesis-specific prompts
+   * that request JSON in synthesis format (commonGround, keyDifferences, etc.)
+   * rather than debate format (position, reasoning, confidence).
+   *
+   * Default implementation calls generateSynthesisInternal which can be
+   * overridden by provider-specific agents for direct API access.
+   */
+  async generateSynthesis(context: SynthesisContext): Promise<string> {
+    const systemPrompt = this.buildSynthesisSystemPrompt();
+    const userMessage = context.synthesisPrompt;
+
+    // Call the internal method that subclasses can override for direct API access
+    const response = await this.generateSynthesisInternal(systemPrompt, userMessage);
+    return response;
+  }
+
+  /**
+   * Internal method for generating synthesis - can be overridden by subclasses
+   * Default implementation falls back to generateResponse
+   */
+  protected async generateSynthesisInternal(systemPrompt: string, userMessage: string): Promise<string> {
+    // Default fallback: Use generateResponse with a context that includes synthesis instructions
+    // This is not ideal but provides basic functionality
+    const context: DebateContext = {
+      sessionId: 'synthesis',
+      topic: userMessage, // The full synthesis prompt
+      mode: 'collaborative',
+      currentRound: 1,
+      totalRounds: 1,
+      previousResponses: [],
+      modePrompt: systemPrompt,
+    };
+
+    const response = await this.generateResponse(context);
+    // Return the reasoning field which should contain the synthesis JSON
+    return response.reasoning;
+  }
+
+  /**
+   * Build the system prompt for synthesis tasks
+   */
+  protected buildSynthesisSystemPrompt(): string {
+    return `You are ${this.name}, an AI assistant tasked with synthesizing and analyzing debate discussions.
+Your role is to provide a comprehensive, balanced synthesis of the debate.
+You must respond with valid JSON only, no additional text before or after the JSON object.`;
   }
 
   /**
