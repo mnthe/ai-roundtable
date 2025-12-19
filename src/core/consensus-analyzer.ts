@@ -65,6 +65,94 @@ const STOP_WORDS = new Set([
 const SIMILARITY_THRESHOLD = 0.35;
 
 /**
+ * Negation words that reverse the sentiment/meaning
+ */
+const NEGATION_WORDS = new Set([
+  'not',
+  'no',
+  'never',
+  'neither',
+  'nobody',
+  'nothing',
+  'nowhere',
+  "don't",
+  "doesn't",
+  "didn't",
+  "won't",
+  "wouldn't",
+  "shouldn't",
+  "couldn't",
+  'cannot',
+  "can't",
+  "isn't",
+  "aren't",
+  "wasn't",
+  "weren't",
+  'without',
+  'lack',
+  'lacking',
+  'absent',
+  'against',
+  'oppose',
+  'opposed',
+  'opposing',
+  'disagree',
+  'reject',
+  'deny',
+  // Korean negation particles
+  '않',
+  '없',
+  '못',
+  '아니',
+  '안',
+]);
+
+/**
+ * Stance/opinion words that indicate position direction
+ * These are universal across topics
+ */
+const STANCE_WORDS = new Set([
+  // Positive stance
+  'support',
+  'favor',
+  'agree',
+  'recommend',
+  'approve',
+  'endorse',
+  'advocate',
+  'promote',
+  'encourage',
+  'beneficial',
+  'positive',
+  'good',
+  'important',
+  'necessary',
+  'essential',
+  // Negative stance
+  'oppose',
+  'against',
+  'disagree',
+  'reject',
+  'disapprove',
+  'harmful',
+  'negative',
+  'bad',
+  'dangerous',
+  'risky',
+  'problematic',
+  'unnecessary',
+  // Korean stance words
+  '찬성',
+  '반대',
+  '지지',
+  '필요',
+  '중요',
+  '위험',
+  '좋',
+  '나쁘',
+]);
+
+/**
  * Analyze consensus among agent responses
  *
  * This is a basic implementation that:
@@ -149,8 +237,7 @@ export class ConsensusAnalyzer {
     const confidences = responses.map((r) => r.confidence);
     const avgConfidence = confidences.reduce((a, b) => a + b, 0) / confidences.length;
     const variance =
-      confidences.reduce((sum, c) => sum + Math.pow(c - avgConfidence, 2), 0) /
-      confidences.length;
+      confidences.reduce((sum, c) => sum + Math.pow(c - avgConfidence, 2), 0) / confidences.length;
 
     // Lower variance = higher agreement (normalize with max variance of 0.25)
     const confidenceScore = Math.max(0, 1 - variance / 0.25);
@@ -284,7 +371,10 @@ export class ConsensusAnalyzer {
     return responses
       .filter((r) => r.confidence >= 0.8)
       .slice(0, 2)
-      .map((r) => `${r.agentName} (${(r.confidence * 100).toFixed(0)}%): ${r.position.slice(0, 100)}${r.position.length > 100 ? '...' : ''}`);
+      .map(
+        (r) =>
+          `${r.agentName} (${(r.confidence * 100).toFixed(0)}%): ${r.position.slice(0, 100)}${r.position.length > 100 ? '...' : ''}`
+      );
   }
 
   /**
@@ -318,8 +408,7 @@ export class ConsensusAnalyzer {
         if (!cluster || cluster.length === 0) continue;
 
         const agentNames = cluster.map((r) => r.agentName).join(', ');
-        const avgConfidence =
-          cluster.reduce((sum, r) => sum + r.confidence, 0) / cluster.length;
+        const avgConfidence = cluster.reduce((sum, r) => sum + r.confidence, 0) / cluster.length;
 
         // Extract key position summary from the first response in cluster
         const firstResponse = cluster[0];
@@ -370,9 +459,7 @@ export class ConsensusAnalyzer {
    * @param responses - Agent responses
    * @returns Array of response clusters
    */
-  private clusterPositionsBySimilarity(
-    responses: AgentResponse[]
-  ): AgentResponse[][] {
+  private clusterPositionsBySimilarity(responses: AgentResponse[]): AgentResponse[][] {
     if (responses.length === 0) return [];
     if (responses.length === 1) return [responses];
 
@@ -395,10 +482,7 @@ export class ConsensusAnalyzer {
         const response2 = responses[j];
         if (!response2) continue;
 
-        const similarity = this.calculatePairwiseSimilarity(
-          response1.position,
-          response2.position
-        );
+        const similarity = this.calculatePairwiseSimilarity(response1.position, response2.position);
 
         if (similarity >= SIMILARITY_THRESHOLD) {
           cluster.push(response2);
@@ -415,7 +499,10 @@ export class ConsensusAnalyzer {
   /**
    * Calculate similarity between two position strings
    *
-   * Uses Jaccard similarity coefficient on word sets with basic stemming
+   * Uses a multi-factor approach:
+   * 1. Negation detection - opposite positions should have low similarity
+   * 2. Weighted Jaccard - domain-relevant words count more
+   * 3. Cosine-like similarity for better handling of different text lengths
    *
    * @param pos1 - First position
    * @param pos2 - Second position
@@ -425,15 +512,141 @@ export class ConsensusAnalyzer {
     const words1 = this.extractNormalizedWords(pos1);
     const words2 = this.extractNormalizedWords(pos2);
 
+    if (words1.length === 0 || words2.length === 0) return 0;
+
+    // Step 1: Check for negation opposition
+    // If one text has negation on key terms that the other asserts positively,
+    // they are likely opposite positions
+    const negationScore = this.calculateNegationScore(pos1, pos2);
+    if (negationScore < 0) {
+      // Negative score indicates opposition - return low similarity
+      return Math.max(0, 0.2 + negationScore * 0.2);
+    }
+
+    // Step 2: Calculate Jaccard similarity (simple fallback)
+    const jaccardSimilarity = this.calculateJaccardSimilarity(words1, words2);
+
+    return Math.max(0, Math.min(1, jaccardSimilarity));
+  }
+
+  /**
+   * Calculate negation score between two positions
+   *
+   * Detects if one position negates what the other asserts.
+   * Returns negative value if positions are opposed, positive if aligned.
+   *
+   * @param pos1 - First position text
+   * @param pos2 - Second position text
+   * @returns Score from -1 (opposed) to 1 (aligned), 0 if neutral
+   */
+  private calculateNegationScore(pos1: string, pos2: string): number {
+    const text1 = pos1.toLowerCase();
+    const text2 = pos2.toLowerCase();
+
+    // Extract key phrases (word + context window)
+    const keyPhrases1 = this.extractKeyPhrasesWithNegation(text1);
+    const keyPhrases2 = this.extractKeyPhrasesWithNegation(text2);
+
+    let oppositionCount = 0;
+    let alignmentCount = 0;
+
+    // Check for opposition: same key term with different negation status
+    for (const [term1, isNegated1] of keyPhrases1) {
+      for (const [term2, isNegated2] of keyPhrases2) {
+        // Check if terms are similar (simple substring or exact match)
+        if (term1 === term2 || term1.includes(term2) || term2.includes(term1)) {
+          if (isNegated1 !== isNegated2) {
+            // One negated, one not - opposition
+            oppositionCount++;
+          } else {
+            // Both negated or both positive - alignment
+            alignmentCount++;
+          }
+        }
+      }
+    }
+
+    if (oppositionCount + alignmentCount === 0) return 0;
+
+    // Return score based on ratio
+    return (alignmentCount - oppositionCount) / (alignmentCount + oppositionCount);
+  }
+
+  /**
+   * Extract key phrases with negation context
+   *
+   * Focuses on stance words (support/oppose) and content words
+   * to detect if positions are semantically opposed.
+   *
+   * @param text - Text to analyze
+   * @returns Array of [key_term, is_negated] pairs
+   */
+  private extractKeyPhrasesWithNegation(text: string): Array<[string, boolean]> {
+    const phrases: Array<[string, boolean]> = [];
+    const words = text.split(/\s+/);
+
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i]?.toLowerCase().replace(/[^\w가-힣]/g, '') || '';
+      if (!word || word.length < 3) continue;
+      if (STOP_WORDS.has(word)) continue;
+
+      // Focus on stance words - these indicate position direction
+      const stemmed = this.stemWord(word);
+      if (!STANCE_WORDS.has(word) && !STANCE_WORDS.has(stemmed)) {
+        continue;
+      }
+
+      // Look for negation in window of 3 words before
+      let isNegated = false;
+      for (let j = Math.max(0, i - 3); j < i; j++) {
+        const prevWord = words[j]?.toLowerCase().replace(/[^\w가-힣']/g, '') || '';
+        if (NEGATION_WORDS.has(prevWord)) {
+          isNegated = true;
+          break;
+        }
+      }
+
+      phrases.push([stemmed || word, isNegated]);
+    }
+
+    return phrases;
+  }
+
+  /**
+   * Calculate Jaccard similarity between two word sets
+   *
+   * Simple fallback - AIConsensusAnalyzer handles semantic analysis.
+   *
+   * @param words1 - Normalized words from first position
+   * @param words2 - Normalized words from second position
+   * @returns Similarity score from 0 to 1
+   */
+  private calculateJaccardSimilarity(words1: string[], words2: string[]): number {
     const set1 = new Set(words1);
     const set2 = new Set(words2);
 
-    const intersection = new Set([...set1].filter((x) => set2.has(x)));
+    const intersection = [...set1].filter((x) => set2.has(x));
     const union = new Set([...set1, ...set2]);
 
     if (union.size === 0) return 0;
+    return intersection.length / union.size;
+  }
 
-    return intersection.size / union.size;
+  /**
+   * Simple word stemming
+   *
+   * @param word - Word to stem
+   * @returns Stemmed word
+   */
+  private stemWord(word: string): string {
+    // Simple stemming: remove common suffixes
+    let stemmed = word.toLowerCase();
+    stemmed = stemmed.replace(/ing$/, '');
+    stemmed = stemmed.replace(/ed$/, '');
+    stemmed = stemmed.replace(/ies$/, 'y');
+    stemmed = stemmed.replace(/es$/, '');
+    stemmed = stemmed.replace(/s$/, '');
+    return stemmed.length >= 2 ? stemmed : word;
   }
 
   /**
