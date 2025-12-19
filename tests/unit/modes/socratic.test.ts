@@ -146,7 +146,8 @@ describe('SocraticMode', () => {
       const prompt = mode.buildAgentPrompt(contextWithFocus);
 
       expect(prompt).toContain('How do we know what is good?');
-      expect(prompt).toContain('Socratic questioning');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('FOCUS QUESTION');
     });
 
     it('should encourage questioning when previous responses exist', () => {
@@ -166,16 +167,17 @@ describe('SocraticMode', () => {
 
       const prompt = mode.buildAgentPrompt(contextWithPrevious);
 
-      expect(prompt).toContain('assumptions');
-      expect(prompt).toContain('clarifications');
-      expect(prompt).toContain('probing questions');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('EXAMINING ASSUMPTIONS');
+      expect(prompt).toContain('QUESTIONING THE POSITION');
     });
 
     it('should include foundational guidance for first round', () => {
       const prompt = mode.buildAgentPrompt(defaultContext);
 
-      expect(prompt).toContain('Begin the Socratic dialogue');
-      expect(prompt).toContain('foundational questions');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('FRAMING QUESTION');
+      expect(prompt).toContain('FOUNDATIONAL QUESTIONS');
     });
   });
 });

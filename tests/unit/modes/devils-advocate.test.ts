@@ -164,7 +164,7 @@ describe('DevilsAdvocateMode', () => {
     it('should provide different prompts for different roles', () => {
       // First agent (no previous responses)
       const firstPrompt = mode.buildAgentPrompt(defaultContext);
-      expect(firstPrompt).toContain('Primary Position');
+      expect(firstPrompt.toUpperCase()).toContain('PRIMARY POSITION');
 
       // Second agent (one previous response)
       const contextWithOneResponse: DebateContext = {
@@ -181,7 +181,7 @@ describe('DevilsAdvocateMode', () => {
         ],
       };
       const secondPrompt = mode.buildAgentPrompt(contextWithOneResponse);
-      expect(secondPrompt).toContain('Opposition');
+      expect(secondPrompt.toUpperCase()).toContain('OPPOSITION');
 
       // Third agent (two previous responses)
       const contextWithTwoResponses: DebateContext = {
@@ -206,7 +206,7 @@ describe('DevilsAdvocateMode', () => {
         ],
       };
       const thirdPrompt = mode.buildAgentPrompt(contextWithTwoResponses);
-      expect(thirdPrompt).toContain('Evaluator');
+      expect(thirdPrompt.toUpperCase()).toContain('EVALUATOR');
     });
   });
 
@@ -301,25 +301,25 @@ describe('DevilsAdvocateMode', () => {
       await mode.executeRound(agents, defaultContext, mockToolkit);
 
       expect(receivedPrompts).toHaveLength(4);
-      // Agent 0: Primary Position
-      expect(receivedPrompts[0]).toContain('Primary Position');
-      expect(receivedPrompts[0]).not.toContain('Opposition');
-      expect(receivedPrompts[0]).not.toContain('Evaluator');
+      // Agent 0: Primary Position (case-insensitive checks)
+      expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY POSITION');
+      expect(receivedPrompts[0].toUpperCase()).not.toContain('OPPOSITION ROLE');
+      expect(receivedPrompts[0].toUpperCase()).not.toContain('EVALUATOR ROLE');
 
       // Agent 1: Opposition Role
-      expect(receivedPrompts[1]).toContain('Opposition Role');
-      expect(receivedPrompts[1]).not.toContain('Primary Position');
-      expect(receivedPrompts[1]).not.toContain('Evaluator');
+      expect(receivedPrompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
+      expect(receivedPrompts[1].toUpperCase()).not.toContain('PRIMARY POSITION');
+      expect(receivedPrompts[1].toUpperCase()).not.toContain('EVALUATOR ROLE');
 
       // Agent 2: Evaluator Role (NOT Opposition!)
-      expect(receivedPrompts[2]).toContain('Evaluator Role');
-      expect(receivedPrompts[2]).not.toContain('Opposition');
-      expect(receivedPrompts[2]).not.toContain('Primary Position');
+      expect(receivedPrompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
+      expect(receivedPrompts[2].toUpperCase()).not.toContain('OPPOSITION ROLE');
+      expect(receivedPrompts[2].toUpperCase()).not.toContain('PRIMARY POSITION');
 
       // Agent 3: Evaluator Role (NOT Opposition!)
-      expect(receivedPrompts[3]).toContain('Evaluator Role');
-      expect(receivedPrompts[3]).not.toContain('Opposition');
-      expect(receivedPrompts[3]).not.toContain('Primary Position');
+      expect(receivedPrompts[3].toUpperCase()).toContain('EVALUATOR ROLE');
+      expect(receivedPrompts[3].toUpperCase()).not.toContain('OPPOSITION ROLE');
+      expect(receivedPrompts[3].toUpperCase()).not.toContain('PRIMARY POSITION');
     });
 
     it('should maintain correct roles across multiple rounds', async () => {
@@ -371,20 +371,20 @@ describe('DevilsAdvocateMode', () => {
 
       await mode.executeRound(agents, round2Context, mockToolkit);
 
-      // Verify round 1 role assignment
-      expect(round1Prompts[0]).toContain('Primary Position');
-      expect(round1Prompts[1]).toContain('Opposition Role');
-      expect(round1Prompts[2]).toContain('Evaluator Role');
+      // Verify round 1 role assignment (case-insensitive)
+      expect(round1Prompts[0].toUpperCase()).toContain('PRIMARY POSITION');
+      expect(round1Prompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
+      expect(round1Prompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
 
       // Verify round 2 role assignment (same roles)
-      expect(round2Prompts[0]).toContain('Primary Position');
-      expect(round2Prompts[1]).toContain('Opposition Role');
-      expect(round2Prompts[2]).toContain('Evaluator Role');
+      expect(round2Prompts[0].toUpperCase()).toContain('PRIMARY POSITION');
+      expect(round2Prompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
+      expect(round2Prompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
 
-      // Verify round 2 prompts mention round number
-      expect(round2Prompts[0]).toContain('round 2');
-      expect(round2Prompts[1]).toContain('round 2');
-      expect(round2Prompts[2]).toContain('round 2');
+      // Verify round 2 prompts mention round number (case-insensitive)
+      expect(round2Prompts[0].toLowerCase()).toContain('round 2');
+      expect(round2Prompts[1].toLowerCase()).toContain('round 2');
+      expect(round2Prompts[2].toLowerCase()).toContain('round 2');
     });
 
     it('should assign correct roles even with different timestamps in responses', async () => {
@@ -416,10 +416,10 @@ describe('DevilsAdvocateMode', () => {
 
       await mode.executeRound(agents, defaultContext, mockToolkit);
 
-      // All roles should be correctly assigned despite different timestamps
-      expect(receivedPrompts[0]).toContain('Primary Position');
-      expect(receivedPrompts[1]).toContain('Opposition Role');
-      expect(receivedPrompts[2]).toContain('Evaluator Role');
+      // All roles should be correctly assigned despite different timestamps (case-insensitive)
+      expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY POSITION');
+      expect(receivedPrompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
+      expect(receivedPrompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
     });
   });
 });

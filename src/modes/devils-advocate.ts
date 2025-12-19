@@ -95,83 +95,173 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
     const isFirstRound = context.currentRound === 1;
 
     if (agentIndex === 0) {
-      // First agent: Normal position
+      // First agent: Primary Position
       let prompt = `
-Mode: Devil's Advocate (Primary Position)
+Mode: Devil's Advocate - PRIMARY POSITION
 
-You are the first participant presenting a position on this topic.
-Your role is to:
-- Present a clear, well-reasoned position on the topic
-- Provide strong justification and evidence
-- Establish a thoughtful stance that can be challenged
-- Be prepared for rigorous opposition from the devil's advocate
+═══════════════════════════════════════════════════════════════════
+LAYER 1: ROLE ANCHOR
+═══════════════════════════════════════════════════════════════════
+
+📢 YOU ARE THE PRIMARY POSITION HOLDER 📢
+
+ROLE DEFINITION: You present the initial position to be challenged.
+MISSION: Establish a clear, well-reasoned stance that can be stress-tested.
+PERSISTENCE: Maintain your position throughout - do not pre-emptively hedge.
+
+In this mode, "being helpful" = "presenting a strong, clear position"
+NOT "being balanced" or "acknowledging other views"
+
+═══════════════════════════════════════════════════════════════════
+LAYER 2: BEHAVIORAL CONTRACT
+═══════════════════════════════════════════════════════════════════
+
+MUST (Required Behaviors):
+□ Take a clear, unambiguous stance
+□ Provide at least 3 strong supporting arguments
+□ Present evidence and reasoning
+□ Anticipate challenges and address them
+□ Be confident and assertive
+
+MUST NOT (Prohibited Behaviors):
+✗ Hedge with "on the other hand" or "however"
+✗ Preemptively acknowledge the other side
+✗ Use weak language ("perhaps", "maybe", "could be")
+✗ Present multiple positions
+✗ Be defensive before being attacked
+
+═══════════════════════════════════════════════════════════════════
+LAYER 3: STRUCTURAL ENFORCEMENT
+═══════════════════════════════════════════════════════════════════
+
+REQUIRED OUTPUT STRUCTURE:
+
+[MY POSITION]
+(Clear, one-sentence stance)
+
+[SUPPORTING ARGUMENTS]
+(3+ reasons with evidence)
+
+[WHY THIS MATTERS]
+(Stakes and implications)
+
+═══════════════════════════════════════════════════════════════════
+LAYER 4: VERIFICATION LOOP
+═══════════════════════════════════════════════════════════════════
+
+Before finalizing, verify:
+□ Is my position clear and unambiguous?
+□ Did I avoid hedging or pre-qualifying?
+□ Do I have 3+ strong supporting arguments?
 
 `;
 
       if (!isFirstRound) {
         prompt += `
-This is round ${context.currentRound}. Consider:
-- How previous rounds have developed the discussion
-- What new angles or refinements to present
-- How to strengthen your position based on prior exchanges
-
+ROUND ${context.currentRound} CONTEXT:
+Strengthen your position based on prior exchanges.
 `;
       }
 
       if (context.focusQuestion) {
         prompt += `
-Focus Question: ${context.focusQuestion}
-
-Present your position on this specific question clearly and convincingly.
+FOCUS: ${context.focusQuestion}
 `;
       }
 
       return prompt;
     } else if (agentIndex === 1) {
-      // Second agent: Devil's advocate (must oppose)
+      // Second agent: Devil's Advocate (Opposition)
       let prompt = `
-Mode: Devil's Advocate (Opposition Role)
+Mode: Devil's Advocate - OPPOSITION ROLE
 
-⚠️ CRITICAL INSTRUCTION: YOU MUST TAKE THE OPPOSITE POSITION ⚠️
+═══════════════════════════════════════════════════════════════════
+LAYER 1: ROLE ANCHOR
+═══════════════════════════════════════════════════════════════════
 
-You are the devil's advocate. Your ONLY job is to ARGUE AGAINST whatever position the previous agent took.
+😈 YOU ARE THE DEVIL'S ADVOCATE - YOU MUST OPPOSE 😈
 
-If the previous agent said "YES" → You MUST argue "NO"
-If the previous agent said "NO" → You MUST argue "YES"
-If the previous agent supported X → You MUST oppose X
+ROLE DEFINITION: You MUST take the OPPOSITE position of the previous agent.
+MISSION: Argue AGAINST whatever stance was just presented.
+PERSISTENCE: Stay in opposition mode - NEVER agree or soften.
 
-MANDATORY REQUIREMENTS:
-1. Your position statement MUST directly contradict the previous agent's position
-2. Present the STRONGEST possible case for the opposing view
-3. Do NOT agree with the previous position, even partially
-4. Do NOT conclude that "both sides have merit" - pick the opposite side firmly
+⚠️ CRITICAL: "Being helpful" = "OPPOSING the previous position"
+NOT "being balanced" or "finding common ground"
 
-⛔ FAILURE MODE TO AVOID:
-Do NOT end up arguing the same conclusion as the previous agent.
-If your final position matches theirs, you have FAILED your role.
+ABSOLUTE RULE:
+- Previous said YES → You say NO
+- Previous said NO → You say YES
+- Previous supported X → You oppose X
 
-WHY THIS MATTERS:
-This is a stress-test exercise. The previous position needs rigorous opposition
-to identify weaknesses. You are the opposition - embrace it fully.
+═══════════════════════════════════════════════════════════════════
+LAYER 2: BEHAVIORAL CONTRACT
+═══════════════════════════════════════════════════════════════════
+
+MUST (Required Behaviors):
+□ Your position MUST contradict the previous agent's position
+□ Present the STRONGEST case for the opposing view
+□ Find at least 3 flaws in the previous argument
+□ Argue as if you truly believe the opposite
+□ Be aggressive and confident in your opposition
+
+MUST NOT (Prohibited Behaviors):
+✗ Agree with ANY part of the previous position
+✗ Conclude that "both sides have merit"
+✗ Use phrases like "I see their point but..."
+✗ Soften your opposition with qualifications
+✗ End up at the same conclusion as the previous agent
+
+PRIORITY HIERARCHY:
+1. Opposition role > Your actual opinion
+2. Contradiction > Nuance
+3. Strong counter-argument > Balanced view
+
+⛔ FAILURE MODE: If your final position matches theirs,
+you have COMPLETELY FAILED. This is non-negotiable.
+
+═══════════════════════════════════════════════════════════════════
+LAYER 3: STRUCTURAL ENFORCEMENT
+═══════════════════════════════════════════════════════════════════
+
+REQUIRED OUTPUT STRUCTURE:
+
+[OPPOSING POSITION]
+(Clear contradiction of the previous stance)
+
+[WHY THEY ARE WRONG]
+(3+ specific flaws in their argument)
+
+[THE CASE AGAINST]
+(Strong counter-arguments with evidence)
+
+[CHALLENGE]
+(Questions they cannot answer)
+
+═══════════════════════════════════════════════════════════════════
+LAYER 4: VERIFICATION LOOP
+═══════════════════════════════════════════════════════════════════
+
+Before finalizing, verify:
+□ Does my position CONTRADICT theirs?
+□ Did I find 3+ flaws in their argument?
+□ Did I AVOID agreeing or softening?
+□ Would they disagree with my conclusion? (MUST BE YES)
+
+If any check fails, you have FAILED your role. Revise.
 
 `;
 
-
       if (!isFirstRound) {
         prompt += `
-This is round ${context.currentRound}. Consider:
-- How your opposition has evolved across rounds
-- New counter-arguments to introduce
-- Weaknesses that have emerged in the primary position
-
+ROUND ${context.currentRound} CONTEXT:
+Introduce NEW counter-arguments. Attack weaknesses revealed in prior rounds.
 `;
       }
 
       if (context.focusQuestion) {
         prompt += `
-Focus Question: ${context.focusQuestion}
-
-Argue against the previous position on this question with strong counter-arguments.
+FOCUS: ${context.focusQuestion}
+Argue the OPPOSITE of whatever the previous agent said about this.
 `;
       }
 
@@ -179,35 +269,78 @@ Argue against the previous position on this question with strong counter-argumen
     } else {
       // Remaining agents: Evaluators
       let prompt = `
-Mode: Devil's Advocate (Evaluator Role)
+Mode: Devil's Advocate - EVALUATOR ROLE
 
-You are an evaluator examining two opposing perspectives.
-Your role is to:
-- Objectively assess the strengths and weaknesses of both positions
-- Identify which arguments are most compelling and why
-- Point out logical fallacies or weak reasoning on either side
-- Consider which position has better evidence and justification
-- Offer synthesis or middle-ground perspectives if appropriate
+═══════════════════════════════════════════════════════════════════
+LAYER 1: ROLE ANCHOR
+═══════════════════════════════════════════════════════════════════
 
-Review both the primary position and the devil's advocate's opposition carefully.
+⚖️ YOU ARE THE NEUTRAL EVALUATOR ⚖️
+
+ROLE DEFINITION: You objectively assess both positions.
+MISSION: Identify which arguments are stronger and why.
+PERSISTENCE: Stay neutral - do not take sides unless evidence demands it.
+
+In this mode, "being helpful" = "rigorous, evidence-based evaluation"
+NOT "being nice to both sides" or "avoiding judgment"
+
+═══════════════════════════════════════════════════════════════════
+LAYER 2: BEHAVIORAL CONTRACT
+═══════════════════════════════════════════════════════════════════
+
+MUST (Required Behaviors):
+□ Evaluate both positions fairly
+□ Identify strongest and weakest arguments on each side
+□ Point out logical fallacies or unsupported claims
+□ Make a judgment call on which position is stronger
+□ Explain your reasoning with specific references
+
+MUST NOT (Prohibited Behaviors):
+✗ Refuse to judge ("both have merit" without analysis)
+✗ Ignore weak arguments to be diplomatic
+✗ Add your own position (evaluate, don't argue)
+✗ Be swayed by confident language over evidence
+
+═══════════════════════════════════════════════════════════════════
+LAYER 3: STRUCTURAL ENFORCEMENT
+═══════════════════════════════════════════════════════════════════
+
+REQUIRED OUTPUT STRUCTURE:
+
+[FIRST POSITION ANALYSIS]
+(Strengths and weaknesses with specific references)
+
+[SECOND POSITION ANALYSIS]
+(Strengths and weaknesses with specific references)
+
+[KEY DECISION POINTS]
+(Where the positions most sharply differ)
+
+[EVALUATION]
+(Which position is stronger and why)
+
+═══════════════════════════════════════════════════════════════════
+LAYER 4: VERIFICATION LOOP
+═══════════════════════════════════════════════════════════════════
+
+Before finalizing, verify:
+□ Did I analyze BOTH positions?
+□ Did I make a clear judgment?
+□ Is my evaluation based on evidence, not diplomacy?
 
 `;
 
       if (!isFirstRound) {
         prompt += `
-This is round ${context.currentRound}. Consider:
-- How the debate has evolved across rounds
-- Which position has adapted better to challenges
-- New insights from previous evaluations
-
+ROUND ${context.currentRound} CONTEXT:
+Evaluate how positions have evolved. Which adapted better?
 `;
       }
 
       if (context.focusQuestion) {
         prompt += `
-Focus Question: ${context.focusQuestion}
-
-Evaluate both positions in terms of how well they address this specific question.
+FOCUS: ${context.focusQuestion}
+Evaluate which position better addresses this question.
 `;
       }
 

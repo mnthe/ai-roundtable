@@ -208,15 +208,17 @@ describe('AdversarialMode', () => {
 
       const prompt = mode.buildAgentPrompt(contextWithPrevious);
 
-      expect(prompt).toContain('Critically analyze');
-      expect(prompt).toContain('counter-arguments');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('STEEL-MAN SUMMARY');
+      expect(prompt).toContain('COUNTER-ARGUMENTS');
     });
 
     it('should include establishment guidance for first round', () => {
       const prompt = mode.buildAgentPrompt(defaultContext);
 
-      expect(prompt).toContain('establish a clear position');
-      expect(prompt).toContain('Anticipate counter-arguments');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('STRONG POSITION');
+      expect(prompt).toContain('ANTICIPATED ATTACKS');
     });
   });
 });
