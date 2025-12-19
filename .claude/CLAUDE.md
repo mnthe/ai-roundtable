@@ -10,7 +10,7 @@ AI Roundtable은 여러 AI 모델이 구조화된 토론을 수행하는 MCP 서
 |------|------|------|
 | Language | TypeScript (ESM) | Type safety, Node.js 20+ |
 | AI Abstraction | Agent SDK 추상화 | Tool use 지원, 확장성 |
-| Initial Providers | Claude + GPT-4 | 성숙한 Agent SDK |
+| Initial Providers | Claude + ChatGPT | 성숙한 Agent SDK |
 | Storage | SQLite only | 로컬 MCP 서버 용도 |
 | Testing | Unit (Mock) + Integration (선택적) | 빠른 피드백 |
 
@@ -51,7 +51,7 @@ AI Roundtable은 여러 AI 모델이 구조화된 토론을 수행하는 MCP 서
 
 ```
 src/
-├── agents/       # AI Agent 추상화 (BaseAgent, Claude, GPT4)
+├── agents/       # AI Agent 추상화 (BaseAgent, Claude, ChatGPT)
 ├── core/         # 핵심 로직 (DebateEngine, SessionManager)
 ├── modes/        # 토론 모드 전략 (Collaborative, etc.)
 ├── tools/        # 공통 도구 (AgentToolkit, WebSearch)
@@ -67,7 +67,7 @@ src/
 - [x] Step 2: Core Types & Interfaces
 - [x] Step 3: Agent Abstraction Layer
 - [x] Step 4: Claude Agent
-- [x] Step 5: GPT-4 Agent
+- [x] Step 5: ChatGPT Agent
 - [x] Step 6: Common Tools
 - [x] Step 7: Web Search & Fact Check
 - [x] Step 8: Session Manager & Storage
