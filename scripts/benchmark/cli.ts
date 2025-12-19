@@ -5,6 +5,7 @@
  * Command-line interface for running benchmark experiments.
  */
 
+import 'dotenv/config';
 import { Command } from 'commander';
 import { BenchmarkRunner } from './runner.js';
 import type { DebateMode } from '../../src/types/index.js';

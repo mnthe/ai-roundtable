@@ -26,6 +26,7 @@ logs/
 
 # Test coverage
 coverage/
+results/
 
 # SQLite database
 *.db

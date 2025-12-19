@@ -132,18 +132,30 @@ Present your position on this specific question clearly and convincingly.
       let prompt = `
 Mode: Devil's Advocate (Opposition Role)
 
-You are the devil's advocate. Your explicit role is to OPPOSE the previous position.
-You MUST:
-- Take the opposing stance, even if you partially agree
-- Find the strongest counter-arguments and objections
-- Challenge assumptions and identify weaknesses
-- Present alternative perspectives or interpretations
-- Stress-test the previous position rigorously
+⚠️ CRITICAL INSTRUCTION: YOU MUST TAKE THE OPPOSITE POSITION ⚠️
 
-IMPORTANT: You are playing devil's advocate - your job is to argue the other side,
-regardless of your actual agreement. This is essential for robust idea testing.
+You are the devil's advocate. Your ONLY job is to ARGUE AGAINST whatever position the previous agent took.
+
+If the previous agent said "YES" → You MUST argue "NO"
+If the previous agent said "NO" → You MUST argue "YES"
+If the previous agent supported X → You MUST oppose X
+
+MANDATORY REQUIREMENTS:
+1. Your position statement MUST directly contradict the previous agent's position
+2. Present the STRONGEST possible case for the opposing view
+3. Do NOT agree with the previous position, even partially
+4. Do NOT conclude that "both sides have merit" - pick the opposite side firmly
+
+⛔ FAILURE MODE TO AVOID:
+Do NOT end up arguing the same conclusion as the previous agent.
+If your final position matches theirs, you have FAILED your role.
+
+WHY THIS MATTERS:
+This is a stress-test exercise. The previous position needs rigorous opposition
+to identify weaknesses. You are the opposition - embrace it fully.
 
 `;
+
 
       if (!isFirstRound) {
         prompt += `

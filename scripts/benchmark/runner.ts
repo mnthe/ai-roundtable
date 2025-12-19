@@ -5,16 +5,16 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { DebateEngine } from '../../src/core/debate-engine.js';
-import { InMemorySessionManager } from '../../src/core/session-manager.js';
+import { DebateEngine } from '../../src/core/DebateEngine.js';
+import { SessionManager } from '../../src/core/session-manager.js';
 import { AgentRegistry } from '../../src/agents/registry.js';
-import { setupProviders, runHealthChecks } from '../../src/agents/setup.js';
+import { setupAgents } from '../../src/agents/setup.js';
 import { AIConsensusAnalyzer } from '../../src/core/ai-consensus-analyzer.js';
 import { DefaultAgentToolkit } from '../../src/tools/toolkit.js';
 import { createLogger } from '../../src/utils/logger.js';
 import { ConfigLoader, generateMatrix } from './config.js';
 import { DataCollector } from './collector.js';
-import type { DebateMode, Session, AgentResponse, ConsensusResult } from '../../src/types/index.js';
+import type { DebateMode, Session, AgentResponse, ConsensusResult, DebateConfig } from '../../src/types/index.js';
 import type {
   ExperimentConfig,
   ExperimentRun,
@@ -31,6 +31,7 @@ const logger = createLogger('BenchmarkRunner');
 
 export class BenchmarkRunner {
   private engine!: DebateEngine;
+  private sessionManager!: SessionManager;
   private agentRegistry!: AgentRegistry;
   private collector: DataCollector;
   private initialized = false;
@@ -47,17 +48,14 @@ export class BenchmarkRunner {
 
     logger.info({}, 'Initializing benchmark runner');
 
-    // Setup agent registry
+    // Setup agent registry with providers, agents, and health checks
     this.agentRegistry = new AgentRegistry();
-    const setupResult = setupProviders(this.agentRegistry);
+    const setupResult = await setupAgents(this.agentRegistry);
 
     // Log warnings
     for (const warning of setupResult.warnings) {
       logger.warn({}, warning);
     }
-
-    // Run health checks
-    await runHealthChecks(this.agentRegistry);
 
     // Check if we have any active agents
     const activeAgents = this.agentRegistry.getActiveAgents();
@@ -80,6 +78,11 @@ export class BenchmarkRunner {
     this.engine = new DebateEngine({
       toolkit,
       aiConsensusAnalyzer,
+    });
+
+    // Create session manager (in-memory for benchmarks)
+    this.sessionManager = new SessionManager({
+      storageFilename: ':memory:',
     });
 
     this.initialized = true;
@@ -207,36 +210,51 @@ export class BenchmarkRunner {
     // Get agent IDs
     const agentIds = this.resolveAgentIds(run.agents);
 
-    // Start debate
-    const session = await this.engine.startDebate({
+    // Create debate config
+    const config: DebateConfig = {
       topic: run.topic,
       mode: run.mode,
       rounds: run.rounds,
-      agentIds,
-    });
+      agents: agentIds,
+    };
 
-    // Collect first round data
-    roundsData.push(this.collectRoundData(session, 1));
+    // Create session
+    const session = await this.sessionManager.createSession(config);
 
-    // Execute remaining rounds
-    for (let round = 2; round <= run.rounds; round++) {
-      const roundStart = Date.now();
+    // Get agents
+    const agents = this.agentRegistry.getAgents(agentIds);
 
-      await this.engine.continueDebate(session.id);
+    // Execute all rounds
+    const roundResults = await this.engine.executeRounds(agents, session, run.rounds);
 
-      // Reload session to get updated data
-      const updatedSession = await this.engine.getSession(session.id);
-      if (updatedSession) {
-        roundsData.push(this.collectRoundData(updatedSession, round, Date.now() - roundStart));
+    // Update session and collect round data
+    await this.sessionManager.updateSessionRound(session.id, session.currentRound);
+    for (const result of roundResults) {
+      for (const response of result.responses) {
+        await this.sessionManager.addResponse(session.id, response);
       }
+
+      // Collect round data
+      roundsData.push({
+        roundNumber: result.roundNumber,
+        responses: result.responses,
+        consensusSnapshot: result.consensus
+          ? {
+              level: result.consensus.consensusLevel,
+              score: result.consensus.agreementLevel,
+            }
+          : undefined,
+        durationMs: 0, // Could track this per round if needed
+      });
     }
 
-    // Get final session
-    const finalSession = await this.engine.getSession(session.id);
+    // Get final session state
+    const finalSession = await this.sessionManager.getSession(session.id);
     const completedAt = new Date();
 
-    // Build consensus data
-    const consensus = this.buildConsensusData(finalSession!, roundsData);
+    // Build consensus data from round results
+    const lastResult = roundResults[roundResults.length - 1];
+    const consensus = this.buildConsensusDataFromResults(lastResult?.consensus, roundsData);
 
     // Build metadata
     const metadata: RunMetadata = {
@@ -276,42 +294,18 @@ export class BenchmarkRunner {
   }
 
   /**
-   * Collect data for a single round
+   * Build consensus data from round results
    */
-  private collectRoundData(session: Session, roundNumber: number, durationMs = 0): RoundData {
-    // Get responses for this round
-    const roundResponses = session.responses.filter((_, index) => {
-      const agentCount = session.agentIds.length;
-      const roundStart = (roundNumber - 1) * agentCount;
-      const roundEnd = roundNumber * agentCount;
-      return index >= roundStart && index < roundEnd;
-    });
-
-    return {
-      roundNumber,
-      responses: roundResponses,
-      consensusSnapshot: session.consensus
-        ? {
-            level: session.consensus.consensusLevel,
-            score: session.consensus.agreementLevel,
-          }
-        : undefined,
-      durationMs,
-    };
-  }
-
-  /**
-   * Build consensus data with progression
-   */
-  private buildConsensusData(session: Session, roundsData: RoundData[]): ConsensusData {
+  private buildConsensusDataFromResults(
+    finalConsensus: ConsensusResult | undefined,
+    roundsData: RoundData[]
+  ): ConsensusData {
     const progression = roundsData
       .filter((r) => r.consensusSnapshot)
       .map((r) => ({
         round: r.roundNumber,
         score: r.consensusSnapshot!.score,
       }));
-
-    const finalConsensus = session.consensus;
 
     return {
       finalLevel: finalConsensus?.consensusLevel ?? 'low',
