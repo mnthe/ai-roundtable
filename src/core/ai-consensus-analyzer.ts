@@ -243,11 +243,12 @@ export class AIConsensusAnalyzer {
     } catch (error) {
       console.warn('[AIConsensusAnalyzer] Failed to parse AI response:', error);
       // Return a basic result from the response
+      // Use generous limits to avoid truncating important content
       return {
         agreementLevel: response.confidence,
-        commonPoints: [response.position.slice(0, 200)],
+        commonPoints: [response.position.slice(0, 5000)],
         disagreementPoints: [],
-        summary: response.reasoning.slice(0, 300),
+        summary: response.reasoning.slice(0, 10000),
         analyzerId,
       };
     }

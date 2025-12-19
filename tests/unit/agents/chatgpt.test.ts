@@ -238,9 +238,12 @@ describe('ChatGPTAgent', () => {
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
-          results: [
-            { title: 'Policy Article', url: 'https://example.com', snippet: 'Regulations...' },
-          ],
+          success: true,
+          data: {
+            results: [
+              { title: 'Policy Article', url: 'https://example.com', snippet: 'Regulations...' },
+            ],
+          },
         }),
       };
 

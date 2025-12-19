@@ -353,9 +353,12 @@ describe('PerplexityAgent', () => {
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
-          results: [
-            { title: 'AI News', url: 'https://example.com', snippet: 'Recent developments...' },
-          ],
+          success: true,
+          data: {
+            results: [
+              { title: 'AI News', url: 'https://example.com', snippet: 'Recent developments...' },
+            ],
+          },
         }),
       };
 

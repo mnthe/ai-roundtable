@@ -153,10 +153,18 @@ export class PerplexityAgent extends BaseAgent {
         });
 
         // Extract citations from search results
-        if (functionName === 'search_web' && result && typeof result === 'object') {
-          const searchResult = result as { results?: Array<{ title: string; url: string; snippet?: string }> };
-          if (searchResult.results) {
-            for (const item of searchResult.results) {
+        // Tool results are wrapped in { success: boolean, data: { results: [...] } }
+        if (
+          (functionName === 'search_web' || functionName === 'perplexity_search') &&
+          result &&
+          typeof result === 'object'
+        ) {
+          const toolResult = result as {
+            success?: boolean;
+            data?: { results?: Array<{ title: string; url: string; snippet?: string }> };
+          };
+          if (toolResult.success && toolResult.data?.results) {
+            for (const item of toolResult.data.results) {
               citations.push({
                 title: item.title,
                 url: item.url,
