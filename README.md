@@ -60,7 +60,7 @@ Add to your Claude Desktop configuration:
   "mcpServers": {
     "ai-roundtable": {
       "command": "npx",
-      "args": ["github:mnthe/ai-roundtable"],
+      "args": ["-y", "github:mnthe/ai-roundtable"],
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
         "OPENAI_API_KEY": "sk-...",
