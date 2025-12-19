@@ -11,6 +11,7 @@ import type {
   ChatCompletionToolMessageParam,
 } from 'openai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit } from './base.js';
+import { withRetry } from '../utils/retry.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -19,6 +20,14 @@ import type {
   Citation,
   ImageResult,
 } from '../types/index.js';
+
+/** Perplexity API error types that should be retried (uses OpenAI SDK) */
+const RETRYABLE_ERRORS = [
+  'RateLimitError',
+  'APIConnectionError',
+  'InternalServerError',
+  'APIError', // 5xx errors
+];
 
 /**
  * Search recency filter options
@@ -117,19 +126,21 @@ export class PerplexityAgent extends BaseAgent {
     // Build tools if toolkit is available (Perplexity supports function calling)
     const tools = this.toolkit ? this.buildOpenAITools() : undefined;
 
-    // Make the API call with Perplexity-specific search options
+    // Make the API call with Perplexity-specific search options and retry logic
     // Note: Perplexity returns citations in the response when using online models
-    let response: OpenAI.Chat.Completions.ChatCompletion = (await this.client.chat.completions.create(
-      {
-        model: this.model,
-        max_tokens: this.maxTokens,
-        messages,
-        tools,
-        temperature: this.temperature,
-        // Perplexity-specific search options (passed as extra body params)
-        ...this.buildSearchParams(),
-      } as Parameters<typeof this.client.chat.completions.create>[0]
-    )) as OpenAI.Chat.Completions.ChatCompletion;
+    let response: OpenAI.Chat.Completions.ChatCompletion = await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages,
+          tools,
+          temperature: this.temperature,
+          // Perplexity-specific search options (passed as extra body params)
+          ...this.buildSearchParams(),
+        } as Parameters<typeof this.client.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>,
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
 
     let choice = response.choices[0];
 
@@ -183,14 +194,18 @@ export class PerplexityAgent extends BaseAgent {
       }
 
       // Continue the conversation with tool results
-      response = (await this.client.chat.completions.create({
-        model: this.model,
-        max_tokens: this.maxTokens,
-        messages,
-        tools,
-        temperature: this.temperature,
-        ...this.buildSearchParams(),
-      } as Parameters<typeof this.client.chat.completions.create>[0])) as OpenAI.Chat.Completions.ChatCompletion;
+      response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            messages,
+            tools,
+            temperature: this.temperature,
+            ...this.buildSearchParams(),
+          } as Parameters<typeof this.client.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>,
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
 
       choice = response.choices[0];
     }
@@ -331,11 +346,15 @@ export class PerplexityAgent extends BaseAgent {
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      await this.client.chat.completions.create({
-        model: this.model,
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'test' }],
-      });
+      await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
       return { healthy: true };
     } catch (error) {
       return {

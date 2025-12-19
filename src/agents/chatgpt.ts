@@ -9,6 +9,7 @@ import type {
   ChatCompletionToolMessageParam,
 } from 'openai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit } from './base.js';
+import { withRetry } from '../utils/retry.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -16,6 +17,14 @@ import type {
   ToolCallRecord,
   Citation,
 } from '../types/index.js';
+
+/** OpenAI SDK error types that should be retried */
+const RETRYABLE_ERRORS = [
+  'RateLimitError',
+  'APIConnectionError',
+  'InternalServerError',
+  'APIError', // 5xx errors
+];
 
 /**
  * Configuration options for ChatGPT Agent
@@ -68,14 +77,18 @@ export class ChatGPTAgent extends BaseAgent {
     // Build tools if toolkit is available
     const tools = this.toolkit ? this.buildOpenAITools() : undefined;
 
-    // Make the API call
-    let response = await this.client.chat.completions.create({
-      model: this.model,
-      max_completion_tokens: this.maxTokens,
-      messages,
-      tools,
-      temperature: this.temperature,
-    });
+    // Make the API call with retry logic
+    let response = await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_completion_tokens: this.maxTokens,
+          messages,
+          tools,
+          temperature: this.temperature,
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
 
     let choice = response.choices[0];
 
@@ -143,13 +156,17 @@ export class ChatGPTAgent extends BaseAgent {
       }
 
       // Continue the conversation with tool results
-      response = await this.client.chat.completions.create({
-        model: this.model,
-        max_completion_tokens: this.maxTokens,
-        messages,
-        tools,
-        temperature: this.temperature,
-      });
+      response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_completion_tokens: this.maxTokens,
+            messages,
+            tools,
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
 
       choice = response.choices[0];
     }
@@ -208,11 +225,15 @@ export class ChatGPTAgent extends BaseAgent {
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      await this.client.chat.completions.create({
-        model: this.model,
-        max_completion_tokens: 10,
-        messages: [{ role: 'user', content: 'test' }],
-      });
+      await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_completion_tokens: 10,
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
       return { healthy: true };
     } catch (error) {
       return {

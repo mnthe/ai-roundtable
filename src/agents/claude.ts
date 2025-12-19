@@ -5,6 +5,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, Tool, ToolUseBlock, TextBlock } from '@anthropic-ai/sdk/resources/messages';
 import { createLogger } from '../utils/logger.js';
+import { withRetry } from '../utils/retry.js';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import type {
   AgentConfig,
@@ -15,6 +16,14 @@ import type {
 } from '../types/index.js';
 
 const logger = createLogger('ClaudeAgent');
+
+/** Anthropic SDK error types that should be retried */
+const RETRYABLE_ERRORS = [
+  'RateLimitError',
+  'APIConnectionError',
+  'InternalServerError',
+  'APIError', // 5xx errors
+];
 
 /**
  * Configuration options for Claude Agent
@@ -79,15 +88,19 @@ export class ClaudeAgent extends BaseAgent {
       // Build tools if toolkit is available
       const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
 
-      // Make the API call
-      let response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: this.maxTokens,
-        system: systemPrompt,
-        messages,
-        tools,
-        temperature: this.temperature,
-      });
+      // Make the API call with retry logic
+      let response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            system: systemPrompt,
+            messages,
+            tools,
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
 
     // Handle tool use loop
     while (response.stop_reason === 'tool_use') {
@@ -154,14 +167,18 @@ export class ClaudeAgent extends BaseAgent {
       messages.push({ role: 'assistant', content: response.content });
       messages.push({ role: 'user', content: toolResults });
 
-      response = await this.client.messages.create({
-        model: this.model,
-        max_tokens: this.maxTokens,
-        system: systemPrompt,
-        messages,
-        tools,
-        temperature: this.temperature,
-      });
+      response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            system: systemPrompt,
+            messages,
+            tools,
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
     }
 
     // Extract text from final response
@@ -253,11 +270,15 @@ export class ClaudeAgent extends BaseAgent {
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      await this.client.messages.create({
-        model: this.model,
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'test' }],
-      });
+      await withRetry(
+        () =>
+          this.client.messages.create({
+            model: this.model,
+            max_tokens: 10,
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
       return { healthy: true };
     } catch (error) {
       return {

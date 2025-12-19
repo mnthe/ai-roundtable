@@ -5,6 +5,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Chat, FunctionDeclaration, Content } from '@google/genai';
 import { BaseAgent, type AgentToolkit } from './base.js';
+import { withRetry } from '../utils/retry.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -12,6 +13,13 @@ import type {
   ToolCallRecord,
   Citation,
 } from '../types/index.js';
+
+/** Google Gen AI error types that should be retried */
+const RETRYABLE_ERRORS = [
+  'GoogleGenerativeAIError', // Generic SDK error
+  'GoogleGenerativeAIFetchError', // Network/fetch errors
+  'GoogleGenerativeAIResponseError', // Server-side errors (5xx)
+];
 
 /**
  * Configuration options for Gemini Agent
@@ -75,8 +83,11 @@ export class GeminiAgent extends BaseAgent {
       history,
     });
 
-    // Send message
-    let response = await chat.sendMessage({ message: userMessage });
+    // Send message with retry logic
+    let response = await withRetry(
+      () => chat.sendMessage({ message: userMessage }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
 
     // Handle function calling loop
     while (response.functionCalls && response.functionCalls.length > 0) {
@@ -141,15 +152,19 @@ export class GeminiAgent extends BaseAgent {
       }
 
       // Send function responses back
-      response = await chat.sendMessage({
-        message: functionResponses.map((fr) => ({
-          functionResponse: {
-            id: fr.id,
-            name: fr.name,
-            response: fr.response,
-          },
-        })),
-      });
+      response = await withRetry(
+        () =>
+          chat.sendMessage({
+            message: functionResponses.map((fr) => ({
+              functionResponse: {
+                id: fr.id,
+                name: fr.name,
+                response: fr.response,
+              },
+            })),
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
     }
 
     // Extract text from final response
@@ -206,18 +221,22 @@ export class GeminiAgent extends BaseAgent {
    */
   override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      const response = await this.ai.models.generateContent({
-        model: this.model,
-        contents: 'test',
-        config: {
-          maxOutputTokens: 10,
-          // Disable thinking for health check to get standard text response
-          // Gemini 3 models have thinking enabled by default which changes response structure
-          thinkingConfig: {
-            thinkingBudget: 0,
-          },
-        },
-      });
+      const response = await withRetry(
+        () =>
+          this.ai.models.generateContent({
+            model: this.model,
+            contents: 'test',
+            config: {
+              maxOutputTokens: 10,
+              // Disable thinking for health check to get standard text response
+              // Gemini 3 models have thinking enabled by default which changes response structure
+              thinkingConfig: {
+                thinkingBudget: 0,
+              },
+            },
+          }),
+        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      );
       // Check if we got a valid response
       if (response.text !== undefined) {
         return { healthy: true };
