@@ -202,8 +202,45 @@ describe('CollaborativeMode', () => {
       const prompt = mode.buildAgentPrompt(context);
 
       expect(prompt).toContain('Collaborative');
-      expect(prompt).toContain('common ground');
-      expect(prompt).toContain('Build upon');
+      expect(prompt).toContain('SYNTHESIZER');
+      expect(prompt).toContain('BUILD BRIDGES');
+    });
+
+    it('should include 4-layer structure', () => {
+      const context: DebateContext = {
+        sessionId: 'test-session',
+        topic: 'Test Topic',
+        mode: 'collaborative',
+        currentRound: 1,
+        totalRounds: 3,
+        previousResponses: [],
+      };
+
+      const prompt = mode.buildAgentPrompt(context);
+
+      // Verify all 4 layers are present
+      expect(prompt).toContain('LAYER 1: ROLE ANCHOR');
+      expect(prompt).toContain('LAYER 2: BEHAVIORAL CONTRACT');
+      expect(prompt).toContain('LAYER 3: STRUCTURAL ENFORCEMENT');
+      expect(prompt).toContain('LAYER 4: VERIFICATION LOOP');
+    });
+
+    it('should include MUST and MUST NOT behaviors', () => {
+      const context: DebateContext = {
+        sessionId: 'test-session',
+        topic: 'Test Topic',
+        mode: 'collaborative',
+        currentRound: 1,
+        totalRounds: 3,
+        previousResponses: [],
+      };
+
+      const prompt = mode.buildAgentPrompt(context);
+
+      expect(prompt).toContain('MUST (Required Behaviors)');
+      expect(prompt).toContain('MUST NOT (Prohibited Behaviors)');
+      expect(prompt).toContain('PRIORITY HIERARCHY');
+      expect(prompt).toContain('FAILURE MODE');
     });
 
     it('should provide first round guidance when no previous responses', () => {
@@ -218,8 +255,11 @@ describe('CollaborativeMode', () => {
 
       const prompt = mode.buildAgentPrompt(context);
 
-      expect(prompt).toContain('first round');
-      expect(prompt).toContain('initial position');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('First Round');
+      expect(prompt).toContain('[MY PERSPECTIVE]');
+      expect(prompt).toContain('[AREAS FOR COLLABORATION]');
+      expect(prompt).toContain('[INVITATION TO BUILD]');
     });
 
     it('should provide review guidance when previous responses exist', () => {
@@ -245,9 +285,11 @@ describe('CollaborativeMode', () => {
 
       const prompt = mode.buildAgentPrompt(context);
 
-      expect(prompt).toContain('Review the previous responses');
-      expect(prompt).toContain('agreement');
-      expect(prompt).toContain('synthesis');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('[POINTS OF AGREEMENT]');
+      expect(prompt).toContain('[BUILDING ON IDEAS]');
+      expect(prompt).toContain('[SYNTHESIS PROPOSAL]');
+      expect(prompt).toContain('[MY CONTRIBUTION]');
     });
 
     it('should include focus question when provided', () => {
@@ -263,7 +305,7 @@ describe('CollaborativeMode', () => {
 
       const prompt = mode.buildAgentPrompt(context);
 
-      expect(prompt).toContain('Focus Question');
+      expect(prompt).toContain('FOCUS QUESTION');
       expect(prompt).toContain('What are the ethical implications?');
     });
 
@@ -279,7 +321,23 @@ describe('CollaborativeMode', () => {
 
       const prompt = mode.buildAgentPrompt(context);
 
-      expect(prompt).not.toContain('Focus Question');
+      expect(prompt).not.toContain('FOCUS QUESTION');
+    });
+
+    it('should include verification checklist', () => {
+      const context: DebateContext = {
+        sessionId: 'test-session',
+        topic: 'Test Topic',
+        mode: 'collaborative',
+        currentRound: 1,
+        totalRounds: 3,
+        previousResponses: [],
+      };
+
+      const prompt = mode.buildAgentPrompt(context);
+
+      expect(prompt).toContain('Before finalizing your response, verify');
+      expect(prompt).toContain('If any check fails, revise before submitting');
     });
   });
 

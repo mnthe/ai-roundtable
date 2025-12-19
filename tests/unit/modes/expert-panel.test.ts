@@ -144,8 +144,27 @@ describe('ExpertPanelMode', () => {
       const prompt = mode.buildAgentPrompt(defaultContext);
 
       expect(prompt).toContain('Expert Panel');
+      expect(prompt).toContain('INDEPENDENT DOMAIN EXPERT');
       expect(prompt).toContain('evidence-based');
-      expect(prompt).toContain('expertise');
+    });
+
+    it('should include 4-layer structure', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      // Verify all 4 layers are present
+      expect(prompt).toContain('LAYER 1: ROLE ANCHOR');
+      expect(prompt).toContain('LAYER 2: BEHAVIORAL CONTRACT');
+      expect(prompt).toContain('LAYER 3: STRUCTURAL ENFORCEMENT');
+      expect(prompt).toContain('LAYER 4: VERIFICATION LOOP');
+    });
+
+    it('should include MUST and MUST NOT behaviors', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      expect(prompt).toContain('MUST (Required Behaviors)');
+      expect(prompt).toContain('MUST NOT (Prohibited Behaviors)');
+      expect(prompt).toContain('PRIORITY HIERARCHY');
+      expect(prompt).toContain('FAILURE MODE');
     });
 
     it('should include focus question when provided', () => {
@@ -156,8 +175,8 @@ describe('ExpertPanelMode', () => {
 
       const prompt = mode.buildAgentPrompt(contextWithFocus);
 
+      expect(prompt).toContain('FOCUS QUESTION');
       expect(prompt).toContain('When will quantum supremacy be practical?');
-      expect(prompt).toContain('expert analysis');
     });
 
     it('should include review guidance when previous responses exist', () => {
@@ -177,17 +196,28 @@ describe('ExpertPanelMode', () => {
 
       const prompt = mode.buildAgentPrompt(contextWithPrevious);
 
-      expect(prompt).toContain('experts\' contributions');
-      expect(prompt).toContain('consensus');
-      expect(prompt).toContain('divergence');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('[EXPERT ASSESSMENT]');
+      expect(prompt).toContain('[AREAS OF CONSENSUS]');
+      expect(prompt).toContain('[POINTS OF DIVERGENCE]');
+      expect(prompt).toContain('[CONFIDENCE & LIMITATIONS]');
     });
 
     it('should include initial assessment guidance for first round', () => {
       const prompt = mode.buildAgentPrompt(defaultContext);
 
-      expect(prompt).toContain('initial assessment');
-      expect(prompt).toContain('analytical framework');
-      expect(prompt).toContain('evidence');
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('[ANALYTICAL FRAMEWORK]');
+      expect(prompt).toContain('[KEY FINDINGS]');
+      expect(prompt).toContain('[SUPPORTING EVIDENCE]');
+      expect(prompt).toContain('[OPEN QUESTIONS]');
+    });
+
+    it('should include verification checklist', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      expect(prompt).toContain('Before finalizing your response, verify');
+      expect(prompt).toContain('If any check fails, revise before submitting');
     });
   });
 });

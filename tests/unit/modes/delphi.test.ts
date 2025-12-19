@@ -150,8 +150,27 @@ describe('DelphiMode', () => {
     it('should include Delphi method instructions', () => {
       const prompt = mode.buildAgentPrompt(defaultContext);
 
-      expect(prompt.toLowerCase()).toContain('delphi');
-      expect(prompt.toLowerCase()).toContain('anonymous');
+      expect(prompt).toContain('Delphi Method');
+      expect(prompt).toContain('ANONYMOUS INDEPENDENT EXPERT');
+    });
+
+    it('should include 4-layer structure', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      // Verify all 4 layers are present
+      expect(prompt).toContain('LAYER 1: ROLE ANCHOR');
+      expect(prompt).toContain('LAYER 2: BEHAVIORAL CONTRACT');
+      expect(prompt).toContain('LAYER 3: STRUCTURAL ENFORCEMENT');
+      expect(prompt).toContain('LAYER 4: VERIFICATION LOOP');
+    });
+
+    it('should include MUST and MUST NOT behaviors', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      expect(prompt).toContain('MUST (Required Behaviors)');
+      expect(prompt).toContain('MUST NOT (Prohibited Behaviors)');
+      expect(prompt).toContain('PRIORITY HIERARCHY');
+      expect(prompt).toContain('FAILURE MODE');
     });
 
     it('should include focus question when provided', () => {
@@ -161,6 +180,7 @@ describe('DelphiMode', () => {
       };
 
       const prompt = mode.buildAgentPrompt(contextWithFocus);
+      expect(prompt).toContain('FOCUS QUESTION');
       expect(prompt).toContain('Focus on the tech sector');
     });
 
@@ -191,13 +211,58 @@ describe('DelphiMode', () => {
       const prompt = mode.buildAgentPrompt(contextWithPrevious);
 
       // Should include statistical information
-      expect(prompt.toLowerCase()).toMatch(/confidence|statistic|participant/);
+      expect(prompt).toContain('PREVIOUS ROUND STATISTICS');
+      expect(prompt).toContain('Participants');
+      expect(prompt).toContain('Average Confidence');
+      expect(prompt).toContain('Consensus Level');
+    });
+
+    it('should include output structure for subsequent rounds', () => {
+      const contextWithPrevious: DebateContext = {
+        ...defaultContext,
+        currentRound: 2,
+        previousResponses: [
+          {
+            agentId: 'expert-1',
+            agentName: 'Expert 1',
+            position: 'High impact prediction',
+            reasoning: 'Detailed analysis',
+            confidence: 0.8,
+            timestamp: new Date(),
+          },
+        ],
+      };
+
+      const prompt = mode.buildAgentPrompt(contextWithPrevious);
+
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('[MY POSITION]');
+      expect(prompt).toContain('[CONFIDENCE LEVEL]');
+      expect(prompt).toContain('[RESPONSE TO GROUP]');
+      expect(prompt).toContain('[REASONING & EVIDENCE]');
     });
 
     it('should encourage independent assessment in first round', () => {
       const prompt = mode.buildAgentPrompt(defaultContext);
 
-      expect(prompt.toLowerCase()).toMatch(/independent|honest|assessment/);
+      // Updated to match 4-Layer Framework
+      expect(prompt).toContain('[MY POSITION]');
+      expect(prompt).toContain('[CONFIDENCE LEVEL]');
+      expect(prompt).toContain('[KEY UNCERTAINTIES]');
+    });
+
+    it('should include verification checklist', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      expect(prompt).toContain('Before finalizing your response, verify');
+      expect(prompt).toContain('If any check fails, revise before submitting');
+    });
+
+    it('should emphasize intellectual independence', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+
+      expect(prompt).toContain('Honest assessment > Social conformity');
+      expect(prompt).toContain('Anonymity protects you');
     });
   });
 
