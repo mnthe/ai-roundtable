@@ -88,7 +88,7 @@ interface DebateModeStrategy {
 ```
 src/
 ├── agents/       # AI Agent abstraction (BaseAgent, Claude, ChatGPT, Gemini, Perplexity)
-├── core/         # Core logic (DebateEngine, SessionManager, ConsensusAnalyzer)
+├── core/         # Core logic (DebateEngine, SessionManager, ConsensusAnalyzer, AIConsensusAnalyzer)
 ├── modes/        # Debate mode strategies (7 modes)
 ├── tools/        # Agent tools (DefaultAgentToolkit)
 ├── storage/      # SQLite persistence
@@ -169,8 +169,55 @@ RoundtableError           // Base error
 - `typescript` - Type checking
 - `eslint` + `prettier` - Code quality
 
+## AI Consensus Analysis
+
+The platform supports two consensus analysis modes:
+
+### AIConsensusAnalyzer (Primary)
+
+Uses lightweight AI models for semantic analysis of debate positions:
+- Understands meaning, not just keywords
+- Detects negation ("AI is dangerous" vs "AI is not dangerous")
+- Clusters similar positions semantically
+- Provides nuanced analysis (partial agreements, conditional positions)
+
+**Light Models Used:**
+| Provider | Model |
+|----------|-------|
+| Anthropic | claude-haiku-4-5-20251022 |
+| OpenAI | gpt-5-mini |
+| Google | gemini-2.5-flash-lite |
+| Perplexity | sonar |
+
+### ConsensusAnalyzer (Fallback)
+
+Rule-based fallback using Jaccard similarity and word stemming. Automatically used when AI analysis is unavailable.
+
+## Health Check System
+
+Agents undergo health checks on startup via `runHealthChecks()`:
+- Tests API connectivity with minimal request
+- Deactivates unhealthy agents automatically
+- Runs in parallel for performance
+
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `start_roundtable` | Start new debate session |
+| `continue_roundtable` | Continue existing debate |
+| `get_consensus` | Get consensus analysis |
+| `get_agents` | List available agents |
+| `list_sessions` | List debate sessions |
+| `get_round_details` | Get responses for specific round |
+| `get_response_detail` | Get agent's detailed response |
+| `get_citations` | Get citations from debate |
+| `get_thoughts` | Get agent's reasoning evolution |
+| `export_session` | Export session (markdown/JSON) |
+| `control_session` | Pause/resume/stop session |
+| `synthesize_debate` | AI-powered debate synthesis |
+
 ## Known Issues / Future Improvements
 
-1. **Consensus Analyzer**: Currently uses rule-based keyword matching. Consider replacing with AI-based semantic analysis.
-2. **Mode prompts**: `buildAgentPrompt()` is defined but not yet integrated into BaseAgent's prompt building.
-3. **Tool result caching**: Web search results are not cached between agents in the same round.
+1. **Mode prompts**: `buildAgentPrompt()` is defined but not yet integrated into BaseAgent's prompt building.
+2. **Tool result caching**: Web search results are not cached between agents in the same round.

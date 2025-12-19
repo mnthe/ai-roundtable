@@ -165,10 +165,16 @@ In `src/agents/setup.ts`:
 ```typescript
 import { MyAgent } from './my-agent.js';
 
-// Add to DEFAULT_MODELS
+// Add to DEFAULT_MODELS (heavy models for debate)
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   // ...
   'my-provider': 'my-model-v1',
+};
+
+// Add to LIGHT_MODELS (light models for consensus analysis)
+export const LIGHT_MODELS: Record<AIProvider, string> = {
+  // ...
+  'my-provider': 'my-model-mini',
 };
 
 // Add to DEFAULT_AGENT_NAMES
@@ -293,7 +299,11 @@ Update these files:
 - [ ] Logging added with `createLogger()`
 - [ ] Error handling with try/catch
 - [ ] Type added to `AIProvider`
-- [ ] Registered in `setup.ts`
+- [ ] Registered in `setup.ts`:
+  - [ ] `DEFAULT_MODELS` (heavy model for debate)
+  - [ ] `LIGHT_MODELS` (light model for analysis)
+  - [ ] `DEFAULT_AGENT_NAMES`
+  - [ ] Provider registration in `setupProviders()`
 - [ ] Exported from `index.ts`
 - [ ] Unit tests with mock client
 - [ ] Environment variable documented

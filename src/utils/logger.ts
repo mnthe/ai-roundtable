@@ -3,6 +3,10 @@
  */
 
 import pino from 'pino';
+import { createRequire } from 'module';
+
+// Create require for ESM compatibility
+const require = createRequire(import.meta.url);
 
 /**
  * Determine if pretty printing should be used
@@ -14,11 +18,24 @@ function shouldUsePrettyPrint(): boolean {
 }
 
 /**
+ * Check if pino-pretty is available
+ * It may not be installed in npx/production environments
+ */
+function isPinoPrettyAvailable(): boolean {
+  try {
+    require.resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Main logger instance
  */
 export const logger = pino({
   level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
-  ...(shouldUsePrettyPrint()
+  ...(shouldUsePrettyPrint() && isPinoPrettyAvailable()
     ? {
         transport: {
           target: 'pino-pretty',
