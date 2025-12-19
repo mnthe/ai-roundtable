@@ -64,6 +64,24 @@ export abstract class BaseAgent {
   }
 
   /**
+   * Execute a tool call using the toolkit
+   * Provides common error handling for all agent implementations
+   */
+  protected async executeTool(name: string, input: unknown): Promise<unknown> {
+    if (!this.toolkit) {
+      return { error: 'No toolkit available' };
+    }
+
+    try {
+      return await this.toolkit.executeTool(name, input);
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Tool execution failed',
+      };
+    }
+  }
+
+  /**
    * Generate a response for the current debate context
    * Must be implemented by each provider-specific agent
    */

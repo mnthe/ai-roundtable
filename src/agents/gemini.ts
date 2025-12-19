@@ -251,23 +251,6 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
-   * Execute a tool call using the toolkit
-   */
-  private async executeTool(name: string, input: unknown): Promise<unknown> {
-    if (!this.toolkit) {
-      return { error: 'No toolkit available' };
-    }
-
-    try {
-      return await this.toolkit.executeTool(name, input);
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Tool execution failed',
-      };
-    }
-  }
-
-  /**
    * Build Gemini-format tool definitions from toolkit
    * Uses the new @google/genai SDK format with parametersJsonSchema
    */
