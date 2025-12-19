@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ai-roundtable": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "cwd": "/path/to/ai-roundtable",
+      "env": {
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "OPENAI_API_KEY": "sk-..."
+      }
+    }
+  }
+}

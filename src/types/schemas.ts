@@ -1,0 +1,161 @@
+/**
+ * Zod schemas for runtime validation
+ */
+
+import { z } from 'zod';
+
+// ============================================
+// Provider Schemas
+// ============================================
+
+export const AIProviderSchema = z.enum(['anthropic', 'openai', 'google', 'perplexity']);
+
+// ============================================
+// Agent Schemas
+// ============================================
+
+export const AgentConfigSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  provider: AIProviderSchema,
+  model: z.string().min(1),
+  systemPrompt: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().positive().optional(),
+});
+
+export const CitationSchema = z.object({
+  title: z.string(),
+  url: z.string().url(),
+  snippet: z.string().optional(),
+});
+
+export const ToolCallRecordSchema = z.object({
+  toolName: z.string(),
+  input: z.unknown(),
+  output: z.unknown(),
+  timestamp: z.coerce.date(),
+});
+
+export const AgentResponseSchema = z.object({
+  agentId: z.string().min(1),
+  agentName: z.string().min(1),
+  position: z.string().min(1),
+  reasoning: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  citations: z.array(CitationSchema).optional(),
+  toolCalls: z.array(ToolCallRecordSchema).optional(),
+  timestamp: z.coerce.date(),
+});
+
+// ============================================
+// Debate Schemas
+// ============================================
+
+export const DebateModeSchema = z.enum(['collaborative', 'adversarial', 'socratic', 'expert-panel']);
+
+export const DebateConfigSchema = z.object({
+  topic: z.string().min(1),
+  mode: DebateModeSchema,
+  agents: z.array(z.string().min(1)).min(1),
+  rounds: z.number().int().positive().optional().default(3),
+  focusQuestion: z.string().optional(),
+});
+
+export const DebateContextSchema = z.object({
+  sessionId: z.string().min(1),
+  topic: z.string().min(1),
+  mode: DebateModeSchema,
+  currentRound: z.number().int().positive(),
+  totalRounds: z.number().int().positive(),
+  previousResponses: z.array(AgentResponseSchema),
+  focusQuestion: z.string().optional(),
+});
+
+// ============================================
+// Session Schemas
+// ============================================
+
+export const SessionStatusSchema = z.enum(['active', 'paused', 'completed', 'error']);
+
+export const ConsensusResultSchema = z.object({
+  agreementLevel: z.number().min(0).max(1),
+  commonPoints: z.array(z.string()),
+  disagreementPoints: z.array(z.string()),
+  summary: z.string(),
+});
+
+export const SessionSchema = z.object({
+  id: z.string().min(1),
+  topic: z.string().min(1),
+  mode: DebateModeSchema,
+  agentIds: z.array(z.string().min(1)),
+  status: SessionStatusSchema,
+  currentRound: z.number().int().nonnegative(),
+  totalRounds: z.number().int().positive(),
+  responses: z.array(AgentResponseSchema),
+  consensus: ConsensusResultSchema.optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export const RoundResultSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  responses: z.array(AgentResponseSchema),
+  consensus: ConsensusResultSchema,
+});
+
+// ============================================
+// Tool Schemas
+// ============================================
+
+export const ToolResultSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
+  z.object({
+    success: z.boolean(),
+    data: dataSchema.optional(),
+    error: z.string().optional(),
+  });
+
+export const SearchResultSchema = z.object({
+  title: z.string(),
+  url: z.string().url(),
+  snippet: z.string(),
+  publishedDate: z.string().optional(),
+});
+
+export const SearchOptionsSchema = z.object({
+  maxResults: z.number().int().positive().max(20).optional().default(5),
+  recency: z.enum(['day', 'week', 'month', 'year']).optional(),
+});
+
+// ============================================
+// MCP Input Schemas
+// ============================================
+
+export const StartRoundtableInputSchema = z.object({
+  topic: z.string().min(1, 'Topic is required'),
+  mode: DebateModeSchema.optional().default('collaborative'),
+  agents: z.array(z.string().min(1)).optional(),
+  rounds: z.number().int().positive().optional().default(3),
+});
+
+export const ContinueRoundtableInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  rounds: z.number().int().positive().optional(),
+  focusQuestion: z.string().optional(),
+});
+
+export const GetConsensusInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+});
+
+// ============================================
+// Type Inference Helpers
+// ============================================
+
+export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
+export type AgentResponseInput = z.input<typeof AgentResponseSchema>;
+export type DebateConfigInput = z.input<typeof DebateConfigSchema>;
+export type SessionInput = z.input<typeof SessionSchema>;
+export type StartRoundtableInputType = z.infer<typeof StartRoundtableInputSchema>;
+export type ContinueRoundtableInputType = z.infer<typeof ContinueRoundtableInputSchema>;

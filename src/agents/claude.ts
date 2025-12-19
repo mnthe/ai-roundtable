@@ -1,0 +1,200 @@
+/**
+ * Claude Agent - Anthropic Claude implementation
+ */
+
+import Anthropic from '@anthropic-ai/sdk';
+import type { MessageParam, Tool, ToolUseBlock, TextBlock } from '@anthropic-ai/sdk/resources/messages';
+import { BaseAgent, type AgentToolkit } from './base.js';
+import type {
+  AgentConfig,
+  AgentResponse,
+  DebateContext,
+  ToolCallRecord,
+  Citation,
+} from '../types/index.js';
+
+/**
+ * Configuration options for Claude Agent
+ */
+export interface ClaudeAgentOptions {
+  /** Anthropic API key (defaults to ANTHROPIC_API_KEY env var) */
+  apiKey?: string;
+  /** Custom Anthropic client instance (for testing) */
+  client?: Anthropic;
+}
+
+/**
+ * Claude Agent using Anthropic's API
+ *
+ * Supports:
+ * - Tool use (function calling)
+ * - Structured response parsing
+ * - Citation tracking from tool calls
+ */
+export class ClaudeAgent extends BaseAgent {
+  private client: Anthropic;
+
+  constructor(config: AgentConfig, options?: ClaudeAgentOptions) {
+    super(config);
+
+    if (options?.client) {
+      this.client = options.client;
+    } else {
+      this.client = new Anthropic({
+        apiKey: options?.apiKey ?? process.env.ANTHROPIC_API_KEY,
+      });
+    }
+  }
+
+  /**
+   * Generate a response using Claude API
+   */
+  async generateResponse(context: DebateContext): Promise<AgentResponse> {
+    const systemPrompt = this.buildSystemPrompt(context);
+    const userMessage = this.buildUserMessage(context);
+
+    const messages: MessageParam[] = [
+      { role: 'user', content: userMessage },
+    ];
+
+    const toolCalls: ToolCallRecord[] = [];
+    const citations: Citation[] = [];
+
+    // Build tools if toolkit is available
+    const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
+
+    // Make the API call
+    let response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: this.maxTokens,
+      system: systemPrompt,
+      messages,
+      tools,
+      temperature: this.temperature,
+    });
+
+    // Handle tool use loop
+    while (response.stop_reason === 'tool_use') {
+      const toolUseBlocks = response.content.filter(
+        (block): block is ToolUseBlock => block.type === 'tool_use'
+      );
+
+      const toolResults: MessageParam['content'] = [];
+
+      for (const toolUse of toolUseBlocks) {
+        const result = await this.executeTool(toolUse.name, toolUse.input);
+
+        toolCalls.push({
+          toolName: toolUse.name,
+          input: toolUse.input,
+          output: result,
+          timestamp: new Date(),
+        });
+
+        // Extract citations from search results
+        if (toolUse.name === 'search_web' && result && typeof result === 'object') {
+          const searchResult = result as { results?: Array<{ title: string; url: string; snippet?: string }> };
+          if (searchResult.results) {
+            for (const item of searchResult.results) {
+              citations.push({
+                title: item.title,
+                url: item.url,
+                snippet: item.snippet,
+              });
+            }
+          }
+        }
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      // Continue the conversation with tool results
+      messages.push({ role: 'assistant', content: response.content });
+      messages.push({ role: 'user', content: toolResults });
+
+      response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: this.maxTokens,
+        system: systemPrompt,
+        messages,
+        tools,
+        temperature: this.temperature,
+      });
+    }
+
+    // Extract text from final response
+    const textBlocks = response.content.filter(
+      (block): block is TextBlock => block.type === 'text'
+    );
+    const rawText = textBlocks.map((block) => block.text).join('\n');
+
+    // Parse the response
+    const parsed = this.parseResponse(rawText, context);
+
+    return {
+      agentId: this.id,
+      agentName: this.name,
+      position: parsed.position ?? 'Unable to determine position',
+      reasoning: parsed.reasoning ?? rawText,
+      confidence: parsed.confidence ?? 0.5,
+      citations: citations.length > 0 ? citations : undefined,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      timestamp: new Date(),
+    };
+  }
+
+  /**
+   * Execute a tool call using the toolkit
+   */
+  private async executeTool(name: string, input: unknown): Promise<unknown> {
+    if (!this.toolkit) {
+      return { error: 'No toolkit available' };
+    }
+
+    try {
+      return await this.toolkit.executeTool(name, input);
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Tool execution failed',
+      };
+    }
+  }
+
+  /**
+   * Build Anthropic-format tool definitions from toolkit
+   */
+  private buildAnthropicTools(): Tool[] {
+    if (!this.toolkit) {
+      return [];
+    }
+
+    return this.toolkit.getTools().map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: {
+        type: 'object' as const,
+        properties: tool.parameters,
+        required: Object.keys(tool.parameters),
+      },
+    }));
+  }
+}
+
+/**
+ * Factory function for creating Claude agents
+ */
+export function createClaudeAgent(
+  config: AgentConfig,
+  toolkit?: AgentToolkit,
+  options?: ClaudeAgentOptions
+): ClaudeAgent {
+  const agent = new ClaudeAgent(config, options);
+  if (toolkit) {
+    agent.setToolkit(toolkit);
+  }
+  return agent;
+}
