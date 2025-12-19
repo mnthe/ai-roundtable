@@ -234,14 +234,17 @@ export class KeyPointsExtractor {
 
     const aiResponse = await agent.generateResponse(extractionContext);
 
-    // Parse the AI response
-    return this.parseAIResponse(aiResponse);
+    // Parse the AI response, passing original reasoning for fallback
+    return this.parseAIResponse(aiResponse, response.reasoning);
   }
 
   /**
    * Parse the AI's JSON response into key points array
+   *
+   * @param response - AI agent's response containing JSON key points
+   * @param originalReasoning - Original agent's reasoning for fallback extraction
    */
-  private parseAIResponse(response: AgentResponse): string[] {
+  private parseAIResponse(response: AgentResponse, originalReasoning: string): string[] {
     try {
       // Try to extract JSON from the response
       let jsonStr = response.position.match(/\{[\s\S]*\}/)?.[0];
@@ -259,18 +262,25 @@ export class KeyPointsExtractor {
       const parsed = JSON.parse(repairedJson);
 
       if (Array.isArray(parsed.keyPoints)) {
-        return parsed.keyPoints
+        const keyPoints = parsed.keyPoints
           .slice(0, this.maxKeyPoints)
           .map((kp: unknown) => String(kp).trim())
           .filter((kp: string) => kp.length > 0);
+
+        // If AI returned empty key points, fall back to rule-based
+        if (keyPoints.length === 0 && this.fallbackToRuleBased) {
+          return this.extractWithRules(originalReasoning);
+        }
+
+        return keyPoints;
       }
 
       throw new Error('keyPoints not found in parsed response');
     } catch (error) {
       console.warn('[KeyPointsExtractor] Failed to parse AI response:', error);
-      // Fallback: try to extract meaningful content from the response
+      // Fallback: extract from ORIGINAL reasoning, not AI response
       if (this.fallbackToRuleBased) {
-        return this.extractWithRules(response.reasoning);
+        return this.extractWithRules(originalReasoning);
       }
       return [];
     }
