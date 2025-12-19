@@ -32,23 +32,31 @@ function isPinoPrettyAvailable(): boolean {
 
 /**
  * Main logger instance
+ *
+ * IMPORTANT: Logs to stderr to avoid conflicts with MCP stdio protocol.
+ * MCP servers communicate via stdout, so all logging must go to stderr.
  */
-export const logger = pino({
-  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
-  ...(shouldUsePrettyPrint() && isPinoPrettyAvailable()
-    ? {
-        transport: {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
+export const logger = pino(
+  {
+    level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'test' ? 'silent' : 'info'),
+    ...(shouldUsePrettyPrint() && isPinoPrettyAvailable()
+      ? {
+          transport: {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              translateTime: 'SYS:standard',
+              ignore: 'pid,hostname',
+              destination: 2, // stderr file descriptor
+            },
           },
-        },
-      }
-    : {}),
-  base: { service: 'ai-roundtable' },
-});
+        }
+      : {}),
+    base: { service: 'ai-roundtable' },
+  },
+  // When not using transport, write to stderr directly
+  shouldUsePrettyPrint() && isPinoPrettyAvailable() ? undefined : pino.destination(2)
+);
 
 /**
  * Create a child logger with specific context
