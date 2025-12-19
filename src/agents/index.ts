@@ -19,3 +19,14 @@ export {
   type PerplexitySearchOptions,
   type SearchRecencyFilter,
 } from './perplexity.js';
+export {
+  setupAgents,
+  setupProviders,
+  createDefaultAgents,
+  detectApiKeys,
+  checkProviderAvailability,
+  getAvailabilityReport,
+  type ApiKeyConfig,
+  type ProviderAvailability,
+  type SetupResult,
+} from './setup.js';

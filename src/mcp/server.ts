@@ -7,6 +7,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { DebateEngine } from '../core/DebateEngine.js';
 import { SessionManager } from '../core/session-manager.js';
 import { AgentRegistry } from '../agents/registry.js';
+import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
 import { DefaultAgentToolkit } from '../tools/toolkit.js';
 import {
   tools,
@@ -29,6 +30,12 @@ export interface ServerOptions {
   debateEngine?: DebateEngine;
   sessionManager?: SessionManager;
   agentRegistry?: AgentRegistry;
+  /** API keys for auto-setup (defaults to environment variables) */
+  apiKeys?: ApiKeyConfig;
+  /** Auto-setup agents based on available API keys (default: true) */
+  autoSetup?: boolean;
+  /** Show availability report on startup (default: false) */
+  showAvailabilityReport?: boolean;
 }
 
 /**
@@ -37,6 +44,7 @@ export interface ServerOptions {
 export function createServer(options: ServerOptions = {}): Server {
   const serverName = options.name || 'ai-roundtable';
   const serverVersion = options.version || '0.1.0';
+  const autoSetup = options.autoSetup !== false; // Default to true
 
   // Initialize dependencies
   const sessionManager = options.sessionManager || new SessionManager();
@@ -46,6 +54,20 @@ export function createServer(options: ServerOptions = {}): Server {
 
   // Set toolkit for agents
   agentRegistry.setToolkit(toolkit);
+
+  // Auto-setup agents based on available API keys
+  if (autoSetup) {
+    const setupResult = setupAgents(agentRegistry, options.apiKeys);
+
+    if (options.showAvailabilityReport) {
+      console.log(getAvailabilityReport(setupResult));
+    }
+
+    // Log warnings if any
+    for (const warning of setupResult.warnings) {
+      console.warn(`[ai-roundtable] ${warning}`);
+    }
+  }
 
   // Create server instance
   const server = new Server(
