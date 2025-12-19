@@ -99,23 +99,37 @@ export class ChatGPTAgent extends BaseAgent {
         });
 
         // Extract citations from search results
-        // Tool results are wrapped in { success: boolean, data: { results: [...] } }
-        if (
-          (functionName === 'search_web' || functionName === 'perplexity_search') &&
-          result &&
-          typeof result === 'object'
-        ) {
+        // search_web returns: { success: boolean, data: { results: SearchResult[] } }
+        // perplexity_search returns: { success: boolean, data: { answer: string, citations?: Citation[], ... } }
+        if (result && typeof result === 'object') {
           const toolResult = result as {
             success?: boolean;
-            data?: { results?: Array<{ title: string; url: string; snippet?: string }> };
+            data?: {
+              results?: Array<{ title: string; url: string; snippet?: string }>;
+              citations?: Array<{ title: string; url: string; snippet?: string }>;
+            };
           };
-          if (toolResult.success && toolResult.data?.results) {
-            for (const item of toolResult.data.results) {
-              citations.push({
-                title: item.title,
-                url: item.url,
-                snippet: item.snippet,
-              });
+
+          if (toolResult.success && toolResult.data) {
+            // Handle search_web format
+            if (functionName === 'search_web' && toolResult.data.results) {
+              for (const item of toolResult.data.results) {
+                citations.push({
+                  title: item.title,
+                  url: item.url,
+                  snippet: item.snippet,
+                });
+              }
+            }
+            // Handle perplexity_search format
+            else if (functionName === 'perplexity_search' && toolResult.data.citations) {
+              for (const item of toolResult.data.citations) {
+                citations.push({
+                  title: item.title,
+                  url: item.url,
+                  snippet: item.snippet,
+                });
+              }
             }
           }
         }

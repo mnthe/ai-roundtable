@@ -288,6 +288,53 @@ describe('ChatGPTAgent', () => {
       expect(call?.tools?.[0]?.function?.name).toBe('test_tool');
     });
 
+    it('should extract citations from perplexity_search tool', async () => {
+      const mockClient = createMockClientWithToolCalls(
+        'perplexity_search',
+        { query: 'climate change policies', recency_filter: 'month' },
+        '{"position":"Environmental policies are evolving","reasoning":"Recent findings","confidence":0.82}'
+      );
+
+      const mockToolkit: AgentToolkit = {
+        getTools: () => [
+          {
+            name: 'perplexity_search',
+            description: 'Search with Perplexity',
+            parameters: { query: { type: 'string' } },
+          },
+        ],
+        executeTool: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            answer: 'Climate policies are being updated...',
+            citations: [
+              { title: 'Climate Report 2025', url: 'https://climate.example.com', snippet: 'Latest findings...' },
+              { title: 'Policy Brief', url: 'https://policy.example.com', snippet: 'New regulations...' },
+              { title: 'Scientific Study', url: 'https://science.example.com', snippet: 'Research data...' },
+            ],
+          },
+        }),
+      };
+
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+      });
+      agent.setToolkit(mockToolkit);
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('perplexity_search', {
+        query: 'climate change policies',
+        recency_filter: 'month',
+      });
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls?.[0]?.toolName).toBe('perplexity_search');
+      expect(response.citations).toHaveLength(3);
+      expect(response.citations?.[0]?.title).toBe('Climate Report 2025');
+      expect(response.citations?.[1]?.title).toBe('Policy Brief');
+      expect(response.citations?.[2]?.title).toBe('Scientific Study');
+    });
+
     it('should handle tool execution errors', async () => {
       const mockClient = createMockClientWithToolCalls(
         'failing_tool',

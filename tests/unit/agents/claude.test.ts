@@ -293,6 +293,58 @@ describe('ClaudeAgent', () => {
       expect(response.toolCalls?.[0]?.output).toEqual({ error: 'Tool failed' });
     });
 
+    it('should extract citations from perplexity_search tool', async () => {
+      const mockClient = createMockClientWithToolUse(
+        'perplexity_search',
+        { query: 'AI regulation', recency_filter: 'week' },
+        {
+          answer: 'Recent AI regulations...',
+          citations: [
+            { title: 'EU AI Act', url: 'https://eu.example.com', snippet: 'New regulations...' },
+            { title: 'US AI Policy', url: 'https://us.example.com', snippet: 'Policy updates...' },
+          ],
+        },
+        '{"position":"Based on recent research","reasoning":"Found regulatory updates","confidence":0.88}'
+      );
+
+      const mockToolkit: AgentToolkit = {
+        getTools: () => [
+          {
+            name: 'perplexity_search',
+            description: 'Search with Perplexity',
+            parameters: { query: { type: 'string' } },
+          },
+        ],
+        executeTool: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            answer: 'Recent AI regulations...',
+            citations: [
+              { title: 'EU AI Act', url: 'https://eu.example.com', snippet: 'New regulations...' },
+              { title: 'US AI Policy', url: 'https://us.example.com', snippet: 'Policy updates...' },
+            ],
+          },
+        }),
+      };
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+      });
+      agent.setToolkit(mockToolkit);
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('perplexity_search', {
+        query: 'AI regulation',
+        recency_filter: 'week',
+      });
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls?.[0]?.toolName).toBe('perplexity_search');
+      expect(response.citations).toHaveLength(2);
+      expect(response.citations?.[0]?.title).toBe('EU AI Act');
+      expect(response.citations?.[1]?.title).toBe('US AI Policy');
+    });
+
     it('should extract position/reasoning from submit_response tool call', async () => {
       // Simulate Claude calling submit_response tool with actual position/reasoning
       // Then returning meta-commentary in text response
