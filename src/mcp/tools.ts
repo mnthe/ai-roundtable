@@ -38,7 +38,8 @@ export const startRoundtableTool: Tool = {
       agents: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Optional: Array of agent IDs to participate. If not provided, default agents will be used.',
+        description:
+          'Optional: Array of agent IDs to participate. If not provided, default agents will be used.',
       },
       rounds: {
         type: 'number',
@@ -92,13 +93,19 @@ export const continueRoundtableTool: Tool = {
 export const getConsensusTool: Tool = {
   name: 'get_consensus',
   description:
-    'Analyze the consensus level in a debate session. Returns agreement level, common points of agreement, disagreement points, and a summary.',
+    'Analyze the consensus level in a debate session. Returns agreement level, common points of agreement, disagreement points, and a summary. By default, analyzes only the latest round to provide current consensus state.',
   inputSchema: {
     type: 'object',
     properties: {
       sessionId: {
         type: 'string',
         description: 'The session ID to analyze',
+      },
+      roundNumber: {
+        type: 'number',
+        description:
+          'Optional: specific round number to analyze (1-based index). If not provided, analyzes the latest round only.',
+        minimum: 1,
       },
     },
     required: ['sessionId'],
@@ -138,7 +145,15 @@ export const listSessionsTool: Tool = {
       },
       mode: {
         type: 'string',
-        enum: ['collaborative', 'adversarial', 'socratic', 'expert-panel', 'devils-advocate', 'delphi', 'red-team-blue-team'],
+        enum: [
+          'collaborative',
+          'adversarial',
+          'socratic',
+          'expert-panel',
+          'devils-advocate',
+          'delphi',
+          'red-team-blue-team',
+        ],
         description: 'Filter by debate mode',
       },
       status: {
@@ -234,7 +249,8 @@ export const controlSessionTool: Tool = {
       action: {
         type: 'string',
         enum: ['pause', 'resume', 'stop'],
-        description: 'Control action: pause (halt temporarily), resume (continue), stop (end permanently)',
+        description:
+          'Control action: pause (halt temporarily), resume (continue), stop (end permanently)',
       },
     },
     required: ['sessionId', 'action'],

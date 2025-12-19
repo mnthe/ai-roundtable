@@ -13,12 +13,7 @@ import { KeyPointsExtractor } from '../core/key-points-extractor.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
 import { DefaultAgentToolkit } from '../tools/toolkit.js';
-import {
-  tools,
-  createSuccessResponse,
-  createErrorResponse,
-  type ToolResponse,
-} from './tools.js';
+import { tools, createSuccessResponse, createErrorResponse, type ToolResponse } from './tools.js';
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
@@ -116,10 +111,12 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
   }
 
   // Create debate engine with AI consensus analyzer
-  const debateEngine = options.debateEngine || new DebateEngine({
-    toolkit,
-    aiConsensusAnalyzer: aiConsensusAnalyzer ?? undefined,
-  });
+  const debateEngine =
+    options.debateEngine ||
+    new DebateEngine({
+      toolkit,
+      aiConsensusAnalyzer: aiConsensusAnalyzer ?? undefined,
+    });
 
   // Create server instance
   const server = new Server(
@@ -151,15 +148,32 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
 
       switch (name) {
         case 'start_roundtable':
-          result = await handleStartRoundtable(args, debateEngine, sessionManager, agentRegistry, keyPointsExtractor);
+          result = await handleStartRoundtable(
+            args,
+            debateEngine,
+            sessionManager,
+            agentRegistry,
+            keyPointsExtractor
+          );
           break;
 
         case 'continue_roundtable':
-          result = await handleContinueRoundtable(args, debateEngine, sessionManager, agentRegistry, keyPointsExtractor);
+          result = await handleContinueRoundtable(
+            args,
+            debateEngine,
+            sessionManager,
+            agentRegistry,
+            keyPointsExtractor
+          );
           break;
 
         case 'get_consensus':
-          result = await handleGetConsensus(args, sessionManager, aiConsensusAnalyzer, debateEngine);
+          result = await handleGetConsensus(
+            args,
+            sessionManager,
+            aiConsensusAnalyzer,
+            debateEngine
+          );
           break;
 
         case 'get_agents':
@@ -183,7 +197,12 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           break;
 
         case 'get_round_details':
-          result = await handleGetRoundDetails(args, sessionManager, aiConsensusAnalyzer, debateEngine);
+          result = await handleGetRoundDetails(
+            args,
+            sessionManager,
+            aiConsensusAnalyzer,
+            debateEngine
+          );
           break;
 
         case 'get_response_detail':
@@ -279,9 +298,7 @@ function extractKeyPoints(reasoning: string): string[] {
   const numberedMatches = reasoning.match(/(?:^|\n)\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?([^\n*]+)/g);
   if (numberedMatches && numberedMatches.length > 0) {
     for (const match of numberedMatches.slice(0, 3)) {
-      const cleaned = match
-        .replace(/^\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?/, '')
-        .trim();
+      const cleaned = match.replace(/^\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?/, '').trim();
       if (cleaned.length > 10) {
         keyPoints.push(cleaned);
       }
@@ -322,7 +339,10 @@ function detectConflicts(
   const positionKeywords = responses.map((r) => ({
     agentId: r.agentId,
     position: r.position,
-    keywords: r.position.toLowerCase().split(/\s+/).filter((w) => w.length > 4),
+    keywords: r.position
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 4),
   }));
 
   // Check confidence variance as indicator of disagreement
@@ -434,8 +454,7 @@ function buildRoundtableResponse(
   const consensus = roundResult.consensus;
 
   // Calculate average confidence
-  const avgConfidence =
-    responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
+  const avgConfidence = responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
 
   // Classify consensus level
   const consensusLevel = classifyConsensusLevel(consensus.agreementLevel);
@@ -497,10 +516,7 @@ function buildRoundtableResponse(
   });
 
   // Total citations (Layer 3)
-  const totalCitations = responses.reduce(
-    (sum, r) => sum + (r.citations?.length || 0),
-    0
-  );
+  const totalCitations = responses.reduce((sum, r) => sum + (r.citations?.length || 0), 0);
 
   // Build verification hints (Layer 4)
   const verificationHints = buildVerificationHints(responses, session.id);
@@ -643,7 +659,9 @@ async function handleContinueRoundtable(
 
     // Check if session is active
     if (session.status !== 'active') {
-      return createErrorResponse(`Session "${input.sessionId}" is not active (status: ${session.status})`);
+      return createErrorResponse(
+        `Session "${input.sessionId}" is not active (status: ${session.status})`
+      );
     }
 
     // Get agents
@@ -693,7 +711,12 @@ async function handleContinueRoundtable(
       ? await keyPointsExtractor.extractKeyPointsBatch(latestRound.responses)
       : new Map<string, string[]>();
 
-    const response = buildRoundtableResponse(updatedSession, latestRound, previousResponses, keyPointsMap);
+    const response = buildRoundtableResponse(
+      updatedSession,
+      latestRound,
+      previousResponses,
+      keyPointsMap
+    );
     return createSuccessResponse(response);
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -719,10 +742,24 @@ async function handleGetConsensus(
       return createErrorResponse(`Session "${input.sessionId}" not found`);
     }
 
-    // Get all responses
-    const responses = await sessionManager.getResponses(input.sessionId);
+    // Determine which round to analyze
+    // If roundNumber is specified, use it; otherwise use the latest round
+    const roundToAnalyze = input.roundNumber ?? session.currentRound;
+
+    // Validate round number
+    if (roundToAnalyze < 1) {
+      return createErrorResponse('No rounds have been executed yet');
+    }
+    if (roundToAnalyze > session.currentRound) {
+      return createErrorResponse(
+        `Round ${roundToAnalyze} does not exist. Current round is ${session.currentRound}`
+      );
+    }
+
+    // Get responses for the specific round only
+    const responses = await sessionManager.getResponsesForRound(input.sessionId, roundToAnalyze);
     if (responses.length === 0) {
-      return createErrorResponse('No responses found in this session');
+      return createErrorResponse(`No responses found for round ${roundToAnalyze}`);
     }
 
     // Analyze consensus using AI if available, otherwise fall back to rule-based
@@ -734,7 +771,8 @@ async function handleGetConsensus(
       sessionId: input.sessionId,
       consensus,
       responseCount: responses.length,
-      roundCount: session.currentRound,
+      analyzedRound: roundToAnalyze,
+      totalRounds: session.currentRound,
     });
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -895,7 +933,9 @@ async function handleExportSession(
         },
         agents: session.agentIds.map((id) => {
           const agent = agentRegistry.getAgent(id);
-          return agent ? agent.getInfo() : { id, name: 'Unknown', provider: 'unknown' as const, model: 'unknown' };
+          return agent
+            ? agent.getInfo()
+            : { id, name: 'Unknown', provider: 'unknown' as const, model: 'unknown' };
         }),
         responses: responses.map((r) => ({
           agentId: r.agentId,
@@ -994,9 +1034,7 @@ async function handleExportSession(
       if (session.consensus) {
         lines.push('## Consensus Analysis');
         lines.push('');
-        lines.push(
-          `**Agreement Level:** ${(session.consensus.agreementLevel * 100).toFixed(1)}%`
-        );
+        lines.push(`**Agreement Level:** ${(session.consensus.agreementLevel * 100).toFixed(1)}%`);
         lines.push('');
 
         if (session.consensus.commonPoints.length > 0) {
@@ -1279,13 +1317,16 @@ async function handleGetCitations(
       .filter((c) => c !== null);
 
     // Remove duplicate citations (same URL)
-    const uniqueCitations = citations.reduce((acc, citation) => {
-      const existing = acc.find((c) => c.url === citation.url);
-      if (!existing) {
-        acc.push(citation);
-      }
-      return acc;
-    }, [] as typeof citations);
+    const uniqueCitations = citations.reduce(
+      (acc, citation) => {
+        const existing = acc.find((c) => c.url === citation.url);
+        if (!existing) {
+          acc.push(citation);
+        }
+        return acc;
+      },
+      [] as typeof citations
+    );
 
     return createSuccessResponse({
       sessionId: input.sessionId,
@@ -1320,7 +1361,9 @@ async function handleSynthesizeDebate(
     // Get all responses
     const responses = await sessionManager.getResponses(input.sessionId);
     if (responses.length === 0) {
-      return createErrorResponse('No responses found in this session. Cannot synthesize an empty debate.');
+      return createErrorResponse(
+        'No responses found in this session. Cannot synthesize an empty debate.'
+      );
     }
 
     // Determine synthesizer agent
@@ -1399,7 +1442,9 @@ function buildSynthesisPrompt(
   }
 
   const totalRounds = Object.keys(responsesByRound).length;
-  parts.push(`The debate had ${totalRounds} rounds with the following participants: ${Array.from(agentsInSession).join(', ')}`);
+  parts.push(
+    `The debate had ${totalRounds} rounds with the following participants: ${Array.from(agentsInSession).join(', ')}`
+  );
   parts.push('');
 
   // Add all responses
@@ -1422,7 +1467,9 @@ function buildSynthesisPrompt(
     }
   }
 
-  parts.push('Please analyze this debate and provide a comprehensive synthesis in JSON format with the following structure:');
+  parts.push(
+    'Please analyze this debate and provide a comprehensive synthesis in JSON format with the following structure:'
+  );
   parts.push('{');
   parts.push('  "commonGround": ["Key point 1", "Key point 2", ...],');
   parts.push('  "keyDifferences": ["Difference 1", "Difference 2", ...],');

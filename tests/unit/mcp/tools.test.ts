@@ -10,11 +10,7 @@ import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
 import type { AgentConfig } from '../../../src/types/index.js';
-import {
-  tools,
-  createSuccessResponse,
-  createErrorResponse,
-} from '../../../src/mcp/tools.js';
+import { tools, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
@@ -85,6 +81,29 @@ describe('MCP Tools', () => {
 
       const result = GetConsensusInputSchema.safeParse(validInput);
       expect(result.success).toBe(true);
+    });
+
+    it('should validate get_consensus input with optional roundNumber', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 2,
+      };
+
+      const result = GetConsensusInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.roundNumber).toBe(2);
+      }
+    });
+
+    it('should reject get_consensus with invalid roundNumber', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 0, // Must be >= 1
+      };
+
+      const result = GetConsensusInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
     });
 
     it('should reject get_consensus without sessionId', () => {
@@ -285,6 +304,7 @@ describe('MCP Tools', () => {
       expect(consensusTool).toBeDefined();
       expect(consensusTool?.inputSchema).toHaveProperty('properties');
       expect(consensusTool?.inputSchema.properties).toHaveProperty('sessionId');
+      expect(consensusTool?.inputSchema.properties).toHaveProperty('roundNumber');
     });
 
     it('should have required fields marked correctly', () => {
@@ -375,7 +395,11 @@ describe('MCP Tools', () => {
       debateEngine = new DebateEngine({ toolkit });
 
       // Register mock agents
-      agentRegistry.registerProvider('anthropic', (config) => new MockAgent(config), 'claude-3-opus');
+      agentRegistry.registerProvider(
+        'anthropic',
+        (config) => new MockAgent(config),
+        'claude-3-opus'
+      );
       agentRegistry.registerProvider('openai', (config) => new MockAgent(config), 'gpt-4');
 
       // Create test agents
@@ -514,6 +538,53 @@ describe('MCP Tools', () => {
       expect(consensus).toHaveProperty('summary');
       expect(consensus.agreementLevel).toBeGreaterThanOrEqual(0);
       expect(consensus.agreementLevel).toBeLessThanOrEqual(1);
+    });
+
+    it('should get responses for specific round', async () => {
+      const config = {
+        topic: 'Round-specific test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1', 'agent-2'],
+        rounds: 3,
+      };
+
+      const session = await sessionManager.createSession(config);
+      const agents = agentRegistry.getAgents(['agent-1', 'agent-2']);
+
+      // Execute 2 rounds
+      const results = await debateEngine.executeRounds(agents, session, 2);
+      await sessionManager.updateSessionRound(session.id, session.currentRound);
+
+      // Save all responses to storage
+      for (const result of results) {
+        for (const response of result.responses) {
+          await sessionManager.addResponse(session.id, response);
+        }
+      }
+
+      // Get all responses
+      const allResponses = await sessionManager.getResponses(session.id);
+      expect(allResponses).toHaveLength(4); // 2 agents x 2 rounds
+
+      // Get responses for round 1 only
+      const round1Responses = await sessionManager.getResponsesForRound(session.id, 1);
+      expect(round1Responses).toHaveLength(2); // 2 agents
+
+      // Get responses for round 2 only
+      const round2Responses = await sessionManager.getResponsesForRound(session.id, 2);
+      expect(round2Responses).toHaveLength(2); // 2 agents
+
+      // Verify that round-specific consensus analysis uses only that round's responses
+      const round1Consensus = debateEngine.analyzeConsensus(round1Responses);
+      const round2Consensus = debateEngine.analyzeConsensus(round2Responses);
+
+      // Each round should analyze only 2 responses
+      expect(round1Responses).toHaveLength(2);
+      expect(round2Responses).toHaveLength(2);
+
+      // Both should have valid consensus
+      expect(round1Consensus.agreementLevel).toBeGreaterThanOrEqual(0);
+      expect(round2Consensus.agreementLevel).toBeGreaterThanOrEqual(0);
     });
 
     it('should handle non-existent agent gracefully', () => {

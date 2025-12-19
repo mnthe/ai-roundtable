@@ -155,6 +155,7 @@ export const ContinueRoundtableInputSchema = z.object({
 
 export const GetConsensusInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
+  roundNumber: z.number().int().positive().min(1).optional(),
 });
 
 export const GetThoughtsInputSchema = z.object({
@@ -215,6 +216,7 @@ export type DebateConfigInput = z.input<typeof DebateConfigSchema>;
 export type SessionInput = z.input<typeof SessionSchema>;
 export type StartRoundtableInputType = z.infer<typeof StartRoundtableInputSchema>;
 export type ContinueRoundtableInputType = z.infer<typeof ContinueRoundtableInputSchema>;
+export type GetConsensusInputType = z.infer<typeof GetConsensusInputSchema>;
 export type GetThoughtsInputType = z.infer<typeof GetThoughtsInputSchema>;
 export type ExportSessionInputType = z.infer<typeof ExportSessionInputSchema>;
 export type ControlSessionInputType = z.infer<typeof ControlSessionInputSchema>;
