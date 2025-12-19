@@ -191,7 +191,135 @@ describe('AIConsensusAnalyzer', () => {
       const responses = createSampleResponses();
       const result = await analyzerNoFallback.analyzeConsensus(responses, 'Test topic');
 
-      expect(result.summary).toContain('unavailable');
+      // Should contain diagnostic info about why AI is unavailable
+      expect(result.summary).toContain('fallback disabled');
+      expect(result.summary).toContain('No providers registered');
+    });
+  });
+
+  describe('getDiagnostics', () => {
+    it('should report no providers when registry is empty', () => {
+      const diagnostics = analyzer.getDiagnostics();
+
+      expect(diagnostics.available).toBe(false);
+      expect(diagnostics.registeredProviders).toBe(0);
+      expect(diagnostics.totalAgents).toBe(0);
+      expect(diagnostics.reason).toContain('No providers registered');
+    });
+
+    it('should report no agents when providers exist but no agents created', () => {
+      registry.registerProvider(
+        'anthropic',
+        () => createMockAgent('test', 'anthropic') as any,
+        'test-model'
+      );
+
+      const diagnostics = analyzer.getDiagnostics();
+
+      expect(diagnostics.available).toBe(false);
+      expect(diagnostics.registeredProviders).toBe(1);
+      expect(diagnostics.totalAgents).toBe(0);
+      expect(diagnostics.reason).toContain('No agents created');
+    });
+
+    it('should report available when active agents exist', () => {
+      registry.registerProvider(
+        'anthropic',
+        () => createMockAgent('test', 'anthropic') as any,
+        'test-model'
+      );
+      registry.createAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+
+      const diagnostics = analyzer.getDiagnostics();
+
+      expect(diagnostics.available).toBe(true);
+      expect(diagnostics.activeAgents).toBe(1);
+      expect(diagnostics.reason).toBeUndefined();
+    });
+
+    it('should report inactive agents with errors', () => {
+      registry.registerProvider(
+        'anthropic',
+        () => createMockAgent('test', 'anthropic') as any,
+        'test-model'
+      );
+      registry.createAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+      registry.deactivateAgent('test-agent', 'API key invalid');
+
+      const diagnostics = analyzer.getDiagnostics();
+
+      expect(diagnostics.available).toBe(false);
+      expect(diagnostics.activeAgents).toBe(0);
+      expect(diagnostics.inactiveAgents).toHaveLength(1);
+      expect(diagnostics.inactiveAgents[0]!.error).toBe('API key invalid');
+      expect(diagnostics.reason).toContain('health checks');
+    });
+
+    it('should report preferred provider availability', () => {
+      const analyzerWithPref = new AIConsensusAnalyzer({
+        registry,
+        preferredProvider: 'openai',
+      });
+
+      registry.registerProvider(
+        'anthropic',
+        () => createMockAgent('test', 'anthropic') as any,
+        'test-model'
+      );
+      registry.createAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+
+      const diagnostics = analyzerWithPref.getDiagnostics();
+
+      expect(diagnostics.preferredProvider).toBe('openai');
+      expect(diagnostics.preferredProviderAvailable).toBe(false);
+      expect(diagnostics.available).toBe(true); // Still available via fallback
+      expect(diagnostics.reason).toContain('Preferred provider');
+    });
+  });
+
+  describe('Diagnostic information in fallback reasoning', () => {
+    it('should include hint about missing API keys when no agents', async () => {
+      const responses = createSampleResponses();
+      const result = await analyzer.analyzeConsensus(responses, 'Test topic');
+
+      expect(result.reasoning).toContain('No agents registered');
+      expect(result.reasoning).toContain('API keys');
+    });
+
+    it('should include health check errors when all agents failed', async () => {
+      registry.registerProvider(
+        'anthropic',
+        () => createMockAgent('test', 'anthropic') as any,
+        'test-model'
+      );
+      registry.createAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+      registry.deactivateAgent('test-agent', 'Connection refused');
+
+      const responses = createSampleResponses();
+      const result = await analyzer.analyzeConsensus(responses, 'Test topic');
+
+      expect(result.reasoning).toContain('health checks');
+      expect(result.reasoning).toContain('Connection refused');
     });
   });
 });

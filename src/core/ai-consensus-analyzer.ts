@@ -28,6 +28,34 @@ export interface AIConsensusAnalyzerConfig {
 }
 
 /**
+ * Diagnostic information about why AI analysis may be unavailable
+ */
+export interface AIAnalysisDiagnostics {
+  /** Whether AI analysis is available */
+  available: boolean;
+  /** Human-readable reason if unavailable */
+  reason?: string;
+  /** Number of registered providers */
+  registeredProviders: number;
+  /** List of registered provider names */
+  providerNames: AIProvider[];
+  /** Total number of agents in registry */
+  totalAgents: number;
+  /** Number of active (healthy) agents */
+  activeAgents: number;
+  /** Number of inactive agents with their errors */
+  inactiveAgents: Array<{
+    id: string;
+    provider: AIProvider;
+    error?: string;
+  }>;
+  /** Preferred provider if configured */
+  preferredProvider?: AIProvider;
+  /** Whether preferred provider is available */
+  preferredProviderAvailable?: boolean;
+}
+
+/**
  * Analysis prompt template for the AI model
  */
 const ANALYSIS_PROMPT = `You are analyzing debate positions from multiple AI agents. Your task is to perform semantic analysis - understanding meaning, not just matching keywords.
@@ -123,34 +151,72 @@ export class AIConsensusAnalyzer {
     }
 
     // Try AI analysis
+    let diagnostics: AIAnalysisDiagnostics | undefined;
+    let aiError: Error | undefined;
+
     try {
-      const analysisAgent = await this.getAnalysisAgent();
-      if (analysisAgent) {
+      const result = await this.getAnalysisAgent();
+      diagnostics = result.diagnostics;
+
+      if (result.agent) {
         logger.debug({ topic, responseCount: responses.length }, 'Attempting AI consensus analysis');
-        return await this.performAIAnalysis(analysisAgent, responses, topic);
+        return await this.performAIAnalysis(result.agent, responses, topic);
       } else {
-        logger.debug('No analysis agent available, falling back to rule-based analysis');
+        logger.info(
+          {
+            reason: diagnostics.reason,
+            totalAgents: diagnostics.totalAgents,
+            activeAgents: diagnostics.activeAgents,
+            registeredProviders: diagnostics.providerNames,
+          },
+          'No analysis agent available, falling back to rule-based analysis'
+        );
       }
     } catch (error) {
-      logger.warn({ err: error }, 'AI analysis failed, falling back to rule-based analysis');
+      aiError = error instanceof Error ? error : new Error(String(error));
+      logger.warn(
+        {
+          err: error,
+          errorMessage: aiError.message,
+          diagnostics,
+        },
+        'AI analysis failed, falling back to rule-based analysis'
+      );
     }
 
     // Fallback to semantic similarity-based analysis
     if (this.fallbackToRuleBased) {
       logger.debug('Using ConsensusAnalyzer for fallback analysis');
-      return this.performBasicAnalysis(responses);
+      return this.performBasicAnalysis(responses, diagnostics, aiError);
     }
 
-    return this.createEmptyResult('AI analysis unavailable and fallback disabled');
+    const unavailableReason = aiError
+      ? `AI analysis failed: ${aiError.message}`
+      : diagnostics?.reason ?? 'AI analysis unavailable';
+    return this.createEmptyResult(`${unavailableReason} and fallback disabled`);
   }
 
   /**
    * Get an agent configured for analysis (using light model)
+   * Returns both the agent and diagnostic information about availability
    */
-  private async getAnalysisAgent(): Promise<BaseAgent | null> {
+  private async getAnalysisAgent(): Promise<{
+    agent: BaseAgent | null;
+    diagnostics: AIAnalysisDiagnostics;
+  }> {
+    const diagnostics = this.getDiagnostics();
+
     const activeAgents = this.registry.getActiveAgents();
     if (activeAgents.length === 0) {
-      return null;
+      logger.warn(
+        {
+          totalAgents: diagnostics.totalAgents,
+          inactiveAgents: diagnostics.inactiveAgents,
+          registeredProviders: diagnostics.providerNames,
+        },
+        'No active agents available for AI consensus analysis'
+      );
+      return { agent: null, diagnostics };
     }
 
     // Try preferred provider first
@@ -159,17 +225,32 @@ export class AIConsensusAnalyzer {
         (a) => a.getInfo().provider === this.preferredProvider
       );
       if (preferred) {
-        return this.createLightModelAgent(preferred);
+        logger.debug(
+          { provider: this.preferredProvider, agentId: preferred.getInfo().id },
+          'Using preferred provider for analysis'
+        );
+        return { agent: this.createLightModelAgent(preferred), diagnostics: { ...diagnostics, available: true } };
       }
+      logger.debug(
+        {
+          preferredProvider: this.preferredProvider,
+          availableProviders: activeAgents.map((a) => a.getInfo().provider),
+        },
+        'Preferred provider not available, using alternative'
+      );
     }
 
     // Use first available agent
     const firstAgent = activeAgents[0];
     if (firstAgent) {
-      return this.createLightModelAgent(firstAgent);
+      logger.debug(
+        { provider: firstAgent.getInfo().provider, agentId: firstAgent.getInfo().id },
+        'Using first available agent for analysis'
+      );
+      return { agent: this.createLightModelAgent(firstAgent), diagnostics: { ...diagnostics, available: true } };
     }
 
-    return null;
+    return { agent: null, diagnostics };
   }
 
   /**
@@ -317,17 +398,41 @@ export class AIConsensusAnalyzer {
    * Perform semantic similarity-based analysis as fallback
    * Uses ConsensusAnalyzer for sophisticated clustering and agreement detection
    */
-  private performBasicAnalysis(responses: AgentResponse[]): AIConsensusResult {
+  private performBasicAnalysis(
+    responses: AgentResponse[],
+    diagnostics?: AIAnalysisDiagnostics,
+    error?: Error
+  ): AIConsensusResult {
     // Use ConsensusAnalyzer for semantic similarity-based analysis
     const consensusAnalyzer = new ConsensusAnalyzer();
     const result = consensusAnalyzer.analyzeConsensus(responses);
+
+    // Build informative reasoning message
+    const reasoningParts: string[] = ['Semantic similarity analysis (AI unavailable)'];
+
+    if (error) {
+      reasoningParts.push(`Error: ${error.message}`);
+    } else if (diagnostics) {
+      reasoningParts.push(`Reason: ${diagnostics.reason}`);
+    }
+
+    if (diagnostics) {
+      if (diagnostics.totalAgents === 0) {
+        reasoningParts.push('Hint: No agents registered. Ensure API keys are set and setupAgents() was called.');
+      } else if (diagnostics.activeAgents === 0) {
+        const inactiveInfo = diagnostics.inactiveAgents
+          .map((a) => `${a.provider}: ${a.error ?? 'unknown error'}`)
+          .join('; ');
+        reasoningParts.push(`Hint: All ${diagnostics.totalAgents} agents failed health checks. Errors: ${inactiveInfo}`);
+      }
+    }
 
     return {
       agreementLevel: result.agreementLevel,
       commonPoints: result.commonPoints,
       disagreementPoints: result.disagreementPoints,
       summary: result.summary,
-      reasoning: 'Semantic similarity analysis (AI unavailable)',
+      reasoning: reasoningParts.join('. '),
     };
   }
 
@@ -340,6 +445,70 @@ export class AIConsensusAnalyzer {
       commonPoints: [],
       disagreementPoints: [],
       summary: message,
+    };
+  }
+
+  /**
+   * Get diagnostic information about AI analysis availability
+   *
+   * This method can be called to understand why AI analysis may be unavailable.
+   * Useful for debugging and for MCP tools to provide user feedback.
+   *
+   * @returns Diagnostic information including agent status and availability reasons
+   */
+  getDiagnostics(): AIAnalysisDiagnostics {
+    const registeredProviders = this.registry.getRegisteredProviders();
+    const healthStatus = this.registry.getAgentHealthStatus();
+    const activeAgents = healthStatus.filter((a) => a.active);
+    const inactiveAgents = healthStatus.filter((a) => !a.active);
+
+    // Determine availability and reason
+    let available = false;
+    let reason: string | undefined;
+
+    if (registeredProviders.length === 0) {
+      reason = 'No providers registered. API keys may not be configured.';
+    } else if (healthStatus.length === 0) {
+      reason = 'No agents created. Call setupAgents() to initialize agents.';
+    } else if (activeAgents.length === 0) {
+      const errorSummary = inactiveAgents
+        .slice(0, 3)
+        .map((a) => `${a.provider}: ${a.error ?? 'health check failed'}`)
+        .join('; ');
+      reason = `All agents failed health checks. ${errorSummary}`;
+    } else if (this.preferredProvider) {
+      const preferredAvailable = activeAgents.some(
+        (a) => a.provider === this.preferredProvider
+      );
+      if (preferredAvailable) {
+        available = true;
+      } else {
+        available = true; // Will use alternative
+        reason = `Preferred provider '${this.preferredProvider}' not available, using alternative.`;
+      }
+    } else {
+      available = true;
+    }
+
+    // Check if preferred provider is available
+    const preferredProviderAvailable = this.preferredProvider
+      ? activeAgents.some((a) => a.provider === this.preferredProvider)
+      : undefined;
+
+    return {
+      available,
+      reason,
+      registeredProviders: registeredProviders.length,
+      providerNames: registeredProviders,
+      totalAgents: healthStatus.length,
+      activeAgents: activeAgents.length,
+      inactiveAgents: inactiveAgents.map((a) => ({
+        id: a.id,
+        provider: a.provider,
+        error: a.error,
+      })),
+      preferredProvider: this.preferredProvider,
+      preferredProviderAvailable,
     };
   }
 }
