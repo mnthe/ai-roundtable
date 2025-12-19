@@ -149,6 +149,21 @@ export const GetConsensusInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
 });
 
+export const GetThoughtsInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  agentId: z.string().min(1, 'Agent ID is required'),
+});
+
+export const ExportSessionInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  format: z.enum(['markdown', 'json']).default('markdown'),
+});
+
+export const ControlSessionInputSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID is required'),
+  action: z.enum(['pause', 'resume', 'stop']),
+});
+
 // ============================================
 // Type Inference Helpers
 // ============================================
@@ -159,3 +174,6 @@ export type DebateConfigInput = z.input<typeof DebateConfigSchema>;
 export type SessionInput = z.input<typeof SessionSchema>;
 export type StartRoundtableInputType = z.infer<typeof StartRoundtableInputSchema>;
 export type ContinueRoundtableInputType = z.infer<typeof ContinueRoundtableInputSchema>;
+export type GetThoughtsInputType = z.infer<typeof GetThoughtsInputSchema>;
+export type ExportSessionInputType = z.infer<typeof ExportSessionInputSchema>;
+export type ControlSessionInputType = z.infer<typeof ControlSessionInputSchema>;

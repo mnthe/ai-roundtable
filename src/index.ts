@@ -4,7 +4,7 @@
  * AI Roundtable - MCP Server Entry Point
  *
  * A Multi-AI debate platform that enables structured discussions
- * between different AI models (Claude, GPT-4, etc.)
+ * between different AI models (Claude, ChatGPT, etc.)
  */
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';

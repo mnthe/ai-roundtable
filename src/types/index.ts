@@ -59,7 +59,14 @@ export interface ToolCallRecord {
 // Debate Types
 // ============================================
 
-export type DebateMode = 'collaborative' | 'adversarial' | 'socratic' | 'expert-panel';
+export type DebateMode =
+  | 'collaborative'
+  | 'adversarial'
+  | 'socratic'
+  | 'expert-panel'
+  | 'devils-advocate'
+  | 'delphi'
+  | 'red-team-blue-team';
 
 export interface DebateConfig {
   topic: string;
@@ -157,4 +164,23 @@ export interface ContinueRoundtableInput {
 
 export interface GetConsensusInput {
   sessionId: string;
+}
+
+export interface GetThoughtsInput {
+  sessionId: string;
+  agentId: string;
+}
+
+export type ExportFormat = 'markdown' | 'json';
+
+export interface ExportSessionInput {
+  sessionId: string;
+  format?: ExportFormat;
+}
+
+export type SessionAction = 'pause' | 'resume' | 'stop';
+
+export interface ControlSessionInput {
+  sessionId: string;
+  action: SessionAction;
 }

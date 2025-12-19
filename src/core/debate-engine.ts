@@ -2,17 +2,19 @@
  * Debate Engine - Orchestrates multi-round debates between AI agents
  */
 
+import { createLogger } from '../utils/logger.js';
 import type {
   DebateConfig,
   DebateContext,
   Session,
   AgentResponse,
-  RoundResult,
 } from '../types/index.js';
-import type { BaseAgent, AgentToolkit } from '../agents/base.js';
+import type { AgentToolkit } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { ModeRegistry } from '../modes/registry.js';
 import type { ConsensusAnalyzer } from './consensus-analyzer.js';
+
+const logger = createLogger('DebateEngine');
 
 /**
  * Session Manager interface
@@ -130,9 +132,30 @@ export class DebateEngine {
    * @param focusQuestion - Optional focus question for this round
    */
   async executeRound(session: Session, focusQuestion?: string): Promise<void> {
+    const startTime = Date.now();
+    logger.info(
+      {
+        sessionId: session.id,
+        round: session.currentRound,
+        totalRounds: session.totalRounds,
+        mode: session.mode,
+        agentCount: session.agentIds.length,
+        focusQuestion,
+      },
+      'Starting debate round'
+    );
+
     try {
       // Get agents
       const agents = this.agentRegistry.getAgents(session.agentIds);
+      logger.debug(
+        {
+          sessionId: session.id,
+          round: session.currentRound,
+          agents: agents.map((a) => ({ id: a.id, name: a.name, provider: a.provider })),
+        },
+        'Agents retrieved for round'
+      );
 
       // Get mode strategy
       const mode = this.modeRegistry.getMode(session.mode);
@@ -149,6 +172,10 @@ export class DebateEngine {
       };
 
       // Execute round with mode strategy
+      logger.debug(
+        { sessionId: session.id, round: session.currentRound, mode: session.mode },
+        'Executing round with mode strategy'
+      );
       const responses = await mode.executeRound(agents, context, this.toolkit);
 
       // Store responses
@@ -168,11 +195,35 @@ export class DebateEngine {
       // Check if debate is complete
       if (session.currentRound >= session.totalRounds) {
         session.status = 'completed';
+        logger.info({ sessionId: session.id }, 'Debate completed');
       }
 
       // Update session
       await this.sessionManager.updateSession(session);
+
+      const duration = Date.now() - startTime;
+      logger.info(
+        {
+          sessionId: session.id,
+          round: session.currentRound,
+          duration,
+          responseCount: responses.length,
+          agreementLevel: consensus.agreementLevel,
+        },
+        'Debate round completed'
+      );
     } catch (error) {
+      const duration = Date.now() - startTime;
+      logger.error(
+        {
+          err: error,
+          sessionId: session.id,
+          round: session.currentRound,
+          duration,
+        },
+        'Failed to execute debate round'
+      );
+
       // Mark session as error
       session.status = 'error';
       await this.sessionManager.updateSession(session);

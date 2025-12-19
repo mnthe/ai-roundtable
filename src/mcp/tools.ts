@@ -3,11 +3,6 @@
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import {
-  StartRoundtableInputSchema,
-  ContinueRoundtableInputSchema,
-  GetConsensusInputSchema,
-} from '../types/schemas.js';
 
 /**
  * Tool: start_roundtable
@@ -120,15 +115,121 @@ export const getAgentsTool: Tool = {
 /**
  * Tool: list_sessions
  *
- * List all debate sessions
+ * List all debate sessions with optional filters
  */
 export const listSessionsTool: Tool = {
   name: 'list_sessions',
   description:
-    'List all debate sessions with summary information including topic, mode, status, current round, and creation date.',
+    'List debate sessions with optional filters. Search by topic keyword, filter by mode/status, or date range.',
   inputSchema: {
     type: 'object',
-    properties: {},
+    properties: {
+      topic: {
+        type: 'string',
+        description: 'Search sessions by topic keyword (partial match)',
+      },
+      mode: {
+        type: 'string',
+        enum: ['collaborative', 'adversarial', 'socratic', 'expert-panel', 'devils-advocate', 'delphi', 'red-team-blue-team'],
+        description: 'Filter by debate mode',
+      },
+      status: {
+        type: 'string',
+        enum: ['pending', 'in_progress', 'paused', 'completed', 'error'],
+        description: 'Filter by session status',
+      },
+      fromDate: {
+        type: 'string',
+        description: 'Filter sessions created after this date (ISO 8601 format)',
+      },
+      toDate: {
+        type: 'string',
+        description: 'Filter sessions created before this date (ISO 8601 format)',
+      },
+      limit: {
+        type: 'number',
+        description: 'Maximum number of results to return',
+        default: 50,
+      },
+    },
+  },
+};
+
+/**
+ * Tool: get_thoughts
+ *
+ * Get detailed reasoning and confidence evolution for a specific agent in a session
+ */
+export const getThoughtsTool: Tool = {
+  name: 'get_thoughts',
+  description:
+    'Retrieve the detailed reasoning process and confidence evolution for a specific agent across all rounds in a debate session. Returns all responses including position, reasoning, confidence levels, and citations.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to query',
+      },
+      agentId: {
+        type: 'string',
+        description: 'The agent ID whose thoughts to retrieve',
+      },
+    },
+    required: ['sessionId', 'agentId'],
+  },
+};
+
+/**
+ * Tool: export_session
+ *
+ * Export a debate session in various formats
+ */
+export const exportSessionTool: Tool = {
+  name: 'export_session',
+  description:
+    'Export a debate session in markdown or JSON format. Markdown format includes title, participants, round-by-round responses, and consensus analysis. JSON format provides the full structured data.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to export',
+      },
+      format: {
+        type: 'string',
+        enum: ['markdown', 'json'],
+        description: 'Export format (default: markdown)',
+        default: 'markdown',
+      },
+    },
+    required: ['sessionId'],
+  },
+};
+
+/**
+ * Tool: control_session
+ *
+ * Control the execution state of a debate session
+ */
+export const controlSessionTool: Tool = {
+  name: 'control_session',
+  description:
+    'Control a debate session execution state. Actions: pause (temporarily halt), resume (continue paused session), stop (permanently end session with completed status).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      sessionId: {
+        type: 'string',
+        description: 'The session ID to control',
+      },
+      action: {
+        type: 'string',
+        enum: ['pause', 'resume', 'stop'],
+        description: 'Control action: pause (halt temporarily), resume (continue), stop (end permanently)',
+      },
+    },
+    required: ['sessionId', 'action'],
   },
 };
 
@@ -141,6 +242,9 @@ export const tools: Tool[] = [
   getConsensusTool,
   getAgentsTool,
   listSessionsTool,
+  getThoughtsTool,
+  exportSessionTool,
+  controlSessionTool,
 ];
 
 /**
@@ -152,6 +256,9 @@ export interface ToolHandlers {
   get_consensus: (args: unknown) => Promise<ToolResponse>;
   get_agents: (args: unknown) => Promise<ToolResponse>;
   list_sessions: (args: unknown) => Promise<ToolResponse>;
+  get_thoughts: (args: unknown) => Promise<ToolResponse>;
+  export_session: (args: unknown) => Promise<ToolResponse>;
+  control_session: (args: unknown) => Promise<ToolResponse>;
 }
 
 /**

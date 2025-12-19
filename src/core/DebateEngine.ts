@@ -3,7 +3,6 @@
  */
 
 import type {
-  DebateConfig,
   DebateContext,
   AgentResponse,
   RoundResult,

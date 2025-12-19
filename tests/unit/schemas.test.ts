@@ -126,8 +126,8 @@ describe('Zod Schemas', () => {
 
     it('should validate response with citations', () => {
       const response = {
-        agentId: 'gpt4-1',
-        agentName: 'GPT-4',
+        agentId: 'chatgpt-1',
+        agentName: 'ChatGPT',
         position: 'Test position',
         reasoning: 'Test reasoning',
         confidence: 0.9,
@@ -173,7 +173,7 @@ describe('Zod Schemas', () => {
       const config = {
         topic: 'Should AI be regulated?',
         mode: 'collaborative',
-        agents: ['claude-1', 'gpt4-1'],
+        agents: ['claude-1', 'chatgpt-1'],
       };
 
       const result = DebateConfigSchema.safeParse(config);
@@ -223,7 +223,7 @@ describe('Zod Schemas', () => {
         id: 'session-123',
         topic: 'Test topic',
         mode: 'collaborative',
-        agentIds: ['claude-1', 'gpt4-1'],
+        agentIds: ['claude-1', 'chatgpt-1'],
         status: 'active',
         currentRound: 1,
         totalRounds: 3,
@@ -305,7 +305,7 @@ describe('Zod Schemas', () => {
       const input = {
         topic: 'AI Ethics',
         mode: 'adversarial',
-        agents: ['claude-1', 'gpt4-1'],
+        agents: ['claude-1', 'chatgpt-1'],
         rounds: 5,
       };
 

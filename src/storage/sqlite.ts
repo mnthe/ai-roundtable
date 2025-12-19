@@ -5,6 +5,7 @@
 
 import initSqlJs from 'sql.js';
 import type { SqlJsStatic, Database as SqlJsDatabase } from 'sql.js';
+import { createLogger } from '../utils/logger.js';
 import type {
   Session,
   AgentResponse,
@@ -14,8 +15,22 @@ import type {
   ToolCallRecord,
 } from '../types/index.js';
 
+const logger = createLogger('SQLiteStorage');
+
 export interface SQLiteStorageOptions {
   filename?: string; // Use ':memory:' for in-memory database (default)
+}
+
+/**
+ * Session filter options for search
+ */
+export interface SessionFilter {
+  topic?: string;           // Search by topic keyword
+  mode?: DebateMode;        // Filter by debate mode
+  status?: SessionStatus;   // Filter by session status
+  fromDate?: Date;          // Filter sessions created after this date
+  toDate?: Date;            // Filter sessions created before this date
+  limit?: number;           // Maximum number of results
 }
 
 export interface StoredSession {
@@ -131,6 +146,16 @@ export class SQLiteStorage {
     await this.ensureInitialized();
     const db = this.getDb();
 
+    logger.debug(
+      {
+        sessionId: session.id,
+        topic: session.topic,
+        mode: session.mode,
+        agentCount: session.agentIds.length,
+      },
+      'Creating session in database'
+    );
+
     db.run(
       `INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -146,6 +171,8 @@ export class SQLiteStorage {
         session.updatedAt.getTime(),
       ]
     );
+
+    logger.debug({ sessionId: session.id }, 'Session created successfully');
   }
 
   /**
@@ -175,6 +202,11 @@ export class SQLiteStorage {
   async updateSession(sessionId: string, updates: Partial<Session>): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
+
+    logger.debug(
+      { sessionId, updates: Object.keys(updates) },
+      'Updating session in database'
+    );
 
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -210,6 +242,7 @@ export class SQLiteStorage {
 
     if (fields.length === 1) {
       // Only updated_at field, nothing else to update
+      logger.debug({ sessionId }, 'No fields to update');
       return;
     }
 
@@ -217,6 +250,8 @@ export class SQLiteStorage {
 
     const sql = `UPDATE sessions SET ${fields.join(', ')} WHERE id = ?`;
     db.run(sql, values as (string | number | null)[]);
+
+    logger.debug({ sessionId }, 'Session updated successfully');
   }
 
   /**
@@ -232,14 +267,59 @@ export class SQLiteStorage {
   }
 
   /**
-   * List all sessions
+   * Session filter options for search
    */
-  async listSessions(): Promise<Session[]> {
+  /**
+   * List sessions with optional filters
+   */
+  async listSessions(filters?: SessionFilter): Promise<Session[]> {
     await this.ensureInitialized();
     const db = this.getDb();
 
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+
+    if (filters?.topic) {
+      conditions.push('topic LIKE ?');
+      params.push(`%${filters.topic}%`);
+    }
+
+    if (filters?.mode) {
+      conditions.push('mode = ?');
+      params.push(filters.mode);
+    }
+
+    if (filters?.status) {
+      conditions.push('status = ?');
+      params.push(filters.status);
+    }
+
+    if (filters?.fromDate) {
+      conditions.push('created_at >= ?');
+      params.push(filters.fromDate.getTime());
+    }
+
+    if (filters?.toDate) {
+      conditions.push('created_at <= ?');
+      params.push(filters.toDate.getTime());
+    }
+
+    let sql = 'SELECT * FROM sessions';
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+    sql += ' ORDER BY created_at DESC';
+
+    if (filters?.limit) {
+      sql += ' LIMIT ?';
+      params.push(filters.limit);
+    }
+
     const results: Session[] = [];
-    const stmt = db.prepare('SELECT * FROM sessions ORDER BY created_at DESC');
+    const stmt = db.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(params);
+    }
 
     while (stmt.step()) {
       const row = stmt.getAsObject() as unknown as StoredSession;
@@ -256,6 +336,16 @@ export class SQLiteStorage {
   async addResponse(sessionId: string, response: AgentResponse): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
+
+    logger.debug(
+      {
+        sessionId,
+        agentId: response.agentId,
+        agentName: response.agentName,
+        confidence: response.confidence,
+      },
+      'Adding response to database'
+    );
 
     // Use timestamp + random suffix to ensure uniqueness even for rapid calls
     const randomSuffix = Math.random().toString(36).substring(2, 8);
@@ -277,6 +367,8 @@ export class SQLiteStorage {
         response.timestamp.getTime(),
       ]
     );
+
+    logger.debug({ sessionId, responseId: id }, 'Response added successfully');
   }
 
   /**

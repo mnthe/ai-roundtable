@@ -59,8 +59,8 @@ describe('Type Definitions', () => {
 
     it('should accept response with citations', () => {
       const response: AgentResponse = {
-        agentId: 'gpt4-1',
-        agentName: 'GPT-4',
+        agentId: 'chatgpt-1',
+        agentName: 'ChatGPT',
         position: 'Renewable energy is the future',
         reasoning: 'According to recent studies...',
         confidence: 0.9,
@@ -84,7 +84,7 @@ describe('Type Definitions', () => {
       const config: DebateConfig = {
         topic: 'Should AI be regulated?',
         mode: 'collaborative',
-        agents: ['claude-1', 'gpt4-1'],
+        agents: ['claude-1', 'chatgpt-1'],
         rounds: 3,
       };
 
@@ -117,7 +117,7 @@ describe('Type Definitions', () => {
         id: 'session-123',
         topic: 'Climate change solutions',
         mode: 'collaborative',
-        agentIds: ['claude-1', 'gpt4-1'],
+        agentIds: ['claude-1', 'chatgpt-1'],
         status: 'active',
         currentRound: 1,
         totalRounds: 3,

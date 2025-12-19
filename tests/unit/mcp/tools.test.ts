@@ -19,6 +19,9 @@ import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
   GetConsensusInputSchema,
+  GetThoughtsInputSchema,
+  ExportSessionInputSchema,
+  ControlSessionInputSchema,
 } from '../../../src/types/schemas.js';
 
 describe('MCP Tools', () => {
@@ -87,6 +90,74 @@ describe('MCP Tools', () => {
       const result = GetConsensusInputSchema.safeParse(invalidInput);
       expect(result.success).toBe(false);
     });
+
+    it('should validate get_thoughts input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        agentId: 'test-agent-id',
+      };
+
+      const result = GetThoughtsInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject get_thoughts without required fields', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+      };
+
+      const result = GetThoughtsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate export_session input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        format: 'markdown' as const,
+      };
+
+      const result = ExportSessionInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should apply defaults for export_session', () => {
+      const input = {
+        sessionId: 'test-session-id',
+      };
+
+      const result = ExportSessionInputSchema.parse(input);
+      expect(result.format).toBe('markdown');
+    });
+
+    it('should reject export_session with invalid format', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        format: 'invalid',
+      };
+
+      const result = ExportSessionInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate control_session input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        action: 'pause' as const,
+      };
+
+      const result = ControlSessionInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject control_session with invalid action', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        action: 'invalid',
+      };
+
+      const result = ControlSessionInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('Tool Definitions', () => {
@@ -98,7 +169,10 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('get_consensus');
       expect(toolNames).toContain('get_agents');
       expect(toolNames).toContain('list_sessions');
-      expect(tools.length).toBe(5);
+      expect(toolNames).toContain('get_thoughts');
+      expect(toolNames).toContain('export_session');
+      expect(toolNames).toContain('control_session');
+      expect(tools.length).toBe(8);
     });
 
     it('should have proper schemas for each tool', () => {
@@ -127,6 +201,17 @@ describe('MCP Tools', () => {
 
       const consensusTool = tools.find((t) => t.name === 'get_consensus');
       expect(consensusTool?.inputSchema.required).toContain('sessionId');
+
+      const thoughtsTool = tools.find((t) => t.name === 'get_thoughts');
+      expect(thoughtsTool?.inputSchema.required).toContain('sessionId');
+      expect(thoughtsTool?.inputSchema.required).toContain('agentId');
+
+      const exportTool = tools.find((t) => t.name === 'export_session');
+      expect(exportTool?.inputSchema.required).toContain('sessionId');
+
+      const controlTool = tools.find((t) => t.name === 'control_session');
+      expect(controlTool?.inputSchema.required).toContain('sessionId');
+      expect(controlTool?.inputSchema.required).toContain('action');
     });
   });
 
@@ -197,7 +282,7 @@ describe('MCP Tools', () => {
 
       const agent2Config: AgentConfig = {
         id: 'agent-2',
-        name: 'GPT-4',
+        name: 'ChatGPT',
         provider: 'openai',
         model: 'gpt-4',
       };
@@ -287,6 +372,153 @@ describe('MCP Tools', () => {
     it('should handle non-existent session gracefully', async () => {
       const session = await sessionManager.getSession('non-existent-session');
       expect(session).toBeNull();
+    });
+
+    it('should get thoughts for a specific agent', async () => {
+      const config = {
+        topic: 'Test topic',
+        mode: 'collaborative' as const,
+        agents: ['agent-1', 'agent-2'],
+        rounds: 3,
+      };
+
+      const session = await sessionManager.createSession(config);
+      const agents = agentRegistry.getAgents(['agent-1', 'agent-2']);
+      const results = await debateEngine.executeRounds(agents, session, 1);
+
+      // Save responses to storage
+      for (const result of results) {
+        for (const response of result.responses) {
+          await sessionManager.addResponse(session.id, response);
+        }
+      }
+
+      // Update session with responses
+      const responses = await sessionManager.getResponses(session.id);
+      expect(responses.length).toBeGreaterThan(0);
+
+      // Get thoughts for agent-1
+      const agentResponses = responses.filter((r) => r.agentId === 'agent-1');
+      expect(agentResponses.length).toBeGreaterThan(0);
+      expect(agentResponses[0]).toHaveProperty('position');
+      expect(agentResponses[0]).toHaveProperty('reasoning');
+      expect(agentResponses[0]).toHaveProperty('confidence');
+    });
+
+    it('should export session in JSON format', async () => {
+      const config = {
+        topic: 'Export test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1', 'agent-2'],
+        rounds: 2,
+      };
+
+      const session = await sessionManager.createSession(config);
+      const agents = agentRegistry.getAgents(['agent-1', 'agent-2']);
+      const results = await debateEngine.executeRounds(agents, session, 1);
+
+      // Save responses to storage
+      for (const result of results) {
+        for (const response of result.responses) {
+          await sessionManager.addResponse(session.id, response);
+        }
+      }
+
+      const responses = await sessionManager.getResponses(session.id);
+      expect(responses.length).toBeGreaterThan(0);
+
+      // Export would return structured JSON
+      const exportData = {
+        session: {
+          id: session.id,
+          topic: session.topic,
+          mode: session.mode,
+          status: session.status,
+        },
+        agents: session.agentIds.map((id) => agentRegistry.getAgent(id)?.getInfo()),
+        responses: responses,
+      };
+
+      expect(exportData.session.topic).toBe('Export test');
+      expect(exportData.agents).toHaveLength(2);
+      expect(exportData.responses.length).toBeGreaterThan(0);
+    });
+
+    it('should export session in markdown format', async () => {
+      const config = {
+        topic: 'Markdown export test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1'],
+        rounds: 1,
+      };
+
+      const session = await sessionManager.createSession(config);
+      const agents = agentRegistry.getAgents(['agent-1']);
+      await debateEngine.executeRounds(agents, session, 1);
+
+      // Markdown would include title, metadata, participants, responses
+      const markdownLines = [
+        `# Debate Session: ${session.topic}`,
+        '',
+        '## Session Information',
+        '',
+        `- **Session ID:** ${session.id}`,
+        `- **Mode:** ${session.mode}`,
+      ];
+
+      expect(markdownLines.join('\n')).toContain('Markdown export test');
+      expect(markdownLines.join('\n')).toContain('Session Information');
+    });
+
+    it('should control session state (pause)', async () => {
+      const config = {
+        topic: 'Control test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1'],
+        rounds: 3,
+      };
+
+      const session = await sessionManager.createSession(config);
+      expect(session.status).toBe('active');
+
+      // Pause the session
+      await sessionManager.updateSessionStatus(session.id, 'paused');
+      const pausedSession = await sessionManager.getSession(session.id);
+      expect(pausedSession?.status).toBe('paused');
+    });
+
+    it('should control session state (resume)', async () => {
+      const config = {
+        topic: 'Resume test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1'],
+        rounds: 3,
+      };
+
+      const session = await sessionManager.createSession(config);
+      await sessionManager.updateSessionStatus(session.id, 'paused');
+
+      // Resume the session
+      await sessionManager.updateSessionStatus(session.id, 'active');
+      const resumedSession = await sessionManager.getSession(session.id);
+      expect(resumedSession?.status).toBe('active');
+    });
+
+    it('should control session state (stop)', async () => {
+      const config = {
+        topic: 'Stop test',
+        mode: 'collaborative' as const,
+        agents: ['agent-1'],
+        rounds: 3,
+      };
+
+      const session = await sessionManager.createSession(config);
+      expect(session.status).toBe('active');
+
+      // Stop the session
+      await sessionManager.updateSessionStatus(session.id, 'completed');
+      const stoppedSession = await sessionManager.getSession(session.id);
+      expect(stoppedSession?.status).toBe('completed');
     });
   });
 });
