@@ -60,21 +60,3 @@ src/
 ├── types/        # 타입 정의
 └── index.ts      # 엔트리포인트
 ```
-
-## Implementation Status
-
-- [x] Step 1: Project Foundation
-- [x] Step 2: Core Types & Interfaces
-- [x] Step 3: Agent Abstraction Layer
-- [x] Step 4: Claude Agent
-- [x] Step 5: ChatGPT Agent
-- [x] Step 6: Common Tools
-- [x] Step 7: Web Search & Fact Check
-- [x] Step 8: Session Manager & Storage
-- [x] Step 9: Collaborative Mode
-- [x] Step 10: Debate Engine
-- [x] Step 11: MCP Server Integration
-- [x] Step 12: E2E Integration
-- [ ] Step 13: Additional Agents (Gemini, Perplexity)
-- [ ] Step 14: Additional Modes
-- [ ] Step 15: Documentation
