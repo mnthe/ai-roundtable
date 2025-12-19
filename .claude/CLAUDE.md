@@ -261,5 +261,4 @@ Agents undergo health checks on startup via `runHealthChecks()`:
 
 ## Known Issues / Future Improvements
 
-1. **Mode prompts**: `buildAgentPrompt()` is defined but not yet integrated into BaseAgent's prompt building.
-2. **Tool result caching**: Web search results are not cached between agents in the same round.
+1. **Tool result caching**: Web search results are not cached between agents in the same round.

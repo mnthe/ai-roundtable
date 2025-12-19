@@ -70,6 +70,77 @@ describe('BaseAgent', () => {
       agent.setToolkit(mockToolkit);
     });
   });
+
+  describe('buildSystemPrompt', () => {
+    it('should include modePrompt when provided in context', () => {
+      // Create a test agent that exposes buildSystemPrompt
+      class TestAgent extends MockAgent {
+        public testBuildSystemPrompt(context: DebateContext): string {
+          return this.buildSystemPrompt(context);
+        }
+      }
+
+      const agent = new TestAgent(defaultConfig);
+      const contextWithModePrompt: DebateContext = {
+        ...defaultContext,
+        modePrompt: 'Mode: Collaborative Discussion\n\nWork together to find common ground.',
+      };
+
+      const systemPrompt = agent.testBuildSystemPrompt(contextWithModePrompt);
+
+      expect(systemPrompt).toContain('Mode: Collaborative Discussion');
+      expect(systemPrompt).toContain('find common ground');
+    });
+
+    it('should not include modePrompt section when not provided', () => {
+      class TestAgent extends MockAgent {
+        public testBuildSystemPrompt(context: DebateContext): string {
+          return this.buildSystemPrompt(context);
+        }
+      }
+
+      const agent = new TestAgent(defaultConfig);
+      const systemPrompt = agent.testBuildSystemPrompt(defaultContext);
+
+      // Should contain base instructions but not mode-specific prompt
+      expect(systemPrompt).toContain('Should AI be regulated?');
+      expect(systemPrompt).toContain('collaborative');
+      expect(systemPrompt).not.toContain('Mode:');
+    });
+
+    it('should include topic and round information', () => {
+      class TestAgent extends MockAgent {
+        public testBuildSystemPrompt(context: DebateContext): string {
+          return this.buildSystemPrompt(context);
+        }
+      }
+
+      const agent = new TestAgent(defaultConfig);
+      const systemPrompt = agent.testBuildSystemPrompt(defaultContext);
+
+      expect(systemPrompt).toContain('Should AI be regulated?');
+      expect(systemPrompt).toContain('Round 1 of 3');
+      expect(systemPrompt).toContain('collaborative');
+    });
+
+    it('should include focus question when provided', () => {
+      class TestAgent extends MockAgent {
+        public testBuildSystemPrompt(context: DebateContext): string {
+          return this.buildSystemPrompt(context);
+        }
+      }
+
+      const agent = new TestAgent(defaultConfig);
+      const contextWithFocus: DebateContext = {
+        ...defaultContext,
+        focusQuestion: 'What about privacy implications?',
+      };
+
+      const systemPrompt = agent.testBuildSystemPrompt(contextWithFocus);
+
+      expect(systemPrompt).toContain('Focus question: What about privacy implications?');
+    });
+  });
 });
 
 describe('MockAgent', () => {

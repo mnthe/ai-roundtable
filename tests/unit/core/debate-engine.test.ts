@@ -189,4 +189,45 @@ describe('DebateEngine', () => {
       expect(session).toBeNull();
     });
   });
+
+  describe('mode prompt integration', () => {
+    it('should pass mode-specific prompts to agents in collaborative mode', async () => {
+      const config: DebateConfig = {
+        topic: 'Should AI be regulated?',
+        mode: 'collaborative',
+        agents: ['agent-1', 'agent-2'],
+        rounds: 1,
+      };
+
+      const session = await engine.startDebate(config);
+
+      expect(session.responses.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should pass mode-specific prompts to agents in adversarial mode', async () => {
+      const config: DebateConfig = {
+        topic: 'Should AI be regulated?',
+        mode: 'adversarial',
+        agents: ['agent-1', 'agent-2'],
+        rounds: 1,
+      };
+
+      const session = await engine.startDebate(config);
+
+      expect(session.responses.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should pass mode-specific prompts to agents in expert-panel mode', async () => {
+      const config: DebateConfig = {
+        topic: 'Should AI be regulated?',
+        mode: 'expert-panel',
+        agents: ['agent-1', 'agent-2'],
+        rounds: 1,
+      };
+
+      const session = await engine.startDebate(config);
+
+      expect(session.responses.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

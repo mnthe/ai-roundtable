@@ -36,6 +36,32 @@ describe('CollaborativeMode', () => {
       previousResponses: [],
     };
 
+    it('should set modePrompt in context passed to agents', async () => {
+      let capturedContext: DebateContext | undefined;
+
+      // Create a test agent that captures the context it receives
+      class TestAgent extends MockAgent {
+        async generateResponse(context: DebateContext): Promise<AgentResponse> {
+          capturedContext = context;
+          return super.generateResponse(context);
+        }
+      }
+
+      const agent = new TestAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+
+      await mode.executeRound([agent], defaultContext, mockToolkit);
+
+      expect(capturedContext).toBeDefined();
+      expect(capturedContext!.modePrompt).toBeDefined();
+      expect(capturedContext!.modePrompt).toContain('Collaborative');
+      expect(capturedContext!.modePrompt).toContain('common ground');
+    });
+
     it('should return empty array for no agents', async () => {
       const responses = await mode.executeRound([], defaultContext, mockToolkit);
       expect(responses).toEqual([]);
