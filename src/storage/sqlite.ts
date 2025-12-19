@@ -1,8 +1,10 @@
 /**
  * SQLite storage implementation for sessions and responses
+ * Uses sql.js (pure JavaScript/WebAssembly) for cross-platform compatibility
  */
 
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
+import type { SqlJsStatic, Database as SqlJsDatabase } from 'sql.js';
 import type {
   Session,
   AgentResponse,
@@ -13,8 +15,7 @@ import type {
 } from '../types/index.js';
 
 export interface SQLiteStorageOptions {
-  filename?: string; // Use ':memory:' for in-memory database
-  readonly?: boolean;
+  filename?: string; // Use ':memory:' for in-memory database (default)
 }
 
 export interface StoredSession {
@@ -42,25 +43,50 @@ export interface StoredResponse {
   timestamp: number; // Unix timestamp
 }
 
+// Global SQL.js instance (initialized once)
+let sqlJsInstance: SqlJsStatic | null = null;
+
+async function getSqlJs(): Promise<SqlJsStatic> {
+  if (!sqlJsInstance) {
+    sqlJsInstance = await initSqlJs();
+  }
+  return sqlJsInstance;
+}
+
 export class SQLiteStorage {
-  private db: Database.Database;
+  private db: SqlJsDatabase | null = null;
+  private initPromise: Promise<void> | null = null;
 
-  constructor(options: SQLiteStorageOptions = {}) {
-    const filename = options.filename || ':memory:';
-    const dbOptions: { readonly?: boolean; fileMustExist?: boolean } = {
-      fileMustExist: false,
-    };
-    if (options.readonly !== undefined) {
-      dbOptions.readonly = options.readonly;
-    }
-    this.db = new Database(filename, dbOptions);
+  constructor(_options: SQLiteStorageOptions = {}) {
+    // Initialize asynchronously
+    this.initPromise = this.initialize();
+  }
 
+  private async initialize(): Promise<void> {
+    const SQL = await getSqlJs();
+    this.db = new SQL.Database();
     this.initializeSchema();
   }
 
+  private async ensureInitialized(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+      this.initPromise = null;
+    }
+  }
+
+  private getDb(): SqlJsDatabase {
+    if (!this.db) {
+      throw new Error('Database not initialized. Call ensureInitialized() first.');
+    }
+    return this.db;
+  }
+
   private initializeSchema(): void {
+    const db = this.getDb();
+
     // Create sessions table
-    this.db.exec(`
+    db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         topic TEXT NOT NULL,
@@ -71,14 +97,14 @@ export class SQLiteStorage {
         total_rounds INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
-      CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at);
+      )
     `);
 
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at)`);
+
     // Create responses table
-    this.db.exec(`
+    db.run(`
       CREATE TABLE IF NOT EXISTS responses (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
@@ -91,45 +117,54 @@ export class SQLiteStorage {
         tool_calls TEXT,
         timestamp INTEGER NOT NULL,
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id);
-      CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON responses(timestamp);
+      )
     `);
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON responses(timestamp)`);
   }
 
   /**
    * Create a new session
    */
-  createSession(session: Session): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+  async createSession(session: Session): Promise<void> {
+    await this.ensureInitialized();
+    const db = this.getDb();
 
-    stmt.run(
-      session.id,
-      session.topic,
-      session.mode,
-      JSON.stringify(session.agentIds),
-      session.status,
-      session.currentRound,
-      session.totalRounds,
-      session.createdAt.getTime(),
-      session.updatedAt.getTime()
+    db.run(
+      `INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        session.id,
+        session.topic,
+        session.mode,
+        JSON.stringify(session.agentIds),
+        session.status,
+        session.currentRound,
+        session.totalRounds,
+        session.createdAt.getTime(),
+        session.updatedAt.getTime(),
+      ]
     );
   }
 
   /**
    * Get a session by ID
    */
-  getSession(sessionId: string): Session | null {
-    const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
-    const row = stmt.get(sessionId) as StoredSession | undefined;
+  async getSession(sessionId: string): Promise<Session | null> {
+    await this.ensureInitialized();
+    const db = this.getDb();
 
-    if (!row) {
+    const stmt = db.prepare('SELECT * FROM sessions WHERE id = ?');
+    stmt.bind([sessionId]);
+
+    if (!stmt.step()) {
+      stmt.free();
       return null;
     }
+
+    const row = stmt.getAsObject() as unknown as StoredSession;
+    stmt.free();
 
     return this.mapStoredSessionToSession(row);
   }
@@ -137,7 +172,10 @@ export class SQLiteStorage {
   /**
    * Update a session
    */
-  updateSession(sessionId: string, updates: Partial<Session>): void {
+  async updateSession(sessionId: string, updates: Partial<Session>): Promise<void> {
+    await this.ensureInitialized();
+    const db = this.getDb();
+
     const fields: string[] = [];
     const values: unknown[] = [];
 
@@ -178,75 +216,99 @@ export class SQLiteStorage {
     values.push(sessionId);
 
     const sql = `UPDATE sessions SET ${fields.join(', ')} WHERE id = ?`;
-    const stmt = this.db.prepare(sql);
-    stmt.run(...values);
+    db.run(sql, values as (string | number | null)[]);
   }
 
   /**
    * Delete a session and its responses
    */
-  deleteSession(sessionId: string): void {
-    const stmt = this.db.prepare('DELETE FROM sessions WHERE id = ?');
-    stmt.run(sessionId);
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.ensureInitialized();
+    const db = this.getDb();
+
+    // Delete responses first (manual cascade for sql.js)
+    db.run('DELETE FROM responses WHERE session_id = ?', [sessionId]);
+    db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
   }
 
   /**
    * List all sessions
    */
-  listSessions(): Session[] {
-    const stmt = this.db.prepare('SELECT * FROM sessions ORDER BY created_at DESC');
-    const rows = stmt.all() as StoredSession[];
+  async listSessions(): Promise<Session[]> {
+    await this.ensureInitialized();
+    const db = this.getDb();
 
-    return rows.map((row) => this.mapStoredSessionToSession(row));
+    const results: Session[] = [];
+    const stmt = db.prepare('SELECT * FROM sessions ORDER BY created_at DESC');
+
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as unknown as StoredSession;
+      results.push(await this.mapStoredSessionToSession(row));
+    }
+    stmt.free();
+
+    return results;
   }
 
   /**
    * Add a response to a session
    */
-  addResponse(sessionId: string, response: AgentResponse): void {
+  async addResponse(sessionId: string, response: AgentResponse): Promise<void> {
+    await this.ensureInitialized();
+    const db = this.getDb();
+
     // Use timestamp + random suffix to ensure uniqueness even for rapid calls
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     const id = `${sessionId}-${response.agentId}-${response.timestamp.getTime()}-${randomSuffix}`;
 
-    const stmt = this.db.prepare(`
-      INSERT INTO responses (id, session_id, agent_id, agent_name, position, reasoning, confidence, citations, tool_calls, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      id,
-      sessionId,
-      response.agentId,
-      response.agentName,
-      response.position,
-      response.reasoning,
-      response.confidence,
-      response.citations ? JSON.stringify(response.citations) : null,
-      response.toolCalls ? JSON.stringify(response.toolCalls) : null,
-      response.timestamp.getTime()
+    db.run(
+      `INSERT INTO responses (id, session_id, agent_id, agent_name, position, reasoning, confidence, citations, tool_calls, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        sessionId,
+        response.agentId,
+        response.agentName,
+        response.position,
+        response.reasoning,
+        response.confidence,
+        response.citations ? JSON.stringify(response.citations) : null,
+        response.toolCalls ? JSON.stringify(response.toolCalls) : null,
+        response.timestamp.getTime(),
+      ]
     );
   }
 
   /**
    * Get all responses for a session
    */
-  getResponses(sessionId: string): AgentResponse[] {
-    const stmt = this.db.prepare('SELECT * FROM responses WHERE session_id = ? ORDER BY timestamp ASC');
-    const rows = stmt.all(sessionId) as StoredResponse[];
+  async getResponses(sessionId: string): Promise<AgentResponse[]> {
+    await this.ensureInitialized();
+    const db = this.getDb();
 
-    return rows.map((row) => this.mapStoredResponseToAgentResponse(row));
+    const results: AgentResponse[] = [];
+    const stmt = db.prepare('SELECT * FROM responses WHERE session_id = ? ORDER BY timestamp ASC');
+    stmt.bind([sessionId]);
+
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as unknown as StoredResponse;
+      results.push(this.mapStoredResponseToAgentResponse(row));
+    }
+    stmt.free();
+
+    return results;
   }
 
   /**
    * Get responses for a specific round
    */
-  getResponsesForRound(sessionId: string, round: number): AgentResponse[] {
-    const session = this.getSession(sessionId);
+  async getResponsesForRound(sessionId: string, round: number): Promise<AgentResponse[]> {
+    const session = await this.getSession(sessionId);
     if (!session) {
       return [];
     }
 
-    const allResponses = this.getResponses(sessionId);
+    const allResponses = await this.getResponses(sessionId);
     const responsesPerRound = session.agentIds.length;
     const startIndex = (round - 1) * responsesPerRound;
     const endIndex = startIndex + responsesPerRound;
@@ -258,22 +320,26 @@ export class SQLiteStorage {
    * Close the database connection
    */
   close(): void {
-    this.db.close();
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
   }
 
   /**
    * Map stored session to Session type
    */
-  private mapStoredSessionToSession(stored: StoredSession): Session {
+  private async mapStoredSessionToSession(stored: StoredSession): Promise<Session> {
+    const responses = await this.getResponses(stored.id);
     return {
       id: stored.id,
       topic: stored.topic,
-      mode: stored.mode,
+      mode: stored.mode as DebateMode,
       agentIds: JSON.parse(stored.agent_ids) as string[],
-      status: stored.status,
+      status: stored.status as SessionStatus,
       currentRound: stored.current_round,
       totalRounds: stored.total_rounds,
-      responses: this.getResponses(stored.id),
+      responses,
       createdAt: new Date(stored.created_at),
       updatedAt: new Date(stored.updated_at),
     };

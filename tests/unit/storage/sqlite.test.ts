@@ -15,7 +15,7 @@ describe('SQLiteStorage', () => {
   });
 
   describe('session operations', () => {
-    it('should create a session', () => {
+    it('should create a session', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Should AI be regulated?',
@@ -29,9 +29,9 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
-      const retrieved = storage.getSession('session-1');
+      const retrieved = await storage.getSession('session-1');
       expect(retrieved).not.toBeNull();
       expect(retrieved?.id).toBe('session-1');
       expect(retrieved?.topic).toBe('Should AI be regulated?');
@@ -42,12 +42,12 @@ describe('SQLiteStorage', () => {
       expect(retrieved?.totalRounds).toBe(3);
     });
 
-    it('should return null for non-existent session', () => {
-      const retrieved = storage.getSession('non-existent');
+    it('should return null for non-existent session', async () => {
+      const retrieved = await storage.getSession('non-existent');
       expect(retrieved).toBeNull();
     });
 
-    it('should update a session', () => {
+    it('should update a session', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Original topic',
@@ -61,19 +61,19 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
-      storage.updateSession('session-1', {
+      await storage.updateSession('session-1', {
         status: 'completed',
         currentRound: 3,
       });
 
-      const retrieved = storage.getSession('session-1');
+      const retrieved = await storage.getSession('session-1');
       expect(retrieved?.status).toBe('completed');
       expect(retrieved?.currentRound).toBe(3);
     });
 
-    it('should update only specified fields', () => {
+    it('should update only specified fields', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Original topic',
@@ -87,19 +87,19 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
-      storage.updateSession('session-1', {
+      await storage.updateSession('session-1', {
         status: 'paused',
       });
 
-      const retrieved = storage.getSession('session-1');
+      const retrieved = await storage.getSession('session-1');
       expect(retrieved?.status).toBe('paused');
       expect(retrieved?.currentRound).toBe(1); // Should remain unchanged
       expect(retrieved?.topic).toBe('Original topic'); // Should remain unchanged
     });
 
-    it('should delete a session', () => {
+    it('should delete a session', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Test topic',
@@ -113,14 +113,14 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
-      expect(storage.getSession('session-1')).not.toBeNull();
+      await storage.createSession(session);
+      expect(await storage.getSession('session-1')).not.toBeNull();
 
-      storage.deleteSession('session-1');
-      expect(storage.getSession('session-1')).toBeNull();
+      await storage.deleteSession('session-1');
+      expect(await storage.getSession('session-1')).toBeNull();
     });
 
-    it('should list all sessions', () => {
+    it('should list all sessions', async () => {
       const session1: Session = {
         id: 'session-1',
         topic: 'Topic 1',
@@ -147,10 +147,10 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session1);
-      storage.createSession(session2);
+      await storage.createSession(session1);
+      await storage.createSession(session2);
 
-      const sessions = storage.listSessions();
+      const sessions = await storage.listSessions();
       expect(sessions).toHaveLength(2);
       // Should be ordered by created_at DESC
       expect(sessions[0]?.id).toBe('session-2');
@@ -172,11 +172,11 @@ describe('SQLiteStorage', () => {
       updatedAt: new Date(),
     };
 
-    beforeEach(() => {
-      storage.createSession(session);
+    beforeEach(async () => {
+      await storage.createSession(session);
     });
 
-    it('should add a response', () => {
+    it('should add a response', async () => {
       const response: AgentResponse = {
         agentId: 'agent-1',
         agentName: 'Agent One',
@@ -186,16 +186,16 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response);
 
-      const responses = storage.getResponses('session-1');
+      const responses = await storage.getResponses('session-1');
       expect(responses).toHaveLength(1);
       expect(responses[0]?.agentId).toBe('agent-1');
       expect(responses[0]?.position).toBe('Yes, AI should be regulated');
       expect(responses[0]?.confidence).toBe(0.85);
     });
 
-    it('should add a response with citations', () => {
+    it('should add a response with citations', async () => {
       const response: AgentResponse = {
         agentId: 'agent-1',
         agentName: 'Agent One',
@@ -212,14 +212,14 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response);
 
-      const responses = storage.getResponses('session-1');
+      const responses = await storage.getResponses('session-1');
       expect(responses[0]?.citations).toHaveLength(1);
       expect(responses[0]?.citations?.[0]?.title).toBe('AI Research Paper');
     });
 
-    it('should add a response with tool calls', () => {
+    it('should add a response with tool calls', async () => {
       const response: AgentResponse = {
         agentId: 'agent-1',
         agentName: 'Agent One',
@@ -237,14 +237,14 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response);
 
-      const responses = storage.getResponses('session-1');
+      const responses = await storage.getResponses('session-1');
       expect(responses[0]?.toolCalls).toHaveLength(1);
       expect(responses[0]?.toolCalls?.[0]?.toolName).toBe('search_web');
     });
 
-    it('should get all responses for a session', () => {
+    it('should get all responses for a session', async () => {
       const response1: AgentResponse = {
         agentId: 'agent-1',
         agentName: 'Agent One',
@@ -263,17 +263,17 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', response1);
-      storage.addResponse('session-1', response2);
+      await storage.addResponse('session-1', response1);
+      await storage.addResponse('session-1', response2);
 
-      const responses = storage.getResponses('session-1');
+      const responses = await storage.getResponses('session-1');
       expect(responses).toHaveLength(2);
       // Should be ordered by timestamp ASC
       expect(responses[0]?.agentId).toBe('agent-1');
       expect(responses[1]?.agentId).toBe('agent-2');
     });
 
-    it('should get responses for a specific round', () => {
+    it('should get responses for a specific round', async () => {
       // Round 1: 2 responses
       const round1Response1: AgentResponse = {
         agentId: 'agent-1',
@@ -312,35 +312,35 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', round1Response1);
-      storage.addResponse('session-1', round1Response2);
-      storage.addResponse('session-1', round2Response1);
-      storage.addResponse('session-1', round2Response2);
+      await storage.addResponse('session-1', round1Response1);
+      await storage.addResponse('session-1', round1Response2);
+      await storage.addResponse('session-1', round2Response1);
+      await storage.addResponse('session-1', round2Response2);
 
-      const round1Responses = storage.getResponsesForRound('session-1', 1);
+      const round1Responses = await storage.getResponsesForRound('session-1', 1);
       expect(round1Responses).toHaveLength(2);
       expect(round1Responses[0]?.position).toBe('Round 1 Position 1');
       expect(round1Responses[1]?.position).toBe('Round 1 Position 2');
 
-      const round2Responses = storage.getResponsesForRound('session-1', 2);
+      const round2Responses = await storage.getResponsesForRound('session-1', 2);
       expect(round2Responses).toHaveLength(2);
       expect(round2Responses[0]?.position).toBe('Round 2 Position 1');
       expect(round2Responses[1]?.position).toBe('Round 2 Position 2');
     });
 
-    it('should return empty array for non-existent session responses', () => {
-      const responses = storage.getResponses('non-existent');
+    it('should return empty array for non-existent session responses', async () => {
+      const responses = await storage.getResponses('non-existent');
       expect(responses).toEqual([]);
     });
 
-    it('should return empty array for non-existent session round', () => {
-      const responses = storage.getResponsesForRound('non-existent', 1);
+    it('should return empty array for non-existent session round', async () => {
+      const responses = await storage.getResponsesForRound('non-existent', 1);
       expect(responses).toEqual([]);
     });
   });
 
   describe('session with responses integration', () => {
-    it('should include responses when getting session', () => {
+    it('should include responses when getting session', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Test topic',
@@ -354,7 +354,7 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
       const response: AgentResponse = {
         agentId: 'agent-1',
@@ -365,14 +365,14 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response);
 
-      const retrieved = storage.getSession('session-1');
+      const retrieved = await storage.getSession('session-1');
       expect(retrieved?.responses).toHaveLength(1);
       expect(retrieved?.responses[0]?.agentId).toBe('agent-1');
     });
 
-    it('should delete responses when session is deleted', () => {
+    it('should delete responses when session is deleted', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Test topic',
@@ -386,7 +386,7 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
       const response: AgentResponse = {
         agentId: 'agent-1',
@@ -397,16 +397,16 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      storage.addResponse('session-1', response);
-      expect(storage.getResponses('session-1')).toHaveLength(1);
+      await storage.addResponse('session-1', response);
+      expect((await storage.getResponses('session-1')).length).toBe(1);
 
-      storage.deleteSession('session-1');
-      expect(storage.getResponses('session-1')).toHaveLength(0);
+      await storage.deleteSession('session-1');
+      expect((await storage.getResponses('session-1')).length).toBe(0);
     });
   });
 
   describe('data persistence', () => {
-    it('should preserve date types', () => {
+    it('should preserve date types', async () => {
       const createdAt = new Date('2024-01-01T00:00:00Z');
       const updatedAt = new Date('2024-01-02T00:00:00Z');
 
@@ -423,16 +423,16 @@ describe('SQLiteStorage', () => {
         updatedAt,
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
-      const retrieved = storage.getSession('session-1');
+      const retrieved = await storage.getSession('session-1');
       expect(retrieved?.createdAt).toBeInstanceOf(Date);
       expect(retrieved?.updatedAt).toBeInstanceOf(Date);
       expect(retrieved?.createdAt.getTime()).toBe(createdAt.getTime());
       expect(retrieved?.updatedAt.getTime()).toBe(updatedAt.getTime());
     });
 
-    it('should preserve response timestamps', () => {
+    it('should preserve response timestamps', async () => {
       const session: Session = {
         id: 'session-1',
         topic: 'Test topic',
@@ -446,7 +446,7 @@ describe('SQLiteStorage', () => {
         updatedAt: new Date(),
       };
 
-      storage.createSession(session);
+      await storage.createSession(session);
 
       const timestamp = new Date('2024-01-01T12:00:00Z');
       const response: AgentResponse = {
@@ -458,9 +458,9 @@ describe('SQLiteStorage', () => {
         timestamp,
       };
 
-      storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response);
 
-      const responses = storage.getResponses('session-1');
+      const responses = await storage.getResponses('session-1');
       expect(responses[0]?.timestamp).toBeInstanceOf(Date);
       expect(responses[0]?.timestamp.getTime()).toBe(timestamp.getTime());
     });

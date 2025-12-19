@@ -215,7 +215,7 @@ describe('MCP Tools', () => {
         rounds: 3,
       };
 
-      const session = sessionManager.createSession(config);
+      const session = await sessionManager.createSession(config);
       expect(session).toHaveProperty('id');
       expect(session.topic).toBe('Should AI be regulated?');
       expect(session.mode).toBe('collaborative');
@@ -240,7 +240,7 @@ describe('MCP Tools', () => {
       expect(agents[0]).toHaveProperty('model');
     });
 
-    it('should list sessions', () => {
+    it('should list sessions', async () => {
       const config = {
         topic: 'Test topic',
         mode: 'collaborative' as const,
@@ -248,8 +248,8 @@ describe('MCP Tools', () => {
         rounds: 3,
       };
 
-      sessionManager.createSession(config);
-      const sessions = sessionManager.listSessions();
+      await sessionManager.createSession(config);
+      const sessions = await sessionManager.listSessions();
 
       expect(sessions).toHaveLength(1);
       expect(sessions[0].topic).toBe('Test topic');
@@ -263,7 +263,7 @@ describe('MCP Tools', () => {
         rounds: 3,
       };
 
-      const session = sessionManager.createSession(config);
+      const session = await sessionManager.createSession(config);
       const agents = agentRegistry.getAgents(['agent-1', 'agent-2']);
       const results = await debateEngine.executeRounds(agents, session, 1);
 
@@ -284,8 +284,8 @@ describe('MCP Tools', () => {
       }).toThrow('not found');
     });
 
-    it('should handle non-existent session gracefully', () => {
-      const session = sessionManager.getSession('non-existent-session');
+    it('should handle non-existent session gracefully', async () => {
+      const session = await sessionManager.getSession('non-existent-session');
       expect(session).toBeNull();
     });
   });

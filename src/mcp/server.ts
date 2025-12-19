@@ -158,7 +158,7 @@ async function handleStartRoundtable(
     };
 
     // Create session
-    const session = sessionManager.createSession(config);
+    const session = await sessionManager.createSession(config);
 
     // Get agents
     const agents = agentRegistry.getAgents(agentIds);
@@ -167,15 +167,15 @@ async function handleStartRoundtable(
     const roundResults = await debateEngine.executeRounds(agents, session, 1);
 
     // Update session
-    sessionManager.updateSessionRound(session.id, 1);
+    await sessionManager.updateSessionRound(session.id, 1);
     for (const result of roundResults) {
       for (const response of result.responses) {
-        sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response);
       }
     }
 
     // Get updated session
-    const updatedSession = sessionManager.getSession(session.id);
+    const updatedSession = await sessionManager.getSession(session.id);
 
     return createSuccessResponse({
       sessionId: session.id,
@@ -205,7 +205,7 @@ async function handleContinueRoundtable(
     const input = ContinueRoundtableInputSchema.parse(args) as ContinueRoundtableInputType;
 
     // Get session
-    const session = sessionManager.getSession(input.sessionId);
+    const session = await sessionManager.getSession(input.sessionId);
     if (!session) {
       return createErrorResponse(`Session "${input.sessionId}" not found`);
     }
@@ -228,20 +228,20 @@ async function handleContinueRoundtable(
     );
 
     // Update session
-    sessionManager.updateSessionRound(session.id, session.currentRound + numRounds);
+    await sessionManager.updateSessionRound(session.id, session.currentRound + numRounds);
     for (const result of roundResults) {
       for (const response of result.responses) {
-        sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response);
       }
     }
 
     // Mark as completed if we've reached total rounds
     if (session.currentRound >= session.totalRounds) {
-      sessionManager.updateSessionStatus(session.id, 'completed');
+      await sessionManager.updateSessionStatus(session.id, 'completed');
     }
 
     // Get updated session
-    const updatedSession = sessionManager.getSession(session.id);
+    const updatedSession = await sessionManager.getSession(session.id);
 
     return createSuccessResponse({
       sessionId: session.id,
@@ -268,13 +268,13 @@ async function handleGetConsensus(
     const input = GetConsensusInputSchema.parse(args);
 
     // Get session
-    const session = sessionManager.getSession(input.sessionId);
+    const session = await sessionManager.getSession(input.sessionId);
     if (!session) {
       return createErrorResponse(`Session "${input.sessionId}" not found`);
     }
 
     // Get all responses
-    const responses = sessionManager.getResponses(input.sessionId);
+    const responses = await sessionManager.getResponses(input.sessionId);
     if (responses.length === 0) {
       return createErrorResponse('No responses found in this session');
     }
@@ -314,7 +314,7 @@ async function handleGetAgents(agentRegistry: AgentRegistry): Promise<ToolRespon
  */
 async function handleListSessions(sessionManager: SessionManager): Promise<ToolResponse> {
   try {
-    const sessions = sessionManager.listSessions();
+    const sessions = await sessionManager.listSessions();
 
     // Create summaries
     const summaries = sessions.map((session) => ({
