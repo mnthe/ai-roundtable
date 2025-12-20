@@ -13,6 +13,7 @@ import type {
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
+import { convertSDKError } from './utils/error-converter.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -23,6 +24,85 @@ import type {
 } from '../types/index.js';
 
 const logger = createLogger('PerplexityAgent');
+
+// ============================================
+// Perplexity Extended Response Type Guard
+// ============================================
+
+/**
+ * Perplexity-specific extended response fields
+ * These fields are not part of the standard OpenAI API response
+ */
+interface PerplexityExtendedResponse {
+  /** Deprecated citations field (array of URLs or citation objects) */
+  citations?: Array<string | { url: string; title?: string }>;
+  /** New search_results field (2025+) */
+  search_results?: Array<{ url: string; title?: string; date?: string }>;
+  /** Images found during search */
+  images?: Array<string | { url: string; description?: string }>;
+  /** Related questions suggested by Perplexity */
+  related_questions?: string[];
+}
+
+/**
+ * Type guard to check if a response has Perplexity extended fields
+ * Validates the structure of Perplexity-specific metadata
+ */
+function hasPerplexityExtensions(response: unknown): response is PerplexityExtendedResponse {
+  if (typeof response !== 'object' || response === null) {
+    return false;
+  }
+
+  const obj = response as Record<string, unknown>;
+
+  // Check citations field (deprecated format)
+  if (obj.citations !== undefined) {
+    if (!Array.isArray(obj.citations)) return false;
+    for (const citation of obj.citations) {
+      if (typeof citation !== 'string') {
+        if (typeof citation !== 'object' || citation === null) return false;
+        const citationObj = citation as Record<string, unknown>;
+        if (typeof citationObj.url !== 'string') return false;
+        if (citationObj.title !== undefined && typeof citationObj.title !== 'string') return false;
+      }
+    }
+  }
+
+  // Check search_results field (new format)
+  if (obj.search_results !== undefined) {
+    if (!Array.isArray(obj.search_results)) return false;
+    for (const result of obj.search_results) {
+      if (typeof result !== 'object' || result === null) return false;
+      const resultObj = result as Record<string, unknown>;
+      if (typeof resultObj.url !== 'string') return false;
+      if (resultObj.title !== undefined && typeof resultObj.title !== 'string') return false;
+      if (resultObj.date !== undefined && typeof resultObj.date !== 'string') return false;
+    }
+  }
+
+  // Check images field
+  if (obj.images !== undefined) {
+    if (!Array.isArray(obj.images)) return false;
+    for (const image of obj.images) {
+      if (typeof image !== 'string') {
+        if (typeof image !== 'object' || image === null) return false;
+        const imageObj = image as Record<string, unknown>;
+        if (typeof imageObj.url !== 'string') return false;
+        if (imageObj.description !== undefined && typeof imageObj.description !== 'string') return false;
+      }
+    }
+  }
+
+  // Check related_questions field
+  if (obj.related_questions !== undefined) {
+    if (!Array.isArray(obj.related_questions)) return false;
+    for (const question of obj.related_questions) {
+      if (typeof question !== 'string') return false;
+    }
+  }
+
+  return true;
+}
 
 /** Perplexity API error types that should be retried (uses OpenAI SDK) */
 const RETRYABLE_ERRORS = [
@@ -182,26 +262,8 @@ export class PerplexityAgent extends BaseAgent {
         });
 
         // Extract citations from search results
-        // Tool results are wrapped in { success: boolean, data: { results: [...] } }
-        if (
-          (functionName === 'search_web' || functionName === 'perplexity_search') &&
-          result &&
-          typeof result === 'object'
-        ) {
-          const toolResult = result as {
-            success?: boolean;
-            data?: { results?: Array<{ title: string; url: string; snippet?: string }> };
-          };
-          if (toolResult.success && toolResult.data?.results) {
-            for (const item of toolResult.data.results) {
-              citations.push({
-                title: item.title,
-                url: item.url,
-                snippet: item.snippet,
-              });
-            }
-          }
-        }
+        const extractedCitations = this.extractCitationsFromToolResult(functionName, result);
+        citations.push(...extractedCitations);
 
         const toolResultMessage: ChatCompletionToolMessageParam = {
           role: 'tool',
@@ -238,12 +300,23 @@ export class PerplexityAgent extends BaseAgent {
       citations.push(...perplexityMetadata.citations);
     }
 
-    // Parse the response
-    const parsed = this.parseResponse(rawText, context);
+    // Parse the response (Perplexity doesn't use submit_response tool)
+    const parsedResponse = this.parseResponse(rawText, context);
+    const parsed = {
+      position: parsedResponse.position || 'Unable to determine position',
+      reasoning: parsedResponse.reasoning || rawText || 'Unable to determine reasoning',
+      confidence: parsedResponse.confidence ?? 0.5,
+    };
 
-    // Validate response has content - use || to catch empty strings (not just null/undefined)
-    const position = parsed.position || 'Unable to determine position';
-    const reasoning = parsed.reasoning || rawText || 'Unable to determine reasoning';
+    // Build the final response with Perplexity-specific metadata
+    const result = this.buildAgentResponse({
+      parsed,
+      rawText,
+      citations,
+      toolCalls,
+      images: perplexityMetadata.images,
+      relatedQuestions: perplexityMetadata.relatedQuestions,
+    });
 
     const durationMs = Date.now() - startTime;
     logger.info(
@@ -255,26 +328,12 @@ export class PerplexityAgent extends BaseAgent {
         durationMs,
         toolCallCount: toolCalls.length,
         citationCount: citations.length,
-        confidence: parsed.confidence ?? 0.5,
+        confidence: parsed.confidence,
       },
       'Agent response generation completed'
     );
 
-    return {
-      agentId: this.id,
-      agentName: this.name,
-      position,
-      reasoning,
-      confidence: parsed.confidence ?? 0.5,
-      citations: citations.length > 0 ? citations : undefined,
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      images: perplexityMetadata.images.length > 0 ? perplexityMetadata.images : undefined,
-      relatedQuestions:
-        perplexityMetadata.relatedQuestions.length > 0
-          ? perplexityMetadata.relatedQuestions
-          : undefined,
-      timestamp: new Date(),
-    };
+    return result;
   }
 
   /**
@@ -364,18 +423,20 @@ export class PerplexityAgent extends BaseAgent {
     const images: ImageResult[] = [];
     const relatedQuestions: string[] = [];
 
-    // Perplexity may include extra metadata in response
-    // The exact format depends on the API version
-    const anyResponse = response as unknown as {
-      citations?: Array<string | { url: string; title?: string }>; // Deprecated, kept for backward compatibility
-      search_results?: Array<{ url: string; title?: string; date?: string }>; // New format (2025+)
-      images?: Array<string | { url: string; description?: string }>;
-      related_questions?: string[];
-    };
+    // Use type guard to safely validate Perplexity extended fields
+    if (!hasPerplexityExtensions(response)) {
+      logger.debug(
+        { responseId: response.id },
+        'Response does not have valid Perplexity extensions, returning empty metadata'
+      );
+      return { citations: [], images: [], relatedQuestions: [] };
+    }
+
+    const perplexityResponse = response;
 
     // Extract citations from search_results (new format, preferred)
-    if (anyResponse.search_results && Array.isArray(anyResponse.search_results)) {
-      for (const result of anyResponse.search_results) {
+    if (perplexityResponse.search_results) {
+      for (const result of perplexityResponse.search_results) {
         allCitations.push({
           title: result.title ?? this.extractDomainFromUrl(result.url),
           url: result.url,
@@ -384,8 +445,8 @@ export class PerplexityAgent extends BaseAgent {
       }
     }
     // Fallback to deprecated citations field for backward compatibility
-    else if (anyResponse.citations && Array.isArray(anyResponse.citations)) {
-      for (const citation of anyResponse.citations) {
+    else if (perplexityResponse.citations) {
+      for (const citation of perplexityResponse.citations) {
         if (typeof citation === 'string') {
           allCitations.push({
             title: this.extractDomainFromUrl(citation),
@@ -416,8 +477,8 @@ export class PerplexityAgent extends BaseAgent {
     }
 
     // Extract images
-    if (anyResponse.images && Array.isArray(anyResponse.images)) {
-      for (const image of anyResponse.images) {
+    if (perplexityResponse.images) {
+      for (const image of perplexityResponse.images) {
         if (typeof image === 'string') {
           images.push({ url: image });
         } else {
@@ -430,8 +491,8 @@ export class PerplexityAgent extends BaseAgent {
     }
 
     // Extract related questions
-    if (anyResponse.related_questions && Array.isArray(anyResponse.related_questions)) {
-      relatedQuestions.push(...anyResponse.related_questions);
+    if (perplexityResponse.related_questions) {
+      relatedQuestions.push(...perplexityResponse.related_questions);
     }
 
     return { citations, images, relatedQuestions };

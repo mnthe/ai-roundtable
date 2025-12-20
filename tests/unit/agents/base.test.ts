@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAgent } from '../../../src/agents/base.js';
-import type { AgentConfig, DebateContext, AgentResponse } from '../../../src/types/index.js';
+import type { AgentConfig, DebateContext, AgentResponse, Citation, ToolCallRecord } from '../../../src/types/index.js';
 
 describe('BaseAgent', () => {
   const defaultConfig: AgentConfig = {
@@ -416,5 +416,411 @@ Hope this helps!`;
 
     expect(result.position).toBe('Unable to determine position');
     expect(result.reasoning).toBe('Only reasoning provided');
+  });
+});
+
+describe('extractCitationsFromToolResult', () => {
+  const defaultConfig: AgentConfig = {
+    id: 'test-agent',
+    name: 'Test Agent',
+    provider: 'anthropic',
+    model: 'test-model',
+  };
+
+  // Expose protected method for testing
+  class TestableAgent extends MockAgent {
+    public testExtractCitationsFromToolResult(toolName: string, result: unknown): Citation[] {
+      return this.extractCitationsFromToolResult(toolName, result);
+    }
+  }
+
+  it('should extract citations from search_web tool result', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const result = {
+      success: true,
+      data: {
+        results: [
+          { title: 'Article 1', url: 'https://example.com/1', snippet: 'Snippet 1' },
+          { title: 'Article 2', url: 'https://example.com/2', snippet: 'Snippet 2' },
+        ],
+      },
+    };
+
+    const citations = agent.testExtractCitationsFromToolResult('search_web', result);
+
+    expect(citations).toHaveLength(2);
+    expect(citations[0]).toEqual({
+      title: 'Article 1',
+      url: 'https://example.com/1',
+      snippet: 'Snippet 1',
+    });
+    expect(citations[1]).toEqual({
+      title: 'Article 2',
+      url: 'https://example.com/2',
+      snippet: 'Snippet 2',
+    });
+  });
+
+  it('should extract citations from perplexity_search tool result', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const result = {
+      success: true,
+      data: {
+        citations: [
+          { title: 'Source 1', url: 'https://source.com/1', snippet: 'Info 1' },
+        ],
+      },
+    };
+
+    const citations = agent.testExtractCitationsFromToolResult('perplexity_search', result);
+
+    expect(citations).toHaveLength(1);
+    expect(citations[0]).toEqual({
+      title: 'Source 1',
+      url: 'https://source.com/1',
+      snippet: 'Info 1',
+    });
+  });
+
+  it('should return empty array when success is false', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const result = {
+      success: false,
+      data: {
+        results: [
+          { title: 'Article', url: 'https://example.com', snippet: 'Snippet' },
+        ],
+      },
+    };
+
+    const citations = agent.testExtractCitationsFromToolResult('search_web', result);
+
+    expect(citations).toHaveLength(0);
+  });
+
+  it('should return empty array for non-search tools', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const result = {
+      success: true,
+      data: {
+        results: [
+          { title: 'Article', url: 'https://example.com', snippet: 'Snippet' },
+        ],
+      },
+    };
+
+    const citations = agent.testExtractCitationsFromToolResult('other_tool', result);
+
+    expect(citations).toHaveLength(0);
+  });
+
+  it('should return empty array for null/undefined result', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    expect(agent.testExtractCitationsFromToolResult('search_web', null)).toHaveLength(0);
+    expect(agent.testExtractCitationsFromToolResult('search_web', undefined)).toHaveLength(0);
+  });
+
+  it('should return empty array when data is missing', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const result = { success: true };
+
+    const citations = agent.testExtractCitationsFromToolResult('search_web', result);
+
+    expect(citations).toHaveLength(0);
+  });
+});
+
+describe('extractResponseFromToolCallsOrText', () => {
+  const defaultConfig: AgentConfig = {
+    id: 'test-agent',
+    name: 'Test Agent',
+    provider: 'anthropic',
+    model: 'test-model',
+  };
+
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'Test Topic',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  // Expose protected method for testing
+  class TestableAgent extends MockAgent {
+    public testExtractResponseFromToolCallsOrText(
+      toolCalls: ToolCallRecord[],
+      rawText: string,
+      context: DebateContext
+    ) {
+      return this.extractResponseFromToolCallsOrText(toolCalls, rawText, context);
+    }
+  }
+
+  it('should extract response from submit_response tool call', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const toolCalls: ToolCallRecord[] = [
+      {
+        toolName: 'submit_response',
+        input: {},
+        output: {
+          success: true,
+          data: {
+            position: 'Tool position',
+            reasoning: 'Tool reasoning',
+            confidence: 0.9,
+          },
+        },
+        timestamp: new Date(),
+      },
+    ];
+
+    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, 'Raw text', defaultContext);
+
+    expect(result.position).toBe('Tool position');
+    expect(result.reasoning).toBe('Tool reasoning');
+    expect(result.confidence).toBe(0.9);
+  });
+
+  it('should fall back to text parsing when submit_response fails', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const toolCalls: ToolCallRecord[] = [
+      {
+        toolName: 'submit_response',
+        input: {},
+        output: {
+          success: false,
+          error: 'Validation failed',
+        },
+        timestamp: new Date(),
+      },
+    ];
+    const rawText = JSON.stringify({
+      position: 'Text position',
+      reasoning: 'Text reasoning',
+      confidence: 0.7,
+    });
+
+    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, rawText, defaultContext);
+
+    expect(result.position).toBe('Text position');
+    expect(result.reasoning).toBe('Text reasoning');
+    expect(result.confidence).toBe(0.7);
+  });
+
+  it('should fall back to text parsing when no submit_response tool call', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const toolCalls: ToolCallRecord[] = [
+      {
+        toolName: 'search_web',
+        input: { query: 'test' },
+        output: { success: true, data: { results: [] } },
+        timestamp: new Date(),
+      },
+    ];
+    const rawText = JSON.stringify({
+      position: 'Parsed position',
+      reasoning: 'Parsed reasoning',
+      confidence: 0.8,
+    });
+
+    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, rawText, defaultContext);
+
+    expect(result.position).toBe('Parsed position');
+    expect(result.reasoning).toBe('Parsed reasoning');
+    expect(result.confidence).toBe(0.8);
+  });
+
+  it('should clamp confidence to valid range', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const toolCalls: ToolCallRecord[] = [
+      {
+        toolName: 'submit_response',
+        input: {},
+        output: {
+          success: true,
+          data: {
+            position: 'Test',
+            reasoning: 'Test',
+            confidence: 1.5, // > 1
+          },
+        },
+        timestamp: new Date(),
+      },
+    ];
+
+    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, '', defaultContext);
+
+    expect(result.confidence).toBe(1);
+  });
+
+  it('should use default values when fields are missing', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const toolCalls: ToolCallRecord[] = [
+      {
+        toolName: 'submit_response',
+        input: {},
+        output: {
+          success: true,
+          data: {},
+        },
+        timestamp: new Date(),
+      },
+    ];
+
+    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, '', defaultContext);
+
+    expect(result.position).toBe('Unable to determine position');
+    expect(result.reasoning).toBe('Unable to determine reasoning');
+    expect(result.confidence).toBe(0.5);
+  });
+});
+
+describe('buildAgentResponse', () => {
+  const defaultConfig: AgentConfig = {
+    id: 'test-agent',
+    name: 'Test Agent',
+    provider: 'anthropic',
+    model: 'test-model',
+  };
+
+  // Expose protected method for testing
+  class TestableAgent extends MockAgent {
+    public testBuildAgentResponse(params: {
+      parsed: { position: string; reasoning: string; confidence: number };
+      rawText: string;
+      citations: Citation[];
+      toolCalls: ToolCallRecord[];
+      images?: { url: string; description?: string }[];
+      relatedQuestions?: string[];
+    }): AgentResponse {
+      return this.buildAgentResponse(params);
+    }
+  }
+
+  it('should build complete response with all fields', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const citations: Citation[] = [{ title: 'Test', url: 'https://test.com' }];
+    const toolCalls: ToolCallRecord[] = [
+      { toolName: 'search_web', input: {}, output: {}, timestamp: new Date() },
+    ];
+
+    const result = agent.testBuildAgentResponse({
+      parsed: {
+        position: 'My position',
+        reasoning: 'My reasoning',
+        confidence: 0.85,
+      },
+      rawText: 'Raw text content',
+      citations,
+      toolCalls,
+    });
+
+    expect(result.agentId).toBe('test-agent');
+    expect(result.agentName).toBe('Test Agent');
+    expect(result.position).toBe('My position');
+    expect(result.reasoning).toBe('My reasoning');
+    expect(result.confidence).toBe(0.85);
+    expect(result.citations).toEqual(citations);
+    expect(result.toolCalls).toEqual(toolCalls);
+    expect(result.timestamp).toBeInstanceOf(Date);
+  });
+
+  it('should omit empty citations and toolCalls arrays', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    const result = agent.testBuildAgentResponse({
+      parsed: {
+        position: 'Position',
+        reasoning: 'Reasoning',
+        confidence: 0.5,
+      },
+      rawText: '',
+      citations: [],
+      toolCalls: [],
+    });
+
+    expect(result.citations).toBeUndefined();
+    expect(result.toolCalls).toBeUndefined();
+  });
+
+  it('should include images and relatedQuestions for Perplexity', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const images = [{ url: 'https://image.com/1.jpg', description: 'Image 1' }];
+    const relatedQuestions = ['Question 1?', 'Question 2?'];
+
+    const result = agent.testBuildAgentResponse({
+      parsed: {
+        position: 'Position',
+        reasoning: 'Reasoning',
+        confidence: 0.7,
+      },
+      rawText: '',
+      citations: [],
+      toolCalls: [],
+      images,
+      relatedQuestions,
+    });
+
+    expect(result.images).toEqual(images);
+    expect(result.relatedQuestions).toEqual(relatedQuestions);
+  });
+
+  it('should omit empty images and relatedQuestions arrays', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    const result = agent.testBuildAgentResponse({
+      parsed: {
+        position: 'Position',
+        reasoning: 'Reasoning',
+        confidence: 0.5,
+      },
+      rawText: '',
+      citations: [],
+      toolCalls: [],
+      images: [],
+      relatedQuestions: [],
+    });
+
+    expect(result.images).toBeUndefined();
+    expect(result.relatedQuestions).toBeUndefined();
+  });
+
+  it('should use fallback values for empty position/reasoning', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    const result = agent.testBuildAgentResponse({
+      parsed: {
+        position: '',
+        reasoning: '',
+        confidence: 0.5,
+      },
+      rawText: 'Fallback raw text',
+      citations: [],
+      toolCalls: [],
+    });
+
+    expect(result.position).toBe('Unable to determine position');
+    expect(result.reasoning).toBe('Fallback raw text');
+  });
+
+  it('should use final fallback when both parsed and rawText are empty', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    const result = agent.testBuildAgentResponse({
+      parsed: {
+        position: '',
+        reasoning: '',
+        confidence: 0.5,
+      },
+      rawText: '',
+      citations: [],
+      toolCalls: [],
+    });
+
+    expect(result.position).toBe('Unable to determine position');
+    expect(result.reasoning).toBe('Unable to determine reasoning');
   });
 });

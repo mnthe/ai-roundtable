@@ -9,7 +9,54 @@ import type {
   DebateContext,
   AIProvider,
   SynthesisContext,
+  Citation,
+  ToolCallRecord,
+  ImageResult,
 } from '../types/index.js';
+
+/**
+ * Tool result structure that may contain citations
+ */
+interface ToolResultWithCitations {
+  success?: boolean;
+  data?: {
+    results?: Array<{ title: string; url: string; snippet?: string }>;
+    citations?: Array<{ title: string; url: string; snippet?: string }>;
+  };
+}
+
+/**
+ * submit_response tool output structure
+ */
+interface SubmitResponseOutput {
+  success?: boolean;
+  data?: {
+    position?: string;
+    reasoning?: string;
+    confidence?: number;
+  };
+}
+
+/**
+ * Parsed output from agent response
+ */
+interface ParsedAgentOutput {
+  position: string;
+  reasoning: string;
+  confidence: number;
+}
+
+/**
+ * Parameters for building an AgentResponse
+ */
+interface AgentResponseParams {
+  parsed: ParsedAgentOutput;
+  rawText: string;
+  citations: Citation[];
+  toolCalls: ToolCallRecord[];
+  images?: ImageResult[];
+  relatedQuestions?: string[];
+}
 
 /**
  * Tool definition that agents can use during debates
@@ -294,6 +341,120 @@ Please provide your response in the following JSON format:
       position: trimmedRaw.slice(0, 200) || 'Unable to determine position',
       reasoning: trimmedRaw || 'Unable to determine reasoning',
       confidence: 0.5,
+      timestamp: new Date(),
+    };
+  }
+
+  /**
+   * Extract citations from a tool result
+   *
+   * Handles two formats:
+   * - search_web: { success: boolean, data: { results: [...] } }
+   * - perplexity_search: { success: boolean, data: { citations: [...] } }
+   *
+   * @param toolName - Name of the tool that produced the result
+   * @param result - The raw tool result
+   * @returns Array of citations extracted from the result
+   */
+  protected extractCitationsFromToolResult(toolName: string, result: unknown): Citation[] {
+    const citations: Citation[] = [];
+
+    if (!result || typeof result !== 'object') {
+      return citations;
+    }
+
+    const toolResult = result as ToolResultWithCitations;
+
+    if (!toolResult.success || !toolResult.data) {
+      return citations;
+    }
+
+    // Handle search_web format
+    if (toolName === 'search_web' && toolResult.data.results) {
+      for (const item of toolResult.data.results) {
+        citations.push({
+          title: item.title,
+          url: item.url,
+          snippet: item.snippet,
+        });
+      }
+    }
+    // Handle perplexity_search format
+    else if (toolName === 'perplexity_search' && toolResult.data.citations) {
+      for (const item of toolResult.data.citations) {
+        citations.push({
+          title: item.title,
+          url: item.url,
+          snippet: item.snippet,
+        });
+      }
+    }
+
+    return citations;
+  }
+
+  /**
+   * Extract response data from tool calls or raw text
+   *
+   * First checks if submit_response tool was used successfully,
+   * then falls back to parsing the raw text.
+   *
+   * @param toolCalls - Array of tool calls made by the agent
+   * @param rawText - Raw text response from the agent
+   * @param context - Debate context for parsing
+   * @returns Parsed output with position, reasoning, and confidence
+   */
+  protected extractResponseFromToolCallsOrText(
+    toolCalls: ToolCallRecord[],
+    rawText: string,
+    context: DebateContext
+  ): ParsedAgentOutput {
+    const submitResponseCall = toolCalls.find((tc) => tc.toolName === 'submit_response');
+
+    if (submitResponseCall && submitResponseCall.output) {
+      const toolOutput = submitResponseCall.output as SubmitResponseOutput;
+
+      if (toolOutput.success && toolOutput.data) {
+        return {
+          position: toolOutput.data.position ?? 'Unable to determine position',
+          reasoning: toolOutput.data.reasoning ?? 'Unable to determine reasoning',
+          confidence: Math.min(1, Math.max(0, toolOutput.data.confidence ?? 0.5)),
+        };
+      }
+    }
+
+    // Fall back to parsing raw text
+    const parsed = this.parseResponse(rawText, context);
+    return {
+      position: parsed.position || 'Unable to determine position',
+      reasoning: parsed.reasoning || rawText || 'Unable to determine reasoning',
+      confidence: parsed.confidence ?? 0.5,
+    };
+  }
+
+  /**
+   * Build an AgentResponse from parsed data and metadata
+   *
+   * @param params - Parameters containing parsed data and metadata
+   * @returns Complete AgentResponse object
+   */
+  protected buildAgentResponse(params: AgentResponseParams): AgentResponse {
+    const { parsed, rawText, citations, toolCalls, images, relatedQuestions } = params;
+
+    // Validate response has content - use || to catch empty strings
+    const position = parsed.position || 'Unable to determine position';
+    const reasoning = parsed.reasoning || rawText || 'Unable to determine reasoning';
+
+    return {
+      agentId: this.id,
+      agentName: this.name,
+      position,
+      reasoning,
+      confidence: parsed.confidence,
+      citations: citations.length > 0 ? citations : undefined,
+      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+      images: images && images.length > 0 ? images : undefined,
+      relatedQuestions: relatedQuestions && relatedQuestions.length > 0 ? relatedQuestions : undefined,
       timestamp: new Date(),
     };
   }

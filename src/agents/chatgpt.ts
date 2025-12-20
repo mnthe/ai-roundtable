@@ -11,6 +11,7 @@ import type {
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
+import { convertSDKError } from './utils/error-converter.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -20,14 +21,6 @@ import type {
 } from '../types/index.js';
 
 const logger = createLogger('ChatGPTAgent');
-
-/** OpenAI SDK error types that should be retried */
-const RETRYABLE_ERRORS = [
-  'RateLimitError',
-  'APIConnectionError',
-  'InternalServerError',
-  'APIError', // 5xx errors
-];
 
 /**
  * Configuration options for ChatGPT Agent
@@ -78,103 +71,23 @@ export class ChatGPTAgent extends BaseAgent {
       'Starting agent response generation'
     );
 
-    const systemPrompt = this.buildSystemPrompt(context);
-    const userMessage = this.buildUserMessage(context);
+    try {
+      const systemPrompt = this.buildSystemPrompt(context);
+      const userMessage = this.buildUserMessage(context);
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ];
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ];
 
-    const toolCalls: ToolCallRecord[] = [];
-    const citations: Citation[] = [];
+      const toolCalls: ToolCallRecord[] = [];
+      const citations: Citation[] = [];
 
-    // Build tools if toolkit is available
-    const tools = this.toolkit ? this.buildOpenAITools() : undefined;
+      // Build tools if toolkit is available
+      const tools = this.toolkit ? this.buildOpenAITools() : undefined;
 
-    // Make the API call with retry logic
-    let response = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_completion_tokens: this.maxTokens,
-          messages,
-          tools,
-          temperature: this.temperature,
-        }),
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-    );
-
-    let choice = response.choices[0];
-
-    // Handle tool call loop
-    while (choice?.finish_reason === 'tool_calls' && choice.message.tool_calls) {
-      const assistantMessage = choice.message;
-      const currentToolCalls = choice.message.tool_calls; // Use choice.message directly for narrowing
-      messages.push(assistantMessage);
-
-      for (const toolCall of currentToolCalls ?? []) {
-        // Skip non-function tool calls (e.g., custom tool calls in v6+)
-        if (toolCall.type !== 'function') continue;
-
-        const functionName = toolCall.function.name;
-        const functionArgs = JSON.parse(toolCall.function.arguments);
-
-        const result = await this.executeTool(functionName, functionArgs);
-
-        toolCalls.push({
-          toolName: functionName,
-          input: functionArgs,
-          output: result,
-          timestamp: new Date(),
-        });
-
-        // Extract citations from search results
-        // search_web returns: { success: boolean, data: { results: SearchResult[] } }
-        // perplexity_search returns: { success: boolean, data: { answer: string, citations?: Citation[], ... } }
-        if (result && typeof result === 'object') {
-          const toolResult = result as {
-            success?: boolean;
-            data?: {
-              results?: Array<{ title: string; url: string; snippet?: string }>;
-              citations?: Array<{ title: string; url: string; snippet?: string }>;
-            };
-          };
-
-          if (toolResult.success && toolResult.data) {
-            // Handle search_web format
-            if (functionName === 'search_web' && toolResult.data.results) {
-              for (const item of toolResult.data.results) {
-                citations.push({
-                  title: item.title,
-                  url: item.url,
-                  snippet: item.snippet,
-                });
-              }
-            }
-            // Handle perplexity_search format
-            else if (functionName === 'perplexity_search' && toolResult.data.citations) {
-              for (const item of toolResult.data.citations) {
-                citations.push({
-                  title: item.title,
-                  url: item.url,
-                  snippet: item.snippet,
-                });
-              }
-            }
-          }
-        }
-
-        const toolResultMessage: ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        };
-        messages.push(toolResultMessage);
-      }
-
-      // Continue the conversation with tool results
-      response = await withRetry(
+      // Make the API call with retry logic
+      let response = await withRetry(
         () =>
           this.client.chat.completions.create({
             model: this.model,
@@ -183,74 +96,107 @@ export class ChatGPTAgent extends BaseAgent {
             tools,
             temperature: this.temperature,
           }),
-        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+        { maxRetries: 3 }
       );
 
-      choice = response.choices[0];
-    }
+      let choice = response.choices[0];
 
-    // Extract text from final response
-    const rawText = choice?.message?.content ?? '';
+      // Handle tool call loop
+      while (choice?.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+        const assistantMessage = choice.message;
+        const currentToolCalls = choice.message.tool_calls; // Use choice.message directly for narrowing
+        messages.push(assistantMessage);
 
-    // Check if agent used submit_response tool
-    const submitResponseCall = toolCalls.find((tc) => tc.toolName === 'submit_response');
-    let parsed: Partial<AgentResponse>;
+        for (const toolCall of currentToolCalls ?? []) {
+          // Skip non-function tool calls (e.g., custom tool calls in v6+)
+          if (toolCall.type !== 'function') continue;
 
-    if (submitResponseCall && submitResponseCall.output) {
-      // Extract from submit_response tool result
-      const toolOutput = submitResponseCall.output as {
-        success?: boolean;
-        data?: {
-          position?: string;
-          reasoning?: string;
-          confidence?: number;
-        };
-      };
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments);
 
-      if (toolOutput.success && toolOutput.data) {
-        parsed = {
-          position: toolOutput.data.position ?? 'Unable to determine position',
-          reasoning: toolOutput.data.reasoning ?? 'Unable to determine reasoning',
-          confidence: Math.min(1, Math.max(0, toolOutput.data.confidence ?? 0.5)),
-        };
-      } else {
-        // Tool call failed, fall back to parsing text
-        parsed = this.parseResponse(rawText, context);
+          const result = await this.executeTool(functionName, functionArgs);
+
+          toolCalls.push({
+            toolName: functionName,
+            input: functionArgs,
+            output: result,
+            timestamp: new Date(),
+          });
+
+          // Extract citations from search results
+          const extractedCitations = this.extractCitationsFromToolResult(functionName, result);
+          citations.push(...extractedCitations);
+
+          const toolResultMessage: ChatCompletionToolMessageParam = {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(result),
+          };
+          messages.push(toolResultMessage);
+        }
+
+        // Continue the conversation with tool results
+        response = await withRetry(
+          () =>
+            this.client.chat.completions.create({
+              model: this.model,
+              max_completion_tokens: this.maxTokens,
+              messages,
+              tools,
+              temperature: this.temperature,
+            }),
+          { maxRetries: 3 }
+        );
+
+        choice = response.choices[0];
       }
-    } else {
-      // No submit_response tool call, parse from text
-      parsed = this.parseResponse(rawText, context);
+
+      // Extract text from final response
+      const rawText = choice?.message?.content ?? '';
+
+      // Extract response from tool calls or text
+      const parsed = this.extractResponseFromToolCallsOrText(toolCalls, rawText, context);
+
+      // Build the final response
+      const result = this.buildAgentResponse({
+        parsed,
+        rawText,
+        citations,
+        toolCalls,
+      });
+
+      const durationMs = Date.now() - startTime;
+      logger.info(
+        {
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          durationMs,
+          toolCallCount: toolCalls.length,
+          citationCount: citations.length,
+          confidence: parsed.confidence,
+        },
+        'Agent response generation completed'
+      );
+
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      const convertedError = convertSDKError(error, 'openai');
+      logger.error(
+        {
+          err: convertedError,
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          duration,
+        },
+        'Failed to generate agent response'
+      );
+      throw convertedError;
     }
-
-    // Validate response has content - use || to catch empty strings (not just null/undefined)
-    const position = parsed.position || 'Unable to determine position';
-    const reasoning = parsed.reasoning || rawText || 'Unable to determine reasoning';
-
-    const durationMs = Date.now() - startTime;
-    logger.info(
-      {
-        sessionId: context.sessionId,
-        agentId: this.id,
-        agentName: this.name,
-        round: context.currentRound,
-        durationMs,
-        toolCallCount: toolCalls.length,
-        citationCount: citations.length,
-        confidence: parsed.confidence ?? 0.5,
-      },
-      'Agent response generation completed'
-    );
-
-    return {
-      agentId: this.id,
-      agentName: this.name,
-      position,
-      reasoning,
-      confidence: parsed.confidence ?? 0.5,
-      citations: citations.length > 0 ? citations : undefined,
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      timestamp: new Date(),
-    };
   }
 
   /**
@@ -261,21 +207,25 @@ export class ChatGPTAgent extends BaseAgent {
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
-    const response = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_completion_tokens: this.maxTokens,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-          temperature: this.temperature,
-        }),
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-    );
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_completion_tokens: this.maxTokens,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage },
+            ],
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3 }
+      );
 
-    return response.choices[0]?.message?.content ?? '';
+      return response.choices[0]?.message?.content ?? '';
+    } catch (error) {
+      throw convertSDKError(error, 'openai');
+    }
   }
 
   /**
@@ -285,24 +235,28 @@ export class ChatGPTAgent extends BaseAgent {
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
-    const response = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_completion_tokens: this.maxTokens,
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-            },
-            { role: 'user', content: prompt },
-          ],
-          temperature: this.temperature,
-        }),
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-    );
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_completion_tokens: this.maxTokens,
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+              },
+              { role: 'user', content: prompt },
+            ],
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3 }
+      );
 
-    return response.choices[0]?.message?.content ?? '';
+      return response.choices[0]?.message?.content ?? '';
+    } catch (error) {
+      throw convertSDKError(error, 'openai');
+    }
   }
 
   /**
@@ -317,13 +271,14 @@ export class ChatGPTAgent extends BaseAgent {
             max_completion_tokens: 10,
             messages: [{ role: 'user', content: 'test' }],
           }),
-        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+        { maxRetries: 3 }
       );
       return { healthy: true };
     } catch (error) {
+      const convertedError = convertSDKError(error, 'openai');
       return {
         healthy: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: convertedError.message,
       };
     }
   }
