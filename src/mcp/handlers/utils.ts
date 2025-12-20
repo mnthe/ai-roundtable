@@ -275,6 +275,7 @@ export function buildRoundtableResponse(
     return {
       agentId: r.agentId,
       agentName: r.agentName,
+      stance: r.stance,
       position: r.position,
       keyPoints,
       confidence: r.confidence,
