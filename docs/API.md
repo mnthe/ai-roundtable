@@ -399,8 +399,8 @@ class GeminiAgent extends BaseAgent {
 }
 
 interface GeminiAgentOptions {
-  apiKey?: string;              // Default: GOOGLE_API_KEY env
-  genAI?: GoogleGenerativeAI;   // Custom client (testing)
+  apiKey?: string;        // Default: GOOGLE_API_KEY env
+  client?: GoogleGenAI;   // Custom client (testing)
 }
 
 function createGeminiAgent(
