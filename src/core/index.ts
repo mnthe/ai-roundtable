@@ -5,8 +5,8 @@
 export { SessionManager } from './session-manager.js';
 export type { SessionManagerOptions } from './session-manager.js';
 
-export { DebateEngine } from './DebateEngine.js';
-export type { DebateEngineOptions } from './DebateEngine.js';
+export { DebateEngine } from './debate-engine.js';
+export type { DebateEngineOptions } from './debate-engine.js';
 
 export { ConsensusAnalyzer } from './consensus-analyzer.js';
 

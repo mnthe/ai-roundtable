@@ -6,7 +6,7 @@ import { jsonrepair } from 'jsonrepair';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createLogger } from '../utils/logger.js';
-import { DebateEngine } from '../core/DebateEngine.js';
+import { DebateEngine } from '../core/debate-engine.js';
 import { SessionManager } from '../core/session-manager.js';
 import { AIConsensusAnalyzer } from '../core/ai-consensus-analyzer.js';
 import { KeyPointsExtractor } from '../core/key-points-extractor.js';

@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { DebateEngine } from '../../src/core/DebateEngine.js';
+import { DebateEngine } from '../../src/core/debate-engine.js';
 import { SessionManager } from '../../src/core/session-manager.js';
 import { AgentRegistry } from '../../src/agents/registry.js';
 import { setupAgents } from '../../src/agents/setup.js';

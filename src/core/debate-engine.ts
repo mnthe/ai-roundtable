@@ -1,332 +1,266 @@
 /**
- * Debate Engine - Orchestrates multi-round debates between AI agents
+ * Debate Engine - Orchestrates multi-agent debates
  */
 
-import { createLogger } from '../utils/logger.js';
 import type {
-  DebateConfig,
   DebateContext,
-  Session,
   AgentResponse,
+  RoundResult,
+  ConsensusResult,
+  Session,
 } from '../types/index.js';
-import type { AgentToolkit } from '../agents/base.js';
-import type { AgentRegistry } from '../agents/registry.js';
-import type { ModeRegistry } from '../modes/registry.js';
-import type { ConsensusAnalyzer } from './consensus-analyzer.js';
+import type { BaseAgent, AgentToolkit } from '../agents/base.js';
+import type { DebateModeStrategy } from '../modes/base.js';
+import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
 
-const logger = createLogger('DebateEngine');
-
-/**
- * Session Manager interface
- *
- * The DebateEngine uses this interface to interact with session storage.
- * This will be implemented in Step 11 (Session Management).
- */
-export interface SessionManager {
-  createSession(config: DebateConfig): Promise<Session>;
-  getSession(sessionId: string): Promise<Session | null>;
-  updateSession(session: Session): Promise<void>;
-  addResponses(sessionId: string, responses: AgentResponse[]): Promise<void>;
-  incrementRound(sessionId: string): Promise<void>;
+export interface DebateEngineOptions {
+  toolkit?: AgentToolkit;
+  aiConsensusAnalyzer?: AIConsensusAnalyzer;
 }
 
 /**
- * Debate Engine
+ * DebateEngine
  *
- * Orchestrates debates by:
- * - Creating and managing debate sessions
- * - Executing rounds with appropriate mode strategies
- * - Collecting and storing agent responses
- * - Analyzing consensus
+ * Core engine that orchestrates debates between AI agents:
+ * - Manages rounds of debate
+ * - Coordinates agent responses
+ * - Applies debate mode strategies
+ * - Analyzes consensus (using AI when available, falling back to rule-based)
  */
 export class DebateEngine {
-  constructor(
-    private sessionManager: SessionManager,
-    private agentRegistry: AgentRegistry,
-    private modeRegistry: ModeRegistry,
-    private consensusAnalyzer: ConsensusAnalyzer,
-    private toolkit: AgentToolkit
-  ) {}
+  private toolkit: AgentToolkit;
+  private modeStrategies: Map<string, DebateModeStrategy> = new Map();
+  private aiConsensusAnalyzer?: AIConsensusAnalyzer;
 
-  /**
-   * Start a new debate
-   *
-   * Creates a session and runs the first round
-   *
-   * @param config - Debate configuration
-   * @returns Session with first round results
-   */
-  async startDebate(config: DebateConfig): Promise<Session> {
-    // Validate configuration
-    this.validateConfig(config);
-
-    // Create session
-    const session = await this.sessionManager.createSession(config);
-
-    // Execute first round
-    await this.executeRound(session);
-
-    // Return updated session
-    return (await this.sessionManager.getSession(session.id))!;
+  constructor(options: DebateEngineOptions = {}) {
+    // Toolkit must be provided as it's an interface
+    if (!options.toolkit) {
+      throw new Error('AgentToolkit must be provided');
+    }
+    this.toolkit = options.toolkit;
+    this.aiConsensusAnalyzer = options.aiConsensusAnalyzer;
   }
 
   /**
-   * Continue an existing debate for additional rounds
-   *
-   * @param sessionId - ID of the session to continue
-   * @param options - Optional parameters for continuation
-   * @returns Updated session
+   * Register a debate mode strategy
    */
-  async continueDebate(
-    sessionId: string,
-    options?: { rounds?: number; focusQuestion?: string }
-  ): Promise<Session> {
-    // Get existing session
-    const session = await this.sessionManager.getSession(sessionId);
-    if (!session) {
-      throw new Error(`Session "${sessionId}" not found`);
-    }
-
-    // Validate session can continue
-    if (session.status === 'completed') {
-      throw new Error('Cannot continue a completed debate');
-    }
-    if (session.status === 'error') {
-      throw new Error('Cannot continue a debate in error state');
-    }
-
-    // Determine how many rounds to run
-    const roundsToRun = options?.rounds ?? 1;
-
-    // Execute rounds
-    for (let i = 0; i < roundsToRun; i++) {
-      // Check if we've reached total rounds
-      if (session.currentRound >= session.totalRounds) {
-        session.status = 'completed';
-        await this.sessionManager.updateSession(session);
-        break;
-      }
-
-      // Update focus question if provided
-      if (options?.focusQuestion) {
-        // Focus question will be included in context during executeRound
-      }
-
-      await this.executeRound(session, options?.focusQuestion);
-
-      // Reload session to get updated state
-      const updatedSession = await this.sessionManager.getSession(sessionId);
-      if (!updatedSession) {
-        throw new Error('Session lost during continuation');
-      }
-      Object.assign(session, updatedSession);
-    }
-
-    return session;
+  registerMode(mode: string, strategy: DebateModeStrategy): void {
+    this.modeStrategies.set(mode, strategy);
   }
 
   /**
    * Execute a single debate round
    *
-   * @param session - Current session
-   * @param focusQuestion - Optional focus question for this round
+   * @param agents - Array of agents participating
+   * @param context - Current debate context
+   * @returns Round results with responses and consensus
    */
-  async executeRound(session: Session, focusQuestion?: string): Promise<void> {
-    const startTime = Date.now();
-    logger.info(
-      {
-        sessionId: session.id,
-        round: session.currentRound,
-        totalRounds: session.totalRounds,
-        mode: session.mode,
-        agentCount: session.agentIds.length,
-        focusQuestion,
-      },
-      'Starting debate round'
-    );
+  async executeRound(agents: BaseAgent[], context: DebateContext): Promise<RoundResult> {
+    // Get the appropriate mode strategy
+    const strategy = this.modeStrategies.get(context.mode);
+    if (!strategy) {
+      // Fall back to simple round-robin if no strategy found
+      const responses = await this.executeSimpleRound(agents, context);
+      const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
+      return {
+        roundNumber: context.currentRound,
+        responses,
+        consensus,
+      };
+    }
 
-    try {
-      // Get agents
-      const agents = this.agentRegistry.getAgents(session.agentIds);
-      logger.debug(
-        {
-          sessionId: session.id,
-          round: session.currentRound,
-          agents: agents.map((a) => ({ id: a.id, name: a.name, provider: a.provider })),
-        },
-        'Agents retrieved for round'
-      );
+    // Use the strategy to execute the round
+    const responses = await strategy.executeRound(agents, context, this.toolkit);
+    const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
 
-      // Get mode strategy
-      const mode = this.modeRegistry.getMode(session.mode);
+    return {
+      roundNumber: context.currentRound,
+      responses,
+      consensus,
+    };
+  }
 
-      // Build debate context
+  /**
+   * Execute multiple debate rounds
+   *
+   * @param agents - Array of agents participating
+   * @param session - Current session state
+   * @param numRounds - Number of rounds to execute
+   * @param focusQuestion - Optional focus question for the rounds
+   * @returns Array of round results
+   */
+  async executeRounds(
+    agents: BaseAgent[],
+    session: Session,
+    numRounds: number,
+    focusQuestion?: string
+  ): Promise<RoundResult[]> {
+    const results: RoundResult[] = [];
+    // Store the starting round to calculate correct round numbers
+    const startingRound = session.currentRound;
+
+    for (let i = 0; i < numRounds; i++) {
+      const currentRound = startingRound + i + 1;
       const context: DebateContext = {
         sessionId: session.id,
         topic: session.topic,
         mode: session.mode,
-        currentRound: session.currentRound,
+        currentRound,
         totalRounds: session.totalRounds,
-        previousResponses: this.getPreviousRoundResponses(session),
+        previousResponses: session.responses,
         focusQuestion,
       };
 
-      // Execute round with mode strategy
-      logger.debug(
-        { sessionId: session.id, round: session.currentRound, mode: session.mode },
-        'Executing round with mode strategy'
-      );
-      const responses = await mode.executeRound(agents, context, this.toolkit);
+      const result = await this.executeRound(agents, context);
+      results.push(result);
 
-      // Store responses
-      await this.sessionManager.addResponses(session.id, responses);
+      // Add responses to session for next round
+      session.responses.push(...result.responses);
+      session.currentRound = currentRound;
+    }
 
-      // Analyze consensus
-      const consensus = this.consensusAnalyzer.analyzeConsensus(responses);
+    return results;
+  }
 
-      // Update session with consensus
-      session.consensus = consensus;
-      session.responses.push(...responses);
+  /**
+   * Simple round-robin execution (fallback when no strategy)
+   */
+  private async executeSimpleRound(
+    agents: BaseAgent[],
+    context: DebateContext
+  ): Promise<AgentResponse[]> {
+    const responses: AgentResponse[] = [];
 
-      // Increment round
-      await this.sessionManager.incrementRound(session.id);
-      session.currentRound += 1;
-
-      // Check if debate is complete
-      if (session.currentRound >= session.totalRounds) {
-        session.status = 'completed';
-        logger.info({ sessionId: session.id }, 'Debate completed');
+    for (const agent of agents) {
+      try {
+        const response = await agent.generateResponse(context);
+        responses.push(response);
+      } catch (error) {
+        // Log error but continue with other agents
+        console.error(`Error from agent ${agent.id}:`, error);
       }
+    }
 
-      // Update session
-      await this.sessionManager.updateSession(session);
+    return responses;
+  }
 
-      const duration = Date.now() - startTime;
-      logger.info(
-        {
-          sessionId: session.id,
-          round: session.currentRound,
-          duration,
-          responseCount: responses.length,
-          agreementLevel: consensus.agreementLevel,
-        },
-        'Debate round completed'
-      );
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      logger.error(
-        {
-          err: error,
-          sessionId: session.id,
-          round: session.currentRound,
-          duration,
-        },
-        'Failed to execute debate round'
-      );
+  /**
+   * Analyze consensus with AI when available, falling back to rule-based
+   *
+   * @param responses - Agent responses to analyze
+   * @param topic - Debate topic for context
+   * @returns Consensus analysis result
+   */
+  async analyzeConsensusWithAI(
+    responses: AgentResponse[],
+    topic: string
+  ): Promise<ConsensusResult> {
+    // Try AI analysis first if available
+    if (this.aiConsensusAnalyzer) {
+      try {
+        return await this.aiConsensusAnalyzer.analyzeConsensus(responses, topic);
+      } catch (error) {
+        // Fall back to rule-based on error
+        console.warn('[DebateEngine] AI consensus analysis failed, falling back to rule-based:', error);
+      }
+    }
 
-      // Mark session as error
-      session.status = 'error';
-      await this.sessionManager.updateSession(session);
-      throw error;
+    // Fall back to rule-based analysis
+    return this.analyzeConsensus(responses);
+  }
+
+  /**
+   * Analyze consensus from agent responses (rule-based fallback)
+   *
+   * This is a simple implementation that looks for common themes
+   * Use analyzeConsensusWithAI for better semantic analysis
+   */
+  analyzeConsensus(responses: AgentResponse[]): ConsensusResult {
+    if (responses.length === 0) {
+      return {
+        agreementLevel: 0,
+        commonPoints: [],
+        disagreementPoints: [],
+        summary: 'No responses to analyze',
+      };
+    }
+
+    // Simple heuristic: check average confidence and position similarity
+    const avgConfidence = responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
+
+    // Extract common words from positions (very basic)
+    const positions = responses.map((r) => r.position.toLowerCase());
+    const commonWords = this.findCommonWords(positions);
+
+    // Check for agreement by comparing positions
+    const uniquePositions = new Set(positions);
+    const agreementLevel = 1 - (uniquePositions.size - 1) / responses.length;
+
+    return {
+      agreementLevel: Math.max(0, Math.min(1, agreementLevel)),
+      commonPoints: commonWords.slice(0, 5),
+      disagreementPoints: uniquePositions.size > 1 ? Array.from(uniquePositions) : [],
+      summary: this.generateConsensusSummary(responses, agreementLevel, avgConfidence),
+    };
+  }
+
+  /**
+   * Find common words across multiple strings
+   */
+  private findCommonWords(texts: string[]): string[] {
+    if (texts.length === 0) return [];
+
+    // Simple word frequency analysis
+    const wordCounts = new Map<string, number>();
+
+    for (const text of texts) {
+      const words = text.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      const uniqueWords = new Set(words);
+
+      for (const word of uniqueWords) {
+        wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+      }
+    }
+
+    // Find words that appear in multiple responses
+    const commonWords = Array.from(wordCounts.entries())
+      .filter(([_, count]) => count > 1)
+      .sort((a, b) => b[1] - a[1])
+      .map(([word]) => word);
+
+    return commonWords;
+  }
+
+  /**
+   * Generate a consensus summary
+   */
+  private generateConsensusSummary(
+    responses: AgentResponse[],
+    agreementLevel: number,
+    avgConfidence: number
+  ): string {
+    const agentCount = responses.length;
+
+    if (agreementLevel > 0.8) {
+      return `Strong consensus among ${agentCount} agents with ${Math.round(agreementLevel * 100)}% agreement (avg confidence: ${Math.round(avgConfidence * 100)}%)`;
+    } else if (agreementLevel > 0.5) {
+      return `Moderate agreement among ${agentCount} agents with ${Math.round(agreementLevel * 100)}% alignment (avg confidence: ${Math.round(avgConfidence * 100)}%)`;
+    } else {
+      return `Diverse perspectives from ${agentCount} agents with ${Math.round(agreementLevel * 100)}% agreement (avg confidence: ${Math.round(avgConfidence * 100)}%)`;
     }
   }
 
   /**
-   * Get responses from previous rounds only (not current round)
-   *
-   * @param session - Current session
-   * @returns Array of responses from completed rounds
+   * Get the current toolkit
    */
-  private getPreviousRoundResponses(session: Session): AgentResponse[] {
-    // Group responses by timestamp to identify rounds
-    // Since we add all responses from a round at once, responses from the same
-    // round will have very close timestamps
-
-    if (session.responses.length === 0) {
-      return [];
-    }
-
-    // Sort responses by timestamp
-    const sorted = [...session.responses].sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-    );
-
-    // Group by rounds (assuming responses within 1 second are from same round)
-    const rounds: AgentResponse[][] = [];
-    const firstResponse = sorted[0];
-    if (!firstResponse) {
-      return [];
-    }
-
-    let currentRound: AgentResponse[] = [firstResponse];
-
-    for (let i = 1; i < sorted.length; i++) {
-      const current = sorted[i];
-      const previous = sorted[i - 1];
-      if (!current || !previous) continue;
-
-      const timeDiff = current.timestamp.getTime() - previous.timestamp.getTime();
-      if (timeDiff < 1000) {
-        // Same round
-        currentRound.push(current);
-      } else {
-        // New round
-        rounds.push(currentRound);
-        currentRound = [current];
-      }
-    }
-    rounds.push(currentRound);
-
-    // Return all responses except the last round (which is the current round)
-    // Actually, since we're called BEFORE executing the round, all responses
-    // are from previous rounds
-    return session.responses;
+  getToolkit(): AgentToolkit {
+    return this.toolkit;
   }
 
   /**
-   * Validate debate configuration
-   *
-   * @param config - Configuration to validate
-   * @throws Error if configuration is invalid
+   * Set a new toolkit
    */
-  private validateConfig(config: DebateConfig): void {
-    if (!config.topic || config.topic.trim().length === 0) {
-      throw new Error('Debate topic is required');
-    }
-
-    if (!config.agents || config.agents.length === 0) {
-      throw new Error('At least one agent is required');
-    }
-
-    // Validate agents exist
-    for (const agentId of config.agents) {
-      if (!this.agentRegistry.hasAgent(agentId)) {
-        throw new Error(`Agent "${agentId}" not found in registry`);
-      }
-    }
-
-    // Validate mode exists
-    if (!this.modeRegistry.hasMode(config.mode)) {
-      throw new Error(
-        `Debate mode "${config.mode}" not found. ` +
-          `Available: ${this.modeRegistry.getAvailableModes().join(', ')}`
-      );
-    }
-
-    // Validate rounds
-    const rounds = config.rounds ?? 3;
-    if (rounds < 1 || rounds > 10) {
-      throw new Error('Debate rounds must be between 1 and 10');
-    }
-  }
-
-  /**
-   * Get the current session
-   *
-   * @param sessionId - Session ID
-   * @returns Session or null if not found
-   */
-  async getSession(sessionId: string): Promise<Session | null> {
-    return this.sessionManager.getSession(sessionId);
+  setToolkit(toolkit: AgentToolkit): void {
+    this.toolkit = toolkit;
   }
 }

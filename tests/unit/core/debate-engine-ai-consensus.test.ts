@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DebateEngine } from '../../../src/core/DebateEngine.js';
+import { DebateEngine } from '../../../src/core/debate-engine.js';
 import { AIConsensusAnalyzer } from '../../../src/core/ai-consensus-analyzer.js';
 import { AgentRegistry } from '../../../src/agents/registry.js';
 import { MockAgent } from '../../../src/agents/base.js';

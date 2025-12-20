@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SessionManager } from '../../../src/core/session-manager.js';
 import { AgentRegistry } from '../../../src/agents/registry.js';
-import { DebateEngine } from '../../../src/core/DebateEngine.js';
+import { DebateEngine } from '../../../src/core/debate-engine.js';
 import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
