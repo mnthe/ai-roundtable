@@ -48,3 +48,29 @@ export {
   createValidatorChain,
   type ResponseValidator,
 } from './validators/index.js';
+
+// Tool usage policy
+export {
+  getToolPolicy,
+  getExecutionPattern,
+  isSequentialMode,
+  isParallelMode,
+  getToolGuidanceForMode,
+  TOOL_USAGE_POLICIES,
+  MODE_EXECUTION_PATTERN,
+  SEQUENTIAL_MODE_TOOL_GUIDANCE,
+  type ExecutionPattern,
+  type ToolUsagePolicy,
+} from './tool-policy.js';
+
+// Context processors
+export {
+  AnonymizationProcessor,
+  StatisticsProcessor,
+  ProcessorChain,
+  createAnonymizationProcessor,
+  createStatisticsProcessor,
+  createProcessorChain,
+  type ContextProcessor,
+  type RoundStatistics,
+} from './processors/index.js';
