@@ -8,8 +8,8 @@
 import { jsonrepair } from 'jsonrepair';
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
+import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
-import { LIGHT_MODELS } from '../agents/setup.js';
 import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('KeyPointsExtractor');
@@ -173,7 +173,9 @@ export class KeyPointsExtractor {
         (a) => a.getInfo().provider === this.preferredProvider
       );
       if (preferred) {
-        this.lightAgent = this.createLightModelAgent(preferred);
+        this.lightAgent = createLightModelAgent(preferred, this.registry, {
+          idSuffix: 'keypoints',
+        });
         return this.lightAgent;
       }
     }
@@ -181,36 +183,13 @@ export class KeyPointsExtractor {
     // Use first available agent
     const firstAgent = activeAgents[0];
     if (firstAgent) {
-      this.lightAgent = this.createLightModelAgent(firstAgent);
+      this.lightAgent = createLightModelAgent(firstAgent, this.registry, {
+        idSuffix: 'keypoints',
+      });
       return this.lightAgent;
     }
 
     return null;
-  }
-
-  /**
-   * Create a variant of the agent using the light model
-   */
-  private createLightModelAgent(baseAgent: BaseAgent): BaseAgent {
-    const info = baseAgent.getInfo();
-    const lightModel = LIGHT_MODELS[info.provider];
-
-    // Get the factory from registry to create a new agent with light model
-    const factory = this.registry.getProviderFactory(info.provider);
-    if (!factory) {
-      // Fallback to base agent if factory not available
-      return baseAgent;
-    }
-
-    // Create new agent with light model config
-    const lightConfig = {
-      id: `${info.id}-light-keypoints`,
-      name: `${info.name} (Light)`,
-      provider: info.provider,
-      model: lightModel,
-    };
-
-    return factory(lightConfig);
   }
 
   /**

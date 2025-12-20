@@ -30,4 +30,9 @@ export {
   type ProviderAvailability,
   type SetupResult,
 } from './setup.js';
-export { convertSDKError, isRetryableError } from './utils/index.js';
+export {
+  convertSDKError,
+  isRetryableError,
+  createLightModelAgent,
+  type LightModelAgentOptions,
+} from './utils/index.js';

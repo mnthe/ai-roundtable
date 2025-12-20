@@ -9,8 +9,8 @@ import { jsonrepair } from 'jsonrepair';
 import { parse as parsePartialJson, Allow } from 'partial-json';
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
+import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
-import { LIGHT_MODELS } from '../agents/setup.js';
 import { ConsensusAnalyzer } from './consensus-analyzer.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -236,7 +236,11 @@ export class AIConsensusAnalyzer {
           { provider: this.preferredProvider, agentId: preferred.getInfo().id },
           'Using preferred provider for analysis'
         );
-        return { agent: this.createLightModelAgent(preferred), diagnostics: { ...diagnostics, available: true } };
+        const lightAgent = createLightModelAgent(preferred, this.registry, {
+          idSuffix: 'consensus',
+          maxTokens: 8192, // Higher limit for detailed analysis
+        });
+        return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
       }
       logger.debug(
         {
@@ -254,40 +258,14 @@ export class AIConsensusAnalyzer {
         { provider: firstAgent.getInfo().provider, agentId: firstAgent.getInfo().id },
         'Using first available agent for analysis'
       );
-      return { agent: this.createLightModelAgent(firstAgent), diagnostics: { ...diagnostics, available: true } };
+      const lightAgent = createLightModelAgent(firstAgent, this.registry, {
+        idSuffix: 'consensus',
+        maxTokens: 8192, // Higher limit for detailed analysis
+      });
+      return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
     }
 
     return { agent: null, diagnostics };
-  }
-
-  /**
-   * Create a variant of the agent using the light model
-   *
-   * Creates a new agent instance with the same provider but using the lightweight model
-   * defined in LIGHT_MODELS for cost-efficient consensus analysis.
-   */
-  private createLightModelAgent(baseAgent: BaseAgent): BaseAgent {
-    const info = baseAgent.getInfo();
-    const lightModel = LIGHT_MODELS[info.provider];
-
-    // Get the factory from registry to create a new agent with light model
-    const factory = this.registry.getProviderFactory(info.provider);
-    if (!factory) {
-      // Fallback to base agent if factory not available
-      return baseAgent;
-    }
-
-    // Create new agent with light model config
-    // Use higher maxTokens to avoid truncation in consensus analysis responses
-    const lightConfig = {
-      id: `${info.id}-light-consensus`,
-      name: `${info.name} (Light)`,
-      provider: info.provider,
-      model: lightModel,
-      maxTokens: 8192, // Higher limit for detailed analysis
-    };
-
-    return factory(lightConfig);
   }
 
   /**
