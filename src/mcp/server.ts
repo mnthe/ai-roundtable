@@ -1037,10 +1037,10 @@ async function handleExportSession(
         lines.push(`**Agreement Level:** ${(session.consensus.agreementLevel * 100).toFixed(1)}%`);
         lines.push('');
 
-        if (session.consensus.commonPoints.length > 0) {
-          lines.push('**Common Points:**');
+        if (session.consensus.commonGround.length > 0) {
+          lines.push('**Common Ground:**');
           lines.push('');
-          for (const point of session.consensus.commonPoints) {
+          for (const point of session.consensus.commonGround) {
             lines.push(`- ${point}`);
           }
           lines.push('');

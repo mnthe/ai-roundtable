@@ -143,7 +143,7 @@ export class AIConsensusAnalyzer {
       const response = responses[0]!;
       return {
         agreementLevel: 1,
-        commonPoints: [response.position],
+        commonGround: [response.position],
         disagreementPoints: [],
         summary: `Single response from ${response.agentName}`,
         clusters: [
@@ -404,7 +404,7 @@ export class AIConsensusAnalyzer {
 
     return {
       agreementLevel: extractedLevel ?? 0.5,
-      commonPoints: extractedLevel !== null ? [] : ['Unable to determine common points'],
+      commonGround: extractedLevel !== null ? [] : ['Unable to determine common ground'],
       disagreementPoints: [],
       // Use extracted summary or full raw response (not truncated)
       summary: extractedSummary || rawResponse || 'Analysis failed',
@@ -467,7 +467,7 @@ export class AIConsensusAnalyzer {
 
     return {
       agreementLevel: Math.max(0, Math.min(1, agreementLevel)),
-      commonPoints: this.extractStringArray(parsed.commonGround),
+      commonGround: this.extractStringArray(parsed.commonGround),
       disagreementPoints: this.extractStringArray(parsed.disagreementPoints),
       summary: String(parsed.summary || 'Partial analysis'),
       clusters: this.extractClusters(parsed.clusters),
@@ -596,7 +596,7 @@ export class AIConsensusAnalyzer {
 
     return {
       agreementLevel: Math.max(0, Math.min(1, Number(parsed.agreementLevel) || 0.5)),
-      commonPoints: Array.isArray(parsed.commonGround) ? parsed.commonGround : [],
+      commonGround: Array.isArray(parsed.commonGround) ? parsed.commonGround : [],
       disagreementPoints: Array.isArray(parsed.disagreementPoints)
         ? parsed.disagreementPoints
         : [],
@@ -655,7 +655,7 @@ export class AIConsensusAnalyzer {
 
     return {
       agreementLevel: result.agreementLevel,
-      commonPoints: result.commonPoints,
+      commonGround: result.commonGround,
       disagreementPoints: result.disagreementPoints,
       summary: result.summary,
       reasoning: reasoningParts.join('. '),
@@ -668,7 +668,7 @@ export class AIConsensusAnalyzer {
   private createEmptyResult(message: string): AIConsensusResult {
     return {
       agreementLevel: 0,
-      commonPoints: [],
+      commonGround: [],
       disagreementPoints: [],
       summary: message,
     };

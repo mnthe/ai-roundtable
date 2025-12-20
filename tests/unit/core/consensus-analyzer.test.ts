@@ -14,7 +14,7 @@ describe('ConsensusAnalyzer', () => {
       const result = analyzer.analyzeConsensus([]);
 
       expect(result.agreementLevel).toBe(0);
-      expect(result.commonPoints).toEqual([]);
+      expect(result.commonGround).toEqual([]);
       expect(result.disagreementPoints).toEqual([]);
       expect(result.summary).toContain('No responses');
     });
@@ -34,7 +34,7 @@ describe('ConsensusAnalyzer', () => {
       const result = analyzer.analyzeConsensus(responses);
 
       expect(result.agreementLevel).toBe(1);
-      expect(result.commonPoints).toContain('AI should be regulated');
+      expect(result.commonGround).toContain('AI should be regulated');
       expect(result.disagreementPoints).toEqual([]);
       expect(result.summary).toContain('Single response from Agent 1');
     });
@@ -121,9 +121,9 @@ describe('ConsensusAnalyzer', () => {
 
       const result = analyzer.analyzeConsensus(responses);
 
-      expect(result.commonPoints.length).toBeGreaterThan(0);
-      const commonPointsText = result.commonPoints.join(' ').toLowerCase();
-      expect(commonPointsText).toMatch(/climate|change|action/);
+      expect(result.commonGround.length).toBeGreaterThan(0);
+      const commonGroundText = result.commonGround.join(' ').toLowerCase();
+      expect(commonGroundText).toMatch(/climate|change|action/);
     });
 
     it('should recognize high agreement when agents have semantically similar positions', () => {
@@ -153,8 +153,8 @@ describe('ConsensusAnalyzer', () => {
       // Should show high agreement (> 0.7) since positions are semantically similar
       expect(result.agreementLevel).toBeGreaterThan(0.7);
 
-      // Should have common points identified
-      expect(result.commonPoints.length).toBeGreaterThan(0);
+      // Should have common ground identified
+      expect(result.commonGround.length).toBeGreaterThan(0);
 
       // Disagreement points should be empty or minimal (both have similar positions)
       // If there are disagreement points, they should be about confidence, not position

@@ -120,7 +120,7 @@ export interface RoundResult {
 
 export interface ConsensusResult {
   agreementLevel: number; // 0-1
-  commonPoints: string[];
+  commonGround: string[];
   disagreementPoints: string[];
   summary: string;
 }

@@ -130,7 +130,7 @@ Analysis of agreement/disagreement.
 ```typescript
 interface ConsensusResult {
   agreementLevel: number;     // 0.0-1.0
-  commonPoints: string[];     // Points of agreement
+  commonGround: string[];     // Points of agreement
   disagreementPoints: string[]; // Points of disagreement
   summary: string;            // Overall summary
 }
@@ -397,7 +397,7 @@ class GeminiAgent extends BaseAgent {
 }
 
 interface GeminiAgentOptions {
-  apiKey?: string;              // Default: GOOGLE_AI_API_KEY env
+  apiKey?: string;              // Default: GOOGLE_API_KEY env
   genAI?: GoogleGenerativeAI;   // Custom client (testing)
 }
 
@@ -917,7 +917,7 @@ await server.start();
 | -------------------- | ---------------------------- | ------------------------------------ |
 | `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
 | `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
-| `GOOGLE_AI_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
+| `GOOGLE_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
 | `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
 | `DATABASE_PATH`      | SQLite database path         | No (default: `./data/roundtable.db`) |
 

@@ -177,7 +177,7 @@ export class ConsensusAnalyzer {
     if (responses.length === 0) {
       return {
         agreementLevel: 0,
-        commonPoints: [],
+        commonGround: [],
         disagreementPoints: [],
         summary: 'No responses to analyze',
       };
@@ -187,7 +187,7 @@ export class ConsensusAnalyzer {
       const firstResponse = responses[0];
       return {
         agreementLevel: 1,
-        commonPoints: [firstResponse?.position ?? ''],
+        commonGround: [firstResponse?.position ?? ''],
         disagreementPoints: [],
         summary: `Single response from ${firstResponse?.agentName ?? 'unknown'}`,
       };
@@ -196,8 +196,8 @@ export class ConsensusAnalyzer {
     // Calculate agreement level
     const agreementLevel = this.calculateAgreementLevel(responses);
 
-    // Find common points
-    const commonPoints = this.findCommonPoints(responses);
+    // Find common ground
+    const commonGround = this.findCommonGround(responses);
 
     // Find disagreement points
     const disagreementPoints = this.findDisagreementPoints(responses);
@@ -206,13 +206,13 @@ export class ConsensusAnalyzer {
     const summary = this.generateSummary(
       responses,
       agreementLevel,
-      commonPoints,
+      commonGround,
       disagreementPoints
     );
 
     return {
       agreementLevel,
-      commonPoints,
+      commonGround,
       disagreementPoints,
       summary,
     };
@@ -271,13 +271,13 @@ export class ConsensusAnalyzer {
   }
 
   /**
-   * Find common points across responses
+   * Find common ground across responses
    *
    * @param responses - Agent responses
    * @returns Array of common themes/points
    */
-  private findCommonPoints(responses: AgentResponse[]): string[] {
-    const commonPoints: string[] = [];
+  private findCommonGround(responses: AgentResponse[]): string[] {
+    const commonGround: string[] = [];
 
     // Cluster positions by similarity
     const clusters = this.clusterPositionsBySimilarity(responses);
@@ -295,7 +295,7 @@ export class ConsensusAnalyzer {
       const commonKeywords = this.extractCommonKeywords(positions);
 
       if (commonKeywords.length > 0) {
-        commonPoints.push(`Common themes: ${commonKeywords.slice(0, 5).join(', ')}`);
+        commonGround.push(`Common themes: ${commonKeywords.slice(0, 5).join(', ')}`);
       }
 
       // Add a representative position from the cluster
@@ -307,7 +307,7 @@ export class ConsensusAnalyzer {
           ? representativeResponse.position.slice(0, 100) + '...'
           : representativeResponse.position;
 
-      commonPoints.push(
+      commonGround.push(
         `Consensus view (${largestCluster.length}/${responses.length} agents): ${positionSummary}`
       );
     } else {
@@ -316,17 +316,17 @@ export class ConsensusAnalyzer {
       const commonKeywords = this.extractCommonKeywords(positions);
 
       if (commonKeywords.length > 0) {
-        commonPoints.push(`Shared concepts: ${commonKeywords.slice(0, 5).join(', ')}`);
+        commonGround.push(`Shared concepts: ${commonKeywords.slice(0, 5).join(', ')}`);
       } else {
-        commonPoints.push('Multiple perspectives on the topic');
+        commonGround.push('Multiple perspectives on the topic');
       }
     }
 
-    // Add high-confidence points as additional common points
+    // Add high-confidence points as additional common ground
     const highConfidencePoints = this.extractHighConfidencePoints(responses);
-    commonPoints.push(...highConfidencePoints);
+    commonGround.push(...highConfidencePoints);
 
-    return commonPoints;
+    return commonGround;
   }
 
   /**
@@ -654,14 +654,14 @@ export class ConsensusAnalyzer {
    *
    * @param responses - Agent responses
    * @param agreementLevel - Calculated agreement level
-   * @param commonPoints - Common points found
+   * @param commonGround - Common ground found
    * @param disagreementPoints - Disagreement points found
    * @returns Summary string
    */
   private generateSummary(
     responses: AgentResponse[],
     agreementLevel: number,
-    commonPoints: string[],
+    commonGround: string[],
     disagreementPoints: string[]
   ): string {
     const agentNames = responses.map((r) => r.agentName).join(', ');
@@ -679,8 +679,8 @@ export class ConsensusAnalyzer {
       summary += `Diverse perspectives (${agreementPct}% agreement). `;
     }
 
-    if (commonPoints.length > 0) {
-      summary += `Key common points identified. `;
+    if (commonGround.length > 0) {
+      summary += `Key common ground identified. `;
     }
 
     if (disagreementPoints.length > 0) {

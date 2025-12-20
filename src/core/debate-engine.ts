@@ -179,7 +179,7 @@ export class DebateEngine {
     if (responses.length === 0) {
       return {
         agreementLevel: 0,
-        commonPoints: [],
+        commonGround: [],
         disagreementPoints: [],
         summary: 'No responses to analyze',
       };
@@ -198,7 +198,7 @@ export class DebateEngine {
 
     return {
       agreementLevel: Math.max(0, Math.min(1, agreementLevel)),
-      commonPoints: commonWords.slice(0, 5),
+      commonGround: commonWords.slice(0, 5),
       disagreementPoints: uniquePositions.size > 1 ? Array.from(uniquePositions) : [],
       summary: this.generateConsensusSummary(responses, agreementLevel, avgConfidence),
     };

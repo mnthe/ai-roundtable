@@ -533,7 +533,7 @@ describe('MCP Tools', () => {
       const consensus = debateEngine.analyzeConsensus(results[0].responses);
 
       expect(consensus).toHaveProperty('agreementLevel');
-      expect(consensus).toHaveProperty('commonPoints');
+      expect(consensus).toHaveProperty('commonGround');
       expect(consensus).toHaveProperty('disagreementPoints');
       expect(consensus).toHaveProperty('summary');
       expect(consensus.agreementLevel).toBeGreaterThanOrEqual(0);

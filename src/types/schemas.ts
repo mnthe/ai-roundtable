@@ -88,7 +88,7 @@ export const SessionStatusSchema = z.enum(['active', 'paused', 'completed', 'err
 
 export const ConsensusResultSchema = z.object({
   agreementLevel: z.number().min(0).max(1),
-  commonPoints: z.array(z.string()),
+  commonGround: z.array(z.string()),
   disagreementPoints: z.array(z.string()),
   summary: z.string(),
 });

@@ -241,7 +241,7 @@ describe('DebateEngine', () => {
       const result = engine.analyzeConsensus([]);
 
       expect(result.agreementLevel).toBe(0);
-      expect(result.commonPoints).toEqual([]);
+      expect(result.commonGround).toEqual([]);
       expect(result.disagreementPoints).toEqual([]);
       expect(result.summary).toBe('No responses to analyze');
     });
@@ -320,8 +320,8 @@ describe('DebateEngine', () => {
 
       const result = engine.analyzeConsensus(responses);
 
-      expect(result.commonPoints).toContain('safety');
-      expect(result.commonPoints).toContain('development');
+      expect(result.commonGround).toContain('safety');
+      expect(result.commonGround).toContain('development');
     });
 
     it('should generate summary with agent count', () => {

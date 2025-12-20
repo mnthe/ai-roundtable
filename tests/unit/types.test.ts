@@ -133,7 +133,7 @@ describe('Type Definitions', () => {
     it('should accept session with consensus', () => {
       const consensus: ConsensusResult = {
         agreementLevel: 0.75,
-        commonPoints: ['Point A', 'Point B'],
+        commonGround: ['Point A', 'Point B'],
         disagreementPoints: ['Point C'],
         summary: 'The agents largely agree on...',
       };

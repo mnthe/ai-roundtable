@@ -248,7 +248,7 @@ describe('Zod Schemas', () => {
         responses: [],
         consensus: {
           agreementLevel: 0.75,
-          commonPoints: ['Point A'],
+          commonGround: ['Point A'],
           disagreementPoints: ['Point B'],
           summary: 'Summary text',
         },
@@ -265,7 +265,7 @@ describe('Zod Schemas', () => {
     it('should validate valid consensus', () => {
       const consensus = {
         agreementLevel: 0.8,
-        commonPoints: ['Point 1', 'Point 2'],
+        commonGround: ['Point 1', 'Point 2'],
         disagreementPoints: ['Point 3'],
         summary: 'The agents agree on most points.',
       };
@@ -277,7 +277,7 @@ describe('Zod Schemas', () => {
     it('should reject agreement level above 1', () => {
       const consensus = {
         agreementLevel: 1.5,
-        commonPoints: [],
+        commonGround: [],
         disagreementPoints: [],
         summary: 'Test',
       };

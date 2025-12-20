@@ -90,7 +90,7 @@ describe('AIConsensusAnalyzer', () => {
         const result = await analyzer.analyzeConsensus([], 'Test topic');
 
         expect(result.agreementLevel).toBe(0);
-        expect(result.commonPoints).toEqual([]);
+        expect(result.commonGround).toEqual([]);
         expect(result.disagreementPoints).toEqual([]);
         expect(result.summary).toBe('No responses to analyze');
       });
@@ -100,7 +100,7 @@ describe('AIConsensusAnalyzer', () => {
         const result = await analyzer.analyzeConsensus(responses, 'Test topic');
 
         expect(result.agreementLevel).toBe(1);
-        expect(result.commonPoints.length).toBeGreaterThan(0);
+        expect(result.commonGround.length).toBeGreaterThan(0);
         expect(result.disagreementPoints).toEqual([]);
         expect(result.clusters).toBeDefined();
         expect(result.clusters![0]!.theme).toBe('Single Position');
@@ -160,13 +160,13 @@ describe('AIConsensusAnalyzer', () => {
 
         // Must have base ConsensusResult fields
         expect(result).toHaveProperty('agreementLevel');
-        expect(result).toHaveProperty('commonPoints');
+        expect(result).toHaveProperty('commonGround');
         expect(result).toHaveProperty('disagreementPoints');
         expect(result).toHaveProperty('summary');
 
         // Types should be correct
         expect(typeof result.agreementLevel).toBe('number');
-        expect(Array.isArray(result.commonPoints)).toBe(true);
+        expect(Array.isArray(result.commonGround)).toBe(true);
         expect(Array.isArray(result.disagreementPoints)).toBe(true);
         expect(typeof result.summary).toBe('string');
       });
@@ -395,7 +395,7 @@ describe('JSON parsing strategies', () => {
       const result = methods.parsePartialJsonResponse(input, 'test');
 
       expect(result).not.toBeNull();
-      expect(result.commonPoints).toEqual(['Point A', 'Point B']);
+      expect(result.commonGround).toEqual(['Point A', 'Point B']);
     });
   });
 
@@ -450,7 +450,7 @@ describe('JSON parsing strategies', () => {
       const result = methods.parseRawAIResponse(input, 'test');
 
       expect(result.agreementLevel).toBe(0.85);
-      expect(result.commonPoints).toEqual(['Point 1', 'Point 2']);
+      expect(result.commonGround).toEqual(['Point 1', 'Point 2']);
       expect(result.summary).toBe('Test summary');
     });
 
@@ -487,7 +487,7 @@ describe('JSON parsing strategies', () => {
       const result = methods.parseRawAIResponse(input, 'test');
 
       expect(result.agreementLevel).toBe(0.5);
-      expect(result.commonPoints).toContain('Unable to determine common points');
+      expect(result.commonGround).toContain('Unable to determine common ground');
     });
   });
 });
@@ -496,7 +496,7 @@ describe('AIConsensusResult type', () => {
   it('should extend ConsensusResult with optional AI fields', () => {
     const result: AIConsensusResult = {
       agreementLevel: 0.75,
-      commonPoints: ['Point 1'],
+      commonGround: ['Point 1'],
       disagreementPoints: ['Diff 1'],
       summary: 'Test summary',
       // AI-specific optional fields
@@ -525,7 +525,7 @@ describe('AIConsensusResult type', () => {
   it('should be compatible with ConsensusResult interface', () => {
     const aiResult: AIConsensusResult = {
       agreementLevel: 0.5,
-      commonPoints: [],
+      commonGround: [],
       disagreementPoints: [],
       summary: 'Test',
     };

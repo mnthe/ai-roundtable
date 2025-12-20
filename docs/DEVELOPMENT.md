@@ -17,16 +17,16 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  └─────────────┘  └──────────────┘  └─────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │         Agents Layer              Modes Layer           │
-│  ┌──────────────────┐      ┌──────────────────────┐     │
-│  │  AgentRegistry   │      │    ModeRegistry      │     │
-│  │  ├─ Claude       │      │  ├─ Collaborative    │     │
-│  │  ├─ ChatGPT      │      │  ├─ Adversarial      │     │
-│  │  ├─ Gemini       │      │  ├─ Socratic         │     │
-│  │  └─ Perplexity   │      │  ├─ Expert Panel     │     │
-│  │                  │      │  ├─ Devil's Advocate │     │
-│  │                  │      │  ├─ Delphi           │     │
+│  ┌──────────────────┐      ┌───────────────────────┐    │
+│  │  AgentRegistry   │      │    ModeRegistry       │    │
+│  │  ├─ Claude       │      │  ├─ Collaborative     │    │
+│  │  ├─ ChatGPT      │      │  ├─ Adversarial       │    │
+│  │  ├─ Gemini       │      │  ├─ Socratic          │    │
+│  │  └─ Perplexity   │      │  ├─ Expert Panel      │    │
+│  │                  │      │  ├─ Devil's Advocate  │    │
+│  │                  │      │  ├─ Delphi            │    │
 │  │                  │      │  └─ Red Team/Blue Team│    │
-│  └──────────────────┘      └──────────────────────┘     │
+│  └──────────────────┘      └───────────────────────┘    │
 ├─────────────────────────────────────────────────────────┤
 │  Tools Layer                    Storage Layer           │
 │  ┌───────────────────┐      ┌──────────────────────┐    │
@@ -340,7 +340,7 @@ API keys must be set before running Inspector:
 # Option 1: Set environment variables directly
 export ANTHROPIC_API_KEY=sk-ant-...
 export OPENAI_API_KEY=sk-...
-export GOOGLE_AI_API_KEY=...
+export GOOGLE_API_KEY=...
 export PERPLEXITY_API_KEY=pplx-...
 
 pnpm build && npx -y @modelcontextprotocol/inspector node dist/index.js
@@ -357,7 +357,7 @@ The left panel shows all available tools:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ Tools                                                                │
+│ Tools                                                               │
 ├─────────────────────────────────────────────────────────────────────┤
 │ ▸ start_roundtable      - Start a new debate session                │
 │ ▸ continue_roundtable   - Continue existing debate                  │
@@ -576,7 +576,7 @@ For testing with Claude Code CLI, create a `.mcp.json` file in the project root:
         "ANTHROPIC_API_KEY": "your-anthropic-api-key",
         "OPENAI_API_KEY": "your-openai-api-key",
         "PERPLEXITY_API_KEY": "your-perplexity-api-key",
-        "GOOGLE_AI_API_KEY": "your-google-ai-api-key"
+        "GOOGLE_API_KEY": "your-google-ai-api-key"
       }
     }
   }

@@ -192,7 +192,7 @@ describe('DebateEngine with AI Consensus', () => {
 
       expect(result).toBeDefined();
       expect(typeof result.agreementLevel).toBe('number');
-      expect(Array.isArray(result.commonPoints)).toBe(true);
+      expect(Array.isArray(result.commonGround)).toBe(true);
       expect(Array.isArray(result.disagreementPoints)).toBe(true);
       expect(typeof result.summary).toBe('string');
     });
@@ -214,7 +214,7 @@ describe('DebateEngine with AI Consensus', () => {
       const result = await engine.analyzeConsensusWithAI([], 'Test Topic');
 
       expect(result.agreementLevel).toBe(0);
-      expect(result.commonPoints).toEqual([]);
+      expect(result.commonGround).toEqual([]);
       expect(result.disagreementPoints).toEqual([]);
       expect(result.summary).toBe('No responses to analyze');
     });
@@ -224,7 +224,7 @@ describe('DebateEngine with AI Consensus', () => {
       const result = await engine.analyzeConsensusWithAI(singleResponse, 'Test Topic');
 
       expect(result.agreementLevel).toBe(1);
-      expect(result.commonPoints.length).toBeGreaterThan(0);
+      expect(result.commonGround.length).toBeGreaterThan(0);
     });
   });
 
