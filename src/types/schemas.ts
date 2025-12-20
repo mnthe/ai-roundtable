@@ -275,10 +275,6 @@ export const StoredToolCallsArraySchema = z.array(
 // Type Inference Helpers
 // ============================================
 
-export type AgentConfigInput = z.input<typeof AgentConfigSchema>;
-export type AgentResponseInput = z.input<typeof AgentResponseSchema>;
-export type DebateConfigInput = z.input<typeof DebateConfigSchema>;
-export type SessionInput = z.input<typeof SessionSchema>;
 export type StartRoundtableInputType = z.infer<typeof StartRoundtableInputSchema>;
 export type ContinueRoundtableInputType = z.infer<typeof ContinueRoundtableInputSchema>;
 export type GetConsensusInputType = z.infer<typeof GetConsensusInputSchema>;
