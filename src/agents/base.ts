@@ -14,7 +14,7 @@ import type {
   ToolCallRecord,
   ImageResult,
 } from '../types/index.js';
-import type { AgentTool, AgentToolkit } from '../tools/types.js';
+import type { AgentToolkit } from '../tools/types.js';
 
 // Re-export toolkit types for backwards compatibility
 export type { AgentTool, AgentToolkit } from '../tools/types.js';
@@ -279,10 +279,16 @@ ${response.citations?.length ? `Sources: ${response.citations.map((c) => c.title
       }
     }
 
+    // Build JSON format instruction based on mode
+    const stanceInstruction =
+      context.mode === 'devils-advocate'
+        ? `  "stance": "YES" or "NO" or "NEUTRAL" (REQUIRED - must match your assigned role),\n`
+        : `  "stance": "YES" or "NO" or "NEUTRAL" (optional),\n`;
+
     parts.push(`
 Please provide your response in the following JSON format:
 {
-  "position": "Your clear position statement",
+${stanceInstruction}  "position": "Your clear position statement",
   "reasoning": "Your detailed reasoning and arguments",
   "confidence": 0.0 to 1.0
 }
@@ -303,6 +309,7 @@ Please provide your response in the following JSON format:
         // Use jsonrepair to fix common JSON issues (trailing commas, unquoted keys, etc.)
         const repairedJson = jsonrepair(jsonMatch[0]);
         const parsed = JSON.parse(repairedJson) as {
+          stance?: string;
           position?: string;
           reasoning?: string;
           confidence?: number;
@@ -311,10 +318,19 @@ Please provide your response in the following JSON format:
         // Only use parsed JSON if it has expected debate response fields
         // Otherwise fall through to preserve raw text (important for key points extraction)
         if ('position' in parsed || 'reasoning' in parsed) {
+          // Validate and normalize stance value
+          const validStances = ['YES', 'NO', 'NEUTRAL'];
+          const normalizedStance = parsed.stance?.toUpperCase();
+          const stance =
+            normalizedStance && validStances.includes(normalizedStance)
+              ? (normalizedStance as 'YES' | 'NO' | 'NEUTRAL')
+              : undefined;
+
           // Use || to catch empty strings (not just null/undefined)
           return {
             agentId: this.id,
             agentName: this.name,
+            stance,
             position: parsed.position || 'Unable to determine position',
             reasoning: parsed.reasoning || 'Unable to determine reasoning',
             confidence: Math.min(1, Math.max(0, parsed.confidence ?? 0.5)),

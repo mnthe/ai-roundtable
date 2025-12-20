@@ -5,7 +5,6 @@
 import type {
   AgentTool,
   AgentToolkit,
-  ToolExecutor,
   ToolDefinition,
 } from './types.js';
 import type {
@@ -17,7 +16,7 @@ import type {
 } from '../types/index.js';
 
 // Re-export types from types.ts for backwards compatibility
-export type { AgentTool, AgentToolkit, ToolExecutor, ToolDefinition } from './types.js';
+export type { AgentTool, AgentToolkit, ToolDefinition, ToolExecutor } from './types.js';
 
 /**
  * Interface for web search provider
