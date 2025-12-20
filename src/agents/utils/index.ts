@@ -3,3 +3,4 @@
  */
 
 export { convertSDKError, isRetryableError } from './error-converter.js';
+export { buildOpenAITools } from './tool-converters.js';

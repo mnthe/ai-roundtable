@@ -7,12 +7,12 @@
 import OpenAI from 'openai';
 import type {
   ChatCompletionMessageParam,
-  ChatCompletionTool,
   ChatCompletionToolMessageParam,
 } from 'openai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
+import { buildOpenAITools } from './utils/index.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -218,7 +218,7 @@ export class PerplexityAgent extends BaseAgent {
     const citations: Citation[] = [];
 
     // Build tools if toolkit is available (Perplexity supports function calling)
-    const tools = this.toolkit ? this.buildOpenAITools() : undefined;
+    const tools = buildOpenAITools(this.toolkit);
 
     // Make the API call with Perplexity-specific search options and retry logic
     // Note: Perplexity returns citations in the response when using online models
@@ -563,28 +563,6 @@ export class PerplexityAgent extends BaseAgent {
         }),
       { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
     );
-  }
-
-  /**
-   * Build OpenAI-format tool definitions from toolkit
-   */
-  private buildOpenAITools(): ChatCompletionTool[] {
-    if (!this.toolkit) {
-      return [];
-    }
-
-    return this.toolkit.getTools().map((tool) => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: {
-          type: 'object' as const,
-          properties: tool.parameters,
-          required: Object.keys(tool.parameters),
-        },
-      },
-    }));
   }
 
   /**
