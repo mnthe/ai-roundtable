@@ -5,7 +5,8 @@
  * Implements the 4-layer prompt structure used across all debate modes.
  */
 
-import type { DebateContext, AgentResponse } from '../../types/index.js';
+import type { DebateContext, AgentResponse, DebateMode } from '../../types/index.js';
+import { getToolGuidanceForMode, isSequentialMode } from '../tool-policy.js';
 
 /**
  * Configuration for the Role Anchor layer (Layer 1)
@@ -41,6 +42,8 @@ export interface BehavioralContractConfig {
   priorityHierarchy: string[];
   /** Failure mode description */
   failureMode: string;
+  /** Whether to include tool usage requirements (default: true) */
+  includeToolUsageRequirements?: boolean;
 }
 
 /**
@@ -73,6 +76,8 @@ export interface StructuralEnforcementConfig {
 export interface VerificationLoopConfig {
   /** Verification checklist items */
   checklistItems: string[];
+  /** Whether to include common tool usage verification checks (default: true) */
+  includeToolUsageChecks?: boolean;
 }
 
 /**
@@ -100,6 +105,64 @@ export interface ModePromptConfig {
   /** Focus question configuration */
   focusQuestion: FocusQuestionConfig;
 }
+
+/**
+ * Tool usage requirements for Layer 2 Behavioral Contract
+ * These are added automatically unless explicitly disabled.
+ */
+export const TOOL_USAGE_MUST_BEHAVIORS = [
+  'Use search_web or fact_check tool for ANY factual claim',
+  'Cite sources from tool results in your response',
+  'Verify statistics and recent events with tools before stating',
+] as const;
+
+export const TOOL_USAGE_MUST_NOT_BEHAVIORS = [
+  'Make factual claims without tool-based verification',
+  'State statistics or data without source citation',
+] as const;
+
+/**
+ * Common verification checks for Layer 4
+ * These include tool usage verification.
+ */
+export const COMMON_TOOL_VERIFICATION_CHECKS = [
+  'Did I use tools (search_web, fact_check) to verify factual claims?',
+  'Did I cite sources from tool results?',
+] as const;
+
+/**
+ * Mode-specific verification checks for Layer 4
+ */
+export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, readonly string[]>> = {
+  'devils-advocate': [
+    'Did I explicitly include my stance (YES/NO/NEUTRAL) in the response?',
+    'Does my reasoning support my assigned stance?',
+  ],
+  'expert-panel': [
+    'Did I analyze from my assigned perspective?',
+    'Did I acknowledge limitations and knowledge gaps?',
+  ],
+  collaborative: [
+    'Did I identify specific points of agreement with others?',
+    'Did I build on others\' ideas constructively?',
+  ],
+  adversarial: [
+    'Did I directly address and counter the previous arguments?',
+    'Did I avoid simply restating my position without engagement?',
+  ],
+  socratic: [
+    'Did I pose meaningful questions that deepen understanding?',
+    'Did I respond substantively to questions asked?',
+  ],
+  delphi: [
+    'Did I provide my independent assessment without bias from others?',
+    'Did I clearly state my confidence level?',
+  ],
+  'red-team-blue-team': [
+    'Did I stay true to my assigned team role (attack/defense)?',
+    'Did I provide concrete evidence for my position?',
+  ],
+} as const;
 
 /**
  * Separator line used in prompts
@@ -136,15 +199,32 @@ ${config.additionalContext}
 
 /**
  * Build the Behavioral Contract layer (Layer 2)
+ *
+ * @param config - Behavioral contract configuration
+ * @param mode - Optional debate mode for mode-aware tool guidance
  */
-export function buildBehavioralContract(config: BehavioralContractConfig): string {
-  const mustItems = config.mustBehaviors.map((b) => `□ ${b}`).join('\n');
-  const mustNotItems = config.mustNotBehaviors.map((b) => `✗ ${b}`).join('\n');
+export function buildBehavioralContract(
+  config: BehavioralContractConfig,
+  mode?: DebateMode
+): string {
+  // Combine mode-specific behaviors with tool usage requirements (unless disabled)
+  const includeToolUsage = config.includeToolUsageRequirements !== false;
+
+  const allMustBehaviors = includeToolUsage
+    ? [...config.mustBehaviors, ...TOOL_USAGE_MUST_BEHAVIORS]
+    : config.mustBehaviors;
+
+  const allMustNotBehaviors = includeToolUsage
+    ? [...config.mustNotBehaviors, ...TOOL_USAGE_MUST_NOT_BEHAVIORS]
+    : config.mustNotBehaviors;
+
+  const mustItems = allMustBehaviors.map((b) => `□ ${b}`).join('\n');
+  const mustNotItems = allMustNotBehaviors.map((b) => `✗ ${b}`).join('\n');
   const priorities = config.priorityHierarchy
     .map((p, i) => `${i + 1}. ${p}`)
     .join('\n');
 
-  return `
+  let prompt = `
 ${SEPARATOR}
 LAYER 2: BEHAVIORAL CONTRACT
 ${SEPARATOR}
@@ -154,12 +234,29 @@ ${mustItems}
 
 MUST NOT (Prohibited Behaviors):
 ${mustNotItems}
+`;
 
+  // Add priority hierarchy if provided
+  if (config.priorityHierarchy.length > 0) {
+    prompt += `
 PRIORITY HIERARCHY:
 ${priorities}
+`;
+  }
 
+  prompt += `
 ⛔ FAILURE MODE: ${config.failureMode}
 `;
+
+  // Add sequential mode tool guidance if applicable
+  if (mode && isSequentialMode(mode)) {
+    const toolGuidance = getToolGuidanceForMode(mode);
+    if (toolGuidance) {
+      prompt += toolGuidance;
+    }
+  }
+
+  return prompt;
 }
 
 /**
@@ -213,9 +310,31 @@ ${SEPARATOR}
 
 /**
  * Build the Verification Loop layer (Layer 4)
+ *
+ * @param config - Verification loop configuration
+ * @param mode - Optional debate mode for mode-specific verification checks
  */
-export function buildVerificationLoop(config: VerificationLoopConfig): string {
-  const checkItems = config.checklistItems.map((item) => `□ ${item}`).join('\n');
+export function buildVerificationLoop(
+  config: VerificationLoopConfig,
+  mode?: DebateMode
+): string {
+  // Combine mode-specific checks with tool usage checks (unless disabled)
+  const includeToolChecks = config.includeToolUsageChecks !== false;
+
+  // Start with provided checklist items
+  let allChecks = [...config.checklistItems];
+
+  // Add common tool usage verification checks
+  if (includeToolChecks) {
+    allChecks = [...allChecks, ...COMMON_TOOL_VERIFICATION_CHECKS];
+  }
+
+  // Add mode-specific verification checks
+  if (mode && MODE_SPECIFIC_VERIFICATION_CHECKS[mode]) {
+    allChecks = [...allChecks, ...MODE_SPECIFIC_VERIFICATION_CHECKS[mode]!];
+  }
+
+  const checkItems = allChecks.map((item) => `□ ${item}`).join('\n');
 
   return `
 ${SEPARATOR}
@@ -258,9 +377,9 @@ Mode: ${config.modeName}
 `;
 
   prompt += buildRoleAnchor(config.roleAnchor);
-  prompt += buildBehavioralContract(config.behavioralContract);
+  prompt += buildBehavioralContract(config.behavioralContract, context.mode);
   prompt += buildStructuralEnforcement(config.structuralEnforcement, context);
-  prompt += buildVerificationLoop(config.verificationLoop);
+  prompt += buildVerificationLoop(config.verificationLoop, context.mode);
   prompt += buildFocusQuestionSection(context, config.focusQuestion);
 
   return prompt;
