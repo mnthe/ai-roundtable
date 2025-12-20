@@ -32,6 +32,7 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  ┌───────────────────┐      ┌──────────────────────┐    │
 │  │DefaultAgentToolkit│      │   SQLiteStorage      │    │
 │  │ ├─ get_context    │      │                      │    │
+│  │ ├─ submit_response│      │                      │    │
 │  │ ├─ search_web     │      │                      │    │
 │  │ ├─ fact_check     │      │                      │    │
 │  │ └─ perplexity_    │      │                      │    │
@@ -59,39 +60,71 @@ The central orchestrator that manages debate sessions.
 
 ```typescript
 class DebateEngine {
-  // Start a new debate session
-  async startDebate(config: DebateConfig): Promise<Session>
+  // Execute a single debate round
+  async executeRound(agents: BaseAgent[], context: DebateContext): Promise<RoundResult>
 
-  // Run a single round
-  async runRound(sessionId: string, focusQuestion?: string): Promise<RoundResult>
+  // Execute multiple debate rounds
+  async executeRounds(
+    agents: BaseAgent[],
+    session: Session,
+    numRounds: number,
+    focusQuestion?: string
+  ): Promise<RoundResult[]>
 
-  // Get consensus analysis
-  async getConsensus(sessionId: string): Promise<ConsensusResult>
+  // Analyze consensus with AI (primary) or rule-based (fallback)
+  async analyzeConsensusWithAI(responses: AgentResponse[], topic: string): Promise<ConsensusResult>
+
+  // Rule-based consensus analysis (fallback)
+  analyzeConsensus(responses: AgentResponse[]): ConsensusResult
 }
 ```
 
 **Flow:**
-1. `startDebate()` creates a session with configured agents
-2. `runRound()` executes one round using the selected mode strategy
+1. MCP handler creates a session via `SessionManager`
+2. `executeRound()` or `executeRounds()` executes rounds using the selected mode strategy
 3. Each agent generates a response with optional tool use
-4. `getConsensus()` analyzes agreement/disagreement points
+4. `analyzeConsensusWithAI()` analyzes agreement/disagreement points (AI-based or rule-based fallback)
 
-### BaseAgent
+### BaseAgent (Template Method Pattern)
 
-Abstract class that all AI agents must extend.
+Abstract class that all AI agents must extend. Uses Template Method pattern where `generateResponse()` is the template method that calls abstract hooks.
 
 ```typescript
 abstract class BaseAgent {
-  // Subclasses must implement
-  abstract generateResponse(context: DebateContext): Promise<AgentResponse>;
+  // Template method - DO NOT override
+  async generateResponse(context: DebateContext): Promise<AgentResponse> {
+    // 1. Log start
+    // 2. Call callProviderApi() [abstract]
+    // 3. Extract response from tool calls or text
+    // 4. Build AgentResponse
+    // 5. Log completion
+  }
+
+  // Abstract methods - MUST implement
+  protected abstract callProviderApi(context: DebateContext): Promise<ProviderApiResult>;
+  protected abstract performHealthCheck(): Promise<void>;
+  abstract generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string>;
+
+  // Virtual method - override for provider-specific error handling
+  protected convertError(error: unknown): Error;
 
   // Provided by base class
   protected buildSystemPrompt(context: DebateContext): string;
   protected buildUserMessage(context: DebateContext): string;
-  protected parseResponse(rawText: string, context: DebateContext): ParsedResponse;
+  protected parseResponse(rawText: string, context: DebateContext): Partial<AgentResponse>;
+  protected extractCitationsFromToolResult(toolName: string, result: unknown): Citation[];
 
   // Toolkit management
   setToolkit(toolkit: AgentToolkit): void;
+}
+```
+
+**ProviderApiResult structure:**
+```typescript
+interface ProviderApiResult {
+  rawText: string;
+  toolCalls: ToolCallRecord[];
+  citations: Citation[];
 }
 ```
 
@@ -125,16 +158,21 @@ interface DebateModeStrategy {
 | Expert Panel       | Parallel         | Independent expert assessments          |
 | Devil's Advocate   | Sequential       | Structured opposition and challenge     |
 | Delphi             | Parallel         | Anonymized iterative consensus building |
-| Red Team/Blue Team | Parallel (teams) | Attack/defense team analysis            |
+| Red Team/Blue Team | Hybrid           | Attack/defense team analysis            |
 
 ## Adding a New AI Provider
+
+See [.claude/rules/adding-agents.md](../.claude/rules/adding-agents.md) for complete guide.
 
 ### Step 1: Create Agent Class
 
 ```typescript
 // src/agents/my-provider.ts
 import { BaseAgent } from './base.js';
-import type { AgentConfig, AgentResponse, DebateContext } from '../types/index.js';
+import type { AgentConfig, AgentResponse, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
+import type { ProviderApiResult } from './base.js';
+import { convertSDKError } from './utils/error-converter.js';
+import { withRetry } from '../utils/retry.js';
 
 export interface MyProviderAgentOptions {
   apiKey?: string;
@@ -151,37 +189,87 @@ export class MyProviderAgent extends BaseAgent {
     });
   }
 
-  async generateResponse(context: DebateContext): Promise<AgentResponse> {
+  /**
+   * ABSTRACT METHOD #1: Primary API call with tool handling
+   */
+  protected async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
     const systemPrompt = this.buildSystemPrompt(context);
     const userMessage = this.buildUserMessage(context);
-    const tools = this.toolkit ? this.buildTools() : undefined;
+    const tools = this.toolkit ? this.buildMyTools() : undefined;
+    const toolCalls: ToolCallRecord[] = [];
+    const citations: Citation[] = [];
 
-    // Call your provider's API
-    const response = await this.client.chat({
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-      tools,
-    });
+    // Initial API call with retry
+    let response = await withRetry(
+      () => this.client.chat({
+        model: this.model,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+        tools,
+      }),
+      { maxRetries: 3 }
+    );
 
-    // Handle tool calls if present
-    // ...
+    // Handle tool call loop
+    while (response.finish_reason === 'tool_calls' && response.tool_calls) {
+      for (const toolCall of response.tool_calls) {
+        const result = await this.toolkit?.executeTool(toolCall.name, toolCall.args);
+        toolCalls.push({
+          toolName: toolCall.name,
+          input: toolCall.args,
+          output: result,
+          timestamp: new Date(),
+        });
+        citations.push(...this.extractCitationsFromToolResult(toolCall.name, result));
+      }
+      // Continue with tool results...
+      response = await withRetry(
+        () => this.client.chat({ /* ... with tool results */ }),
+        { maxRetries: 3 }
+      );
+    }
 
-    // Parse and return response
-    const parsed = this.parseResponse(response.content, context);
-
-    return {
-      agentId: this.id,
-      agentName: this.name,
-      position: parsed.position ?? 'Unable to determine',
-      reasoning: parsed.reasoning ?? response.content,
-      confidence: parsed.confidence ?? 0.5,
-      timestamp: new Date(),
-    };
+    return { rawText: response.content, toolCalls, citations };
   }
 
-  private buildTools(): ToolDefinition[] {
-    // Convert toolkit tools to your provider's format
-    return this.toolkit!.getTools().map(tool => ({
+  /**
+   * ABSTRACT METHOD #2: Health check implementation
+   */
+  protected async performHealthCheck(): Promise<void> {
+    await this.client.chat({
+      model: this.model,
+      messages: [{ role: 'user', content: 'test' }],
+      max_tokens: 10,
+    });
+  }
+
+  /**
+   * ABSTRACT METHOD #3: Raw completion for synthesis/analysis (public - used by AIConsensusAnalyzer)
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const response = await withRetry(
+      () => this.client.chat({
+        model: this.model,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt }
+        ],
+      }),
+      { maxRetries: 3 }
+    );
+    return response.content;
+  }
+
+  /**
+   * VIRTUAL METHOD: Override for provider-specific error handling
+   */
+  protected override convertError(error: unknown): Error {
+    return convertSDKError(error, 'my-provider');
+  }
+
+  private buildMyTools(): ToolDefinition[] {
+    if (!this.toolkit) return [];
+    return this.toolkit.getTools().map(tool => ({
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
@@ -256,15 +344,22 @@ describe('MyProviderAgent', () => {
 
 ## Adding a New Debate Mode
 
+See [.claude/rules/adding-modes.md](../.claude/rules/adding-modes.md) for complete guide.
+
 ### Step 1: Create Mode Class
 
 ```typescript
 // src/modes/my-mode.ts
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { AgentResponse, DebateContext } from '../types/index.js';
+import {
+  buildModePrompt,
+  createOutputSections,
+  type ModePromptConfig,
+} from './utils/prompt-builder.js';
 
-export class MyMode implements DebateModeStrategy {
+export class MyMode extends BaseModeStrategy {
   readonly name = 'my-mode';
 
   async executeRound(
@@ -272,30 +367,51 @@ export class MyMode implements DebateModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    const responses: AgentResponse[] = [];
-
-    // Example: Round-robin with custom logic
-    for (const agent of agents) {
-      agent.setToolkit(toolkit);
-
-      const currentContext: DebateContext = {
-        ...context,
-        previousResponses: [...context.previousResponses, ...responses],
-      };
-
-      const response = await agent.generateResponse(currentContext);
-      responses.push(response);
-    }
-
-    return responses;
+    // Use inherited execution methods:
+    // - executeParallel: All agents respond simultaneously
+    // - executeSequential: Agents respond one by one
+    return this.executeParallel(agents, context, toolkit);
   }
 
   buildAgentPrompt(context: DebateContext): string {
-    let prompt = `## My Custom Mode\n\n`;
-    prompt += `You are participating in a ${this.name} discussion.\n`;
-    prompt += `Topic: ${context.topic}\n`;
-    // Add mode-specific instructions
-    return prompt;
+    // Use 4-layer prompt structure via prompt-builder utilities
+    const config: ModePromptConfig = {
+      modeName: 'My Custom Discussion',
+      roleAnchor: {
+        emoji: '🎯',
+        title: 'MY CUSTOM ROLE',
+        definition: 'You are a participant in a custom discussion format.',
+        mission: 'Primary objective for this mode.',
+        persistence: 'Maintain this role throughout all rounds.',
+        helpfulMeans: 'what being helpful means here',
+        helpfulNotMeans: 'what to avoid',
+      },
+      behavioralContract: {
+        mustBehaviors: ['Provide evidence-based reasoning', 'State confidence levels'],
+        mustNotBehaviors: ['Make claims without justification'],
+        priorityHierarchy: ['Accuracy', 'Constructive engagement'],
+        failureMode: 'Responses without evidence will be rejected.',
+      },
+      structuralEnforcement: {
+        firstRoundSections: createOutputSections([
+          ['[POSITION]', 'State your position clearly'],
+          ['[EVIDENCE]', 'Provide supporting reasoning'],
+          ['[CONFIDENCE]', 'Express confidence level (0-100%)'],
+        ]),
+        subsequentRoundSections: createOutputSections([
+          ['[ENGAGEMENT]', 'Address previous points'],
+          ['[UPDATED POSITION]', 'Refine your position'],
+        ]),
+      },
+      verificationLoop: {
+        checklistItems: ['Is reasoning evidence-based?', 'Is confidence justified?'],
+      },
+      focusQuestion: {
+        instructions: 'Prioritize addressing the focus question.',
+      },
+    };
+
+    return buildModePrompt(config, context);
   }
 }
 ```

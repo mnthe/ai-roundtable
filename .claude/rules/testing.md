@@ -18,9 +18,15 @@ tests/
 │   ├── core/               # Core component tests
 │   ├── tools/              # Toolkit tests
 │   ├── storage/            # Storage tests
-│   └── mcp/                # MCP server tests
+│   ├── mcp/                # MCP server tests
+│   ├── errors/             # Error tests
+│   ├── utils/              # Utility tests
+│   └── types/              # Type tests
+├── utils/                   # Shared test utilities (mocks.ts)
 └── integration/            # Integration tests (requires API keys)
-    └── agents.test.ts
+    ├── setup.ts            # Test setup and helpers (isProviderAvailable, etc.)
+    ├── real-agents.test.ts
+    └── e2e.test.ts
 ```
 
 ## Unit Test Patterns
@@ -116,7 +122,6 @@ describe('AdversarialMode', () => {
     mockToolkit = {
       getTools: () => [],
       executeTool: vi.fn(),
-      setContext: vi.fn(),
     };
   });
 

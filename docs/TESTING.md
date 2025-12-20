@@ -6,7 +6,7 @@ This guide explains how to write and run tests for AI Roundtable.
 
 - **Vitest** - Test runner (Jest-compatible API)
 - **Mock clients** - No real API calls in unit tests
-- **MSW** - Mock Service Worker for HTTP mocking (optional)
+- **Shared mock utilities** - `tests/utils/mocks.ts` provides reusable mock factories
 
 ## Running Tests
 
@@ -41,27 +41,53 @@ tests/
 │   │   ├── chatgpt.test.ts
 │   │   ├── gemini.test.ts
 │   │   ├── perplexity.test.ts
-│   │   └── registry.test.ts
+│   │   ├── registry.test.ts
+│   │   ├── setup.test.ts
+│   │   └── utils/
+│   │       └── error-converter.test.ts
 │   ├── modes/              # Mode tests
+│   │   ├── base.test.ts
 │   │   ├── collaborative.test.ts
 │   │   ├── adversarial.test.ts
 │   │   ├── socratic.test.ts
 │   │   ├── expert-panel.test.ts
+│   │   ├── devils-advocate.test.ts
+│   │   ├── delphi.test.ts
+│   │   ├── red-team-blue-team.test.ts
 │   │   └── registry.test.ts
 │   ├── core/               # Core component tests
 │   │   ├── debate-engine.test.ts
+│   │   ├── debate-engine-ai-consensus.test.ts
 │   │   ├── session-manager.test.ts
-│   │   └── consensus-analyzer.test.ts
+│   │   ├── consensus-analyzer.test.ts
+│   │   ├── ai-consensus-analyzer.test.ts
+│   │   ├── ai-consensus-debug.test.ts
+│   │   └── key-points-extractor.test.ts
 │   ├── tools/              # Toolkit tests
 │   │   └── toolkit.test.ts
 │   ├── storage/            # Storage tests
-│   │   └── sqlite.test.ts
+│   │   ├── sqlite.test.ts
+│   │   └── storage-interface.test.ts
 │   ├── mcp/                # MCP server tests
-│   │   └── tools.test.ts
+│   │   ├── tools.test.ts
+│   │   ├── keypoints.test.ts
+│   │   └── synthesis.test.ts
+│   ├── errors/             # Error tests
+│   │   └── errors.test.ts
+│   ├── utils/              # Utility tests
+│   │   ├── retry.test.ts
+│   │   └── env.test.ts
+│   ├── types/              # Type tests
+│   │   └── stored-session-schema.test.ts
 │   ├── schemas.test.ts     # Schema validation tests
 │   └── types.test.ts       # Type tests
+├── utils/                   # Shared test utilities
+│   ├── index.ts            # Re-exports from mocks.ts
+│   └── mocks.ts            # Mock factories (createMockAnthropicClient, etc.)
 └── integration/            # Integration tests (requires API keys)
-    └── agents.test.ts
+    ├── setup.ts            # Test setup and helper functions (isProviderAvailable, etc.)
+    ├── real-agents.test.ts
+    └── e2e.test.ts
 ```
 
 ## Writing Unit Tests
@@ -151,7 +177,6 @@ describe('AdversarialMode', () => {
     mockToolkit = {
       getTools: () => [],
       executeTool: vi.fn(),
-      setContext: vi.fn(),
     };
   });
 
@@ -391,12 +416,16 @@ pnpm test:integration tests/integration/agents.test.ts
 
 ### Writing Integration Tests
 
+Integration tests use helper functions from `tests/integration/setup.ts`:
+
 ```typescript
 // tests/integration/agents.test.ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { ClaudeAgent } from '../../src/agents/claude.js';
+import { isProviderAvailable } from './setup.js';
 
-describe.skipIf(!process.env.ANTHROPIC_API_KEY)('Claude Integration', () => {
+// Use isProviderAvailable helper for cleaner skip conditions
+describe.skipIf(!isProviderAvailable('anthropic'))('Claude Integration', () => {
   it('should generate real response', async () => {
     const agent = new ClaudeAgent({
       id: 'claude-integration',
@@ -488,7 +517,6 @@ describe('confidence clamping', () => {
 const mockToolkit: AgentToolkit = {
   getTools: () => [],
   executeTool: vi.fn().mockResolvedValue({ success: true }),
-  setContext: vi.fn(),
 };
 ```
 

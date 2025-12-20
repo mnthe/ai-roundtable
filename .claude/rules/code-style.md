@@ -92,12 +92,12 @@ function calculateAgreement(responses: AgentResponse[]) {
 
 ```typescript
 // Good
-export class MyMode implements DebateModeStrategy {
+export class MyMode extends BaseModeStrategy {
   readonly name = 'my-mode';
 }
 
 // Avoid
-export class MyMode implements DebateModeStrategy {
+export class MyMode extends BaseModeStrategy {
   name = 'my-mode';
 }
 ```

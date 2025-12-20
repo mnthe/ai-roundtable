@@ -14,115 +14,105 @@ Apply this rule when:
 Create `src/modes/<mode-name>.ts`:
 
 ```typescript
-import type { DebateModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { AgentResponse, DebateContext } from '../types/index.js';
+import { BaseModeStrategy } from './base.js';
+import {
+  buildModePrompt,
+  createOutputSections,
+  type ModePromptConfig,
+} from './utils/prompt-builder.js';
 
-export class MyMode implements DebateModeStrategy {
+/**
+ * My Custom Mode
+ *
+ * Brief description of what this mode does and when to use it.
+ */
+export class MyMode extends BaseModeStrategy {
   readonly name = 'my-mode';
 
   /**
    * Execute one round of debate
    *
    * Choose execution pattern based on mode characteristics:
-   * - Parallel: Independent responses, no cross-agent influence within round
-   * - Sequential: Each agent sees previous responses within the round
+   * - executeParallel: All agents respond simultaneously (see only previous rounds)
+   * - executeSequential: Agents respond one by one (see accumulated current round responses)
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    // Option 1: Parallel execution
+    // Option 1: Parallel execution (collaborative, expert-panel, delphi)
     return this.executeParallel(agents, context, toolkit);
 
-    // Option 2: Sequential execution
+    // Option 2: Sequential execution (adversarial, socratic)
     // return this.executeSequential(agents, context, toolkit);
   }
 
   /**
-   * Parallel execution - all agents respond simultaneously
-   * Best for: Expert panel, collaborative brainstorming, independent assessments
-   */
-  private async executeParallel(
-    agents: BaseAgent[],
-    context: DebateContext,
-    toolkit: AgentToolkit
-  ): Promise<AgentResponse[]> {
-    return Promise.all(
-      agents.map(async (agent) => {
-        agent.setToolkit(toolkit);
-        return agent.generateResponse(context);
-      })
-    );
-  }
-
-  /**
-   * Sequential execution - agents respond one by one
-   * Best for: Adversarial debate, Socratic dialogue, building arguments
-   */
-  private async executeSequential(
-    agents: BaseAgent[],
-    context: DebateContext,
-    toolkit: AgentToolkit
-  ): Promise<AgentResponse[]> {
-    const responses: AgentResponse[] = [];
-
-    for (const agent of agents) {
-      agent.setToolkit(toolkit);
-
-      // Create context with accumulated responses from current round
-      const currentContext: DebateContext = {
-        ...context,
-        previousResponses: [...context.previousResponses, ...responses],
-      };
-
-      const response = await agent.generateResponse(currentContext);
-      responses.push(response);
-    }
-
-    return responses;
-  }
-
-  /**
-   * Build mode-specific prompt for agents
-   *
-   * Note: This method is defined in the interface but not yet integrated
-   * into BaseAgent's prompt building. Include mode-specific instructions here.
+   * Build mode-specific prompt using 4-layer structure
    */
   buildAgentPrompt(context: DebateContext): string {
-    const basePrompt = `
-## Mode: My Custom Mode
+    const config: ModePromptConfig = {
+      modeName: 'My Custom Discussion',
+      roleAnchor: {
+        emoji: '🎯',
+        title: 'MY CUSTOM ROLE',
+        definition: 'You are a participant in a custom discussion format.',
+        mission: 'Describe the agent\'s primary objective in this mode.',
+        persistence: 'Maintain this role throughout all rounds of discussion.',
+        helpfulMeans: 'What being helpful means in this mode',
+        helpfulNotMeans: 'What to avoid',
+        additionalContext: 'Optional extra context',
+      },
+      behavioralContract: {
+        mustBehaviors: [
+          'Always provide evidence-based reasoning',
+          'Acknowledge others\' valid points',
+          'State confidence levels honestly',
+        ],
+        mustNotBehaviors: [
+          'Make claims without justification',
+          'Dismiss others without engagement',
+          'Pretend certainty when uncertain',
+        ],
+        priorityHierarchy: [
+          'Accuracy and truthfulness',
+          'Constructive engagement',
+          'Clear communication',
+        ],
+        failureMode: 'Responses that [describe failure criteria] will be rejected.',
+      },
+      structuralEnforcement: {
+        firstRoundSections: createOutputSections([
+          ['[INITIAL POSITION]', 'State your position on the topic clearly'],
+          ['[SUPPORTING EVIDENCE]', 'Provide reasoning and evidence'],
+          ['[CONFIDENCE]', 'Express your confidence level (0-100%)'],
+        ]),
+        subsequentRoundSections: createOutputSections([
+          ['[ENGAGEMENT]', 'Address points from previous responses'],
+          ['[UPDATED POSITION]', 'Refine or maintain your position'],
+          ['[NEW EVIDENCE]', 'Add new supporting information'],
+          ['[CONFIDENCE]', 'Updated confidence level with reason for change'],
+        ]),
+        prefix: 'Your response must include the following sections:',
+        suffix: 'Maintain this structure for consistent analysis.',
+      },
+      verificationLoop: {
+        checklistItems: [
+          'Have I addressed the topic directly?',
+          'Is my reasoning sound and evidence-based?',
+          'Have I acknowledged relevant points from others?',
+          'Is my confidence level justified?',
+        ],
+      },
+      focusQuestion: {
+        instructions: 'Prioritize addressing the focus question in your response.',
+      },
+    };
 
-You are participating in a ${this.name} discussion.
-
-### Your Role
-- [Describe the agent's role in this mode]
-- [Specific behavior expectations]
-- [What to focus on]
-
-### Guidelines
-- [Guideline 1]
-- [Guideline 2]
-- [Guideline 3]
-`;
-
-    // Add round-specific instructions
-    if (context.currentRound === 1) {
-      return basePrompt + `
-### First Round Instructions
-- Establish your initial position clearly
-- Provide foundational reasoning
-- Set the stage for subsequent discussion
-`;
-    } else {
-      return basePrompt + `
-### Round ${context.currentRound} Instructions
-- Build on previous responses
-- Address points raised by others
-- Refine and develop your position
-`;
-    }
+    return buildModePrompt(config, context);
   }
 }
 ```
@@ -173,7 +163,6 @@ Create `tests/unit/modes/my-mode.test.ts`:
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MyMode } from '../../../src/modes/my-mode.js';
-import { MockAgent } from '../../../src/agents/base.js';
 import type { DebateContext, AgentToolkit } from '../../../src/types/index.js';
 
 describe('MyMode', () => {
@@ -185,27 +174,22 @@ describe('MyMode', () => {
     mockToolkit = {
       getTools: () => [],
       executeTool: vi.fn(),
-      setContext: vi.fn(),
     };
   });
 
-  const createMockAgent = (id: string) => {
-    const agent = new MockAgent({
-      id,
-      name: `Agent ${id}`,
-      provider: 'anthropic',
-      model: 'mock',
-    });
-    agent.setMockResponse({
+  const createMockAgent = (id: string, mockResponse: any) => ({
+    id,
+    setToolkit: vi.fn(),
+    generateResponse: vi.fn().mockResolvedValue({
       agentId: id,
       agentName: `Agent ${id}`,
       position: `Position from ${id}`,
       reasoning: `Reasoning from ${id}`,
       confidence: 0.8,
       timestamp: new Date(),
-    });
-    return agent;
-  };
+      ...mockResponse,
+    }),
+  });
 
   const defaultContext: DebateContext = {
     sessionId: 'test-session',
@@ -221,74 +205,201 @@ describe('MyMode', () => {
   });
 
   it('should execute round with all agents', async () => {
-    const agents = [createMockAgent('1'), createMockAgent('2')];
-    const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+    const agents = [createMockAgent('1', {}), createMockAgent('2', {})];
+    const responses = await mode.executeRound(agents as any, defaultContext, mockToolkit);
 
     expect(responses).toHaveLength(2);
     expect(responses[0].agentId).toBe('1');
     expect(responses[1].agentId).toBe('2');
   });
 
-  it('should build prompt for first round', () => {
-    const prompt = mode.buildAgentPrompt(defaultContext);
-    expect(prompt).toContain('my-mode');
-    expect(prompt).toContain('First Round');
+  it('should handle agent errors gracefully', async () => {
+    const workingAgent = createMockAgent('1', {});
+    const failingAgent = {
+      id: '2',
+      setToolkit: vi.fn(),
+      generateResponse: vi.fn().mockRejectedValue(new Error('API Error')),
+    };
+
+    const responses = await mode.executeRound(
+      [workingAgent, failingAgent] as any,
+      defaultContext,
+      mockToolkit
+    );
+
+    // Should continue with working agents
+    expect(responses).toHaveLength(1);
+    expect(responses[0].agentId).toBe('1');
   });
 
-  it('should build prompt for subsequent rounds', () => {
-    const context = { ...defaultContext, currentRound: 2 };
-    const prompt = mode.buildAgentPrompt(context);
-    expect(prompt).toContain('Round 2');
+  it('should build prompt with 4-layer structure', () => {
+    const prompt = mode.buildAgentPrompt(defaultContext);
+
+    expect(prompt).toContain('LAYER 1: ROLE ANCHOR');
+    expect(prompt).toContain('LAYER 2: BEHAVIORAL CONTRACT');
+    expect(prompt).toContain('LAYER 3: STRUCTURAL ENFORCEMENT');
+    expect(prompt).toContain('LAYER 4: VERIFICATION LOOP');
+    expect(prompt).toContain('my-mode');
+  });
+
+  it('should use first round sections for round 1', () => {
+    const prompt = mode.buildAgentPrompt(defaultContext);
+    expect(prompt).toContain('[INITIAL POSITION]');
+  });
+
+  it('should use subsequent round sections for later rounds', () => {
+    const context = {
+      ...defaultContext,
+      currentRound: 2,
+      previousResponses: [{ agentId: '1', position: 'Test' }],
+    };
+    const prompt = mode.buildAgentPrompt(context as any);
+    expect(prompt).toContain('[ENGAGEMENT]');
+    expect(prompt).toContain('[UPDATED POSITION]');
   });
 });
 ```
 
+## 4-Layer Prompt Structure
+
+All modes should use the 4-layer prompt structure via `modes/utils/prompt-builder.ts`:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 1: ROLE ANCHOR                                        │
+│ - Emoji + Title (e.g., "🤝 COLLABORATIVE SYNTHESIZER")     │
+│ - Role Definition: What the agent IS                        │
+│ - Mission: Primary objective                                │
+│ - Persistence: "Maintain this role throughout"              │
+│ - What "helpful" means / does NOT mean                      │
+├─────────────────────────────────────────────────────────────┤
+│ LAYER 2: BEHAVIORAL CONTRACT                                │
+│ - MUST behaviors (required)                                 │
+│ - MUST NOT behaviors (prohibited)                           │
+│ - Priority Hierarchy (numbered, ordered)                    │
+│ - Failure Mode: What causes rejection                       │
+├─────────────────────────────────────────────────────────────┤
+│ LAYER 3: STRUCTURAL ENFORCEMENT                             │
+│ - First Round sections (different from subsequent)          │
+│ - Required Output Structure with [SECTION HEADERS]          │
+│ - Each section has description in parentheses               │
+├─────────────────────────────────────────────────────────────┤
+│ LAYER 4: VERIFICATION LOOP                                  │
+│ - Self-check checklist before submission                    │
+│ - "If any check fails, revise before submitting"            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Prompt Builder Utilities:**
+- `buildModePrompt(config, context)` - Build complete 4-layer prompt
+- `buildRoleAnchor(config)` - Layer 1 only
+- `buildBehavioralContract(config)` - Layer 2 only
+- `buildStructuralEnforcement(config, context)` - Layer 3 only
+- `buildVerificationLoop(config)` - Layer 4 only
+- `buildFocusQuestionSection(context, config)` - Optional focus question
+- `buildRoundContext(context)` - Build round context section
+- `formatPreviousResponses(responses)` - Format responses for context
+- `createOutputSections([...])` - Helper to create section arrays
+
 ## Execution Patterns
 
-### Parallel Execution
-Use when:
-- Responses should be independent
-- Order doesn't matter
-- Want faster execution
-- Reducing bias from seeing others' responses
+### Parallel Execution (BaseModeStrategy.executeParallel)
 
-Examples: Expert Panel, Delphi, Collaborative
+- Uses `Promise.allSettled` for graceful error handling
+- Each agent only sees previous rounds' responses
+- Errors logged but don't stop other agents
+- Best for: Collaborative, Expert Panel, Delphi
 
-### Sequential Execution
-Use when:
-- Agents should respond to each other
-- Building arguments progressively
-- Dialogue/conversation style
-- Counter-arguments needed
+**How it works:**
+```typescript
+// Context includes modePrompt from buildAgentPrompt()
+const contextWithModePrompt = {
+  ...context,
+  modePrompt: this.buildAgentPrompt(context),
+};
 
-Examples: Adversarial, Socratic, Devil's Advocate
+// All agents execute in parallel
+const results = await Promise.allSettled(
+  agents.map(agent => agent.generateResponse(contextWithModePrompt))
+);
+
+// Failed agents are logged but don't break the round
+```
+
+### Sequential Execution (BaseModeStrategy.executeSequential)
+
+- Each agent sees accumulated responses from current round
+- Errors caught per-agent, allowing continuation
+- Context and modePrompt rebuild for each agent
+- Best for: Adversarial, Socratic, Devil's Advocate
+
+**How it works:**
+```typescript
+const responses: AgentResponse[] = [];
+
+for (const agent of agents) {
+  try {
+    // Rebuild context with accumulated responses
+    const currentContext = {
+      ...context,
+      previousResponses: [...context.previousResponses, ...responses],
+      modePrompt: this.buildAgentPrompt({
+        ...context,
+        previousResponses: [...context.previousResponses, ...responses],
+      }),
+    };
+
+    const response = await agent.generateResponse(currentContext);
+    responses.push(response);
+  } catch (error) {
+    logger.error({ err: error, agentId: agent.id }, 'Error from agent');
+    // Continue with next agent
+  }
+}
+```
 
 ### Hybrid Patterns
-Some modes may use combinations:
+
+Some modes use custom execution (e.g., Red Team/Blue Team):
 
 ```typescript
-// Team-based parallel (Red Team/Blue Team)
 async executeRound(agents, context, toolkit) {
-  const redTeam = agents.filter((_, i) => i % 2 === 0);
-  const blueTeam = agents.filter((_, i) => i % 2 !== 0);
+  // Split into teams by index (even = red, odd = blue)
+  const redTeam: BaseAgent[] = [];
+  const blueTeam: BaseAgent[] = [];
+  agents.forEach((agent, i) => (i % 2 === 0 ? redTeam : blueTeam).push(agent));
 
+  // Execute both teams in parallel (using a private executeTeam method)
   const [redResponses, blueResponses] = await Promise.all([
-    this.executeTeam(redTeam, context, toolkit, 'red'),
-    this.executeTeam(blueTeam, context, toolkit, 'blue'),
+    this.executeTeam(redTeam, 'red', context, toolkit),
+    this.executeTeam(blueTeam, 'blue', context, toolkit),
   ]);
 
-  return this.interleaveResponses(redResponses, blueResponses);
+  // Interleave responses to maintain original agent order
+  const responses: AgentResponse[] = [];
+  const maxLength = Math.max(redResponses.length, blueResponses.length);
+  for (let i = 0; i < maxLength; i++) {
+    if (redResponses[i]) responses.push(redResponses[i]);
+    if (blueResponses[i]) responses.push(blueResponses[i]);
+  }
+  return responses;
 }
 ```
 
 ## Checklist
 
-- [ ] Mode class implements `DebateModeStrategy`
-- [ ] `name` property set correctly
-- [ ] `executeRound()` implemented with appropriate pattern
-- [ ] `buildAgentPrompt()` provides mode-specific instructions
-- [ ] Mode added to `DebateMode` type
-- [ ] Mode registered in `ModeRegistry`
-- [ ] Exported from `index.ts`
-- [ ] Unit tests cover execution and prompt building
+- [ ] Mode class extends `BaseModeStrategy`
+- [ ] `name` property set as readonly
+- [ ] `executeRound()` implemented using `executeParallel()` or `executeSequential()`
+- [ ] `buildAgentPrompt()` uses 4-layer structure via prompt-builder utilities
+- [ ] First round sections differ from subsequent round sections
+- [ ] Mode added to `DebateMode` type in `src/types/index.ts`
+- [ ] Mode registered in `ModeRegistry` (`src/modes/registry.ts`)
+- [ ] Exported from `src/modes/index.ts`
+- [ ] Unit tests cover:
+  - [ ] Correct mode name
+  - [ ] Round execution with multiple agents
+  - [ ] Graceful error handling (agent failures)
+  - [ ] 4-layer prompt structure
+  - [ ] First round vs subsequent round sections
 - [ ] README.md updated with mode description

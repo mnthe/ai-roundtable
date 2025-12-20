@@ -51,6 +51,7 @@ interface AgentResponse {
   position: string;           // Agent's position on the topic
   reasoning: string;          // Supporting reasoning
   confidence: number;         // 0.0-1.0
+  stance?: 'YES' | 'NO' | 'NEUTRAL';  // For devils-advocate mode
   citations?: Citation[];     // Source citations
   toolCalls?: ToolCallRecord[]; // Tools used
   images?: ImageResult[];     // Images (Perplexity)
@@ -322,7 +323,7 @@ interface MetadataLayer {
 
 ### BaseAgent
 
-Abstract base class for all agents.
+Abstract base class for all agents using Template Method pattern.
 
 ```typescript
 abstract class BaseAgent {
@@ -330,19 +331,46 @@ abstract class BaseAgent {
   readonly name: string;
   readonly provider: AIProvider;
   readonly model: string;
+  protected toolkit?: AgentToolkit;
+  protected temperature: number;
+  protected maxTokens: number;
 
   constructor(config: AgentConfig);
 
-  // Must be implemented by subclasses
-  abstract generateResponse(context: DebateContext): Promise<AgentResponse>;
+  // Template method - DO NOT OVERRIDE
+  // Orchestrates response generation by calling callProviderApi()
+  async generateResponse(context: DebateContext): Promise<AgentResponse>;
+
+  // Template method for health checks
+  async healthCheck(): Promise<HealthCheckResult>;
+
+  // ABSTRACT: Must be implemented by subclasses
+  protected abstract callProviderApi(context: DebateContext): Promise<ProviderApiResult>;
+  protected abstract performHealthCheck(): Promise<void>;
+  abstract generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string>;
 
   // Set the toolkit for tool use
   setToolkit(toolkit: AgentToolkit): void;
 
+  // Virtual method - override for provider-specific error conversion
+  protected convertError(error: unknown): Error;
+
   // Protected helpers
   protected buildSystemPrompt(context: DebateContext): string;
   protected buildUserMessage(context: DebateContext): string;
-  protected parseResponse(rawText: string, context: DebateContext): ParsedResponse;
+  protected parseResponse(raw: string, context: DebateContext): Partial<AgentResponse>;
+  protected extractCitationsFromToolResult(toolName: string, result: unknown): Citation[];
+}
+
+interface ProviderApiResult {
+  rawText: string;
+  toolCalls: ToolCallRecord[];   // Required (empty array if no tool calls)
+  citations: Citation[];         // Required (empty array if no citations)
+}
+
+interface HealthCheckResult {
+  healthy: boolean;
+  error?: string;
 }
 ```
 
@@ -459,14 +487,14 @@ class AgentRegistry {
   // Create an agent
   createAgent(config: AgentConfig): BaseAgent;
 
-  // Get available providers
-  getAvailableProviders(): AIProvider[];
+  // Get registered providers
+  getRegisteredProviders(): AIProvider[];
 
   // Check if provider is registered
   hasProvider(provider: AIProvider): boolean;
 
-  // Get default model for provider
-  getDefaultModel(provider: AIProvider): string;
+  // Get default model for provider (returns undefined if provider not registered)
+  getDefaultModel(provider: AIProvider): string | undefined;
 }
 
 // Global registry
@@ -755,45 +783,70 @@ interface SessionDataProvider {
 
 ### DebateEngine
 
-Main orchestrator for debates.
+Core engine that orchestrates debates between AI agents.
 
 ```typescript
+interface DebateEngineOptions {
+  toolkit: AgentToolkit;            // Required - throws ConfigurationError if not provided
+  aiConsensusAnalyzer?: AIConsensusAnalyzer;  // Optional - enables AI-based consensus
+}
+
 class DebateEngine {
-  constructor(
-    sessionManager: SessionManager,
-    agentRegistry: AgentRegistry,
-    modeRegistry: ModeRegistry,
-    toolkit: AgentToolkit
-  );
+  constructor(options: DebateEngineOptions);
 
-  // Start a new debate
-  async startDebate(config: DebateConfig): Promise<Session>;
+  // Register a debate mode strategy
+  registerMode(mode: string, strategy: DebateModeStrategy): void;
 
-  // Run one round
-  async runRound(sessionId: string, focusQuestion?: string): Promise<RoundResult>;
+  // Execute a single debate round
+  async executeRound(agents: BaseAgent[], context: DebateContext): Promise<RoundResult>;
 
-  // Get consensus analysis
-  async getConsensus(sessionId: string): Promise<ConsensusResult>;
+  // Execute multiple debate rounds
+  async executeRounds(
+    agents: BaseAgent[],
+    session: Session,
+    numRounds: number,
+    focusQuestion?: string
+  ): Promise<RoundResult[]>;
 
-  // Get session
-  async getSession(sessionId: string): Promise<Session | null>;
+  // Analyze consensus with AI (falls back to rule-based if AI unavailable)
+  async analyzeConsensusWithAI(
+    responses: AgentResponse[],
+    topic: string
+  ): Promise<ConsensusResult>;
 
-  // List all sessions
-  async listSessions(): Promise<Session[]>;
+  // Rule-based consensus analysis (fallback)
+  analyzeConsensus(responses: AgentResponse[]): ConsensusResult;
+
+  // Toolkit management
+  getToolkit(): AgentToolkit;
+  setToolkit(toolkit: AgentToolkit): void;
+}
+
+interface RoundResult {
+  roundNumber: number;
+  responses: AgentResponse[];
+  consensus: ConsensusResult;
 }
 ```
+
+**Note:** DebateEngine does not manage sessions directly. Use `SessionManager` for session lifecycle operations (create, get, update, list, delete).
 
 ### SessionManager
 
 Manages debate sessions.
 
 ```typescript
+interface SessionManagerOptions {
+  storage?: StorageProvider;  // Optional - uses in-memory SQLiteStorage if not provided
+}
+
 class SessionManager {
-  constructor(storage: StorageProvider);
+  constructor(options?: SessionManagerOptions);
 
   createSession(config: DebateConfig): Promise<Session>;
   getSession(id: string): Promise<Session | null>;
-  updateSession(session: Session): Promise<void>;
+  updateSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
+  updateSessionRound(sessionId: string, round: number): Promise<void>;
   addResponse(sessionId: string, response: AgentResponse): Promise<void>;
   listSessions(): Promise<Session[]>;
   deleteSession(id: string): Promise<void>;
@@ -802,11 +855,11 @@ class SessionManager {
 
 ### ConsensusAnalyzer
 
-Analyzes consensus among agents.
+Analyzes consensus among agents using rule-based analysis.
 
 ```typescript
 class ConsensusAnalyzer {
-  analyze(responses: AgentResponse[]): ConsensusResult;
+  analyzeConsensus(responses: AgentResponse[]): ConsensusResult;
 }
 ```
 
@@ -820,13 +873,15 @@ SQLite-based persistence.
 
 ```typescript
 class SQLiteStorage implements StorageProvider {
-  constructor(dbPath?: string);  // Default: './data/roundtable.db'
+  constructor(options?: SQLiteStorageOptions);  // Default: ':memory:' (in-memory database)
 
   // Session operations
-  saveSession(session: Session): Promise<void>;
+  createSession(session: Session): Promise<void>;
   getSession(id: string): Promise<Session | null>;
-  getAllSessions(): Promise<Session[]>;
+  listSessions(): Promise<Session[]>;
   deleteSession(id: string): Promise<void>;
+  updateSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
+  updateSessionRound(sessionId: string, round: number): Promise<void>;
 
   // Response operations
   addResponse(sessionId: string, response: AgentResponse): Promise<void>;
@@ -843,9 +898,11 @@ class SQLiteStorage implements StorageProvider {
 
 ### MCP Tools
 
-Tools exposed through MCP protocol.
+Tools exposed through MCP protocol (12 total).
 
 #### start_roundtable
+
+Start a new AI debate roundtable.
 
 ```typescript
 // Input schema
@@ -853,31 +910,36 @@ Tools exposed through MCP protocol.
   topic: string;        // Required: Debate topic
   mode?: DebateMode;    // Default: 'collaborative'
   agents?: string[];    // Default: all available
-  rounds?: number;      // Default: 3
+  rounds?: number;      // Default: 3, min: 1, max: 10
 }
 
-// Returns: Session
+// Returns: RoundtableResponse (4-layer structure)
 ```
 
 #### continue_roundtable
 
+Continue an existing debate with additional rounds.
+
 ```typescript
 // Input schema
 {
   sessionId: string;    // Required
-  rounds?: number;      // Additional rounds to run
+  rounds?: number;      // Default: 1, min: 1, max: 10
   focusQuestion?: string;
 }
 
-// Returns: RoundResult
+// Returns: RoundtableResponse (4-layer structure)
 ```
 
 #### get_consensus
 
+Analyze the consensus level in a debate session.
+
 ```typescript
 // Input schema
 {
   sessionId: string;    // Required
+  roundNumber?: number; // Optional: specific round (1-based), default: latest round
 }
 
 // Returns: ConsensusResult
@@ -885,16 +947,129 @@ Tools exposed through MCP protocol.
 
 #### get_agents
 
+List all available AI agents.
+
 ```typescript
 // Input: none
-// Returns: Array of available agents with metadata
+// Returns: Array of { id, name, provider, model, active }
 ```
 
 #### list_sessions
 
+List debate sessions with optional filters.
+
 ```typescript
-// Input: none
-// Returns: Array of sessions with status
+// Input schema
+{
+  topic?: string;       // Search by topic keyword (partial match)
+  mode?: DebateMode;    // Filter by debate mode
+  status?: 'active' | 'paused' | 'completed' | 'error';
+  fromDate?: string;    // ISO 8601 date string
+  toDate?: string;      // ISO 8601 date string
+  limit?: number;       // Default: 50
+}
+
+// Returns: Array of Session summaries
+```
+
+#### get_thoughts
+
+Get detailed reasoning and confidence evolution for a specific agent.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  agentId: string;      // Required
+}
+
+// Returns: Array of AgentResponse for the agent across all rounds
+```
+
+#### export_session
+
+Export a debate session in various formats.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  format?: 'markdown' | 'json';  // Default: 'markdown'
+}
+
+// Returns: Formatted session export
+```
+
+#### control_session
+
+Control the execution state of a debate session.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  action: 'pause' | 'resume' | 'stop';  // Required
+}
+
+// Returns: Updated session status
+```
+
+#### get_round_details
+
+Get detailed responses for a specific round.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  roundNumber: number;  // Required (1-based index)
+}
+
+// Returns: All responses and consensus for the round
+```
+
+#### get_response_detail
+
+Get detailed response from a specific agent.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  agentId: string;      // Required
+  roundNumber?: number; // Optional: specific round (1-based)
+}
+
+// Returns: AgentResponse(s) - single if roundNumber provided, array otherwise
+```
+
+#### get_citations
+
+Get citations from the debate.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  roundNumber?: number; // Optional: filter by round (1-based)
+  agentId?: string;     // Optional: filter by agent
+}
+
+// Returns: Array of Citation with source info
+```
+
+#### synthesize_debate
+
+AI-powered synthesis of the entire debate.
+
+```typescript
+// Input schema
+{
+  sessionId: string;    // Required
+  synthesizer?: string; // Optional: agent ID to use for synthesis
+}
+
+// Returns: SynthesisResult
 ```
 
 ### Server Setup
@@ -919,9 +1094,10 @@ await server.start();
 | -------------------- | ---------------------------- | ------------------------------------ |
 | `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
 | `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
-| `GOOGLE_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
+| `GOOGLE_API_KEY`     | Google AI API key for Gemini | For Gemini agents                    |
 | `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
-| `DATABASE_PATH`      | SQLite database path         | No (default: `./data/roundtable.db`) |
+
+**Note:** Storage is in-memory using sql.js (WebAssembly SQLite). Sessions persist only during server runtime.
 
 ---
 
@@ -970,7 +1146,9 @@ RoundtableError (base)
 ├── APINetworkError       (retryable: true)
 ├── APITimeoutError       (retryable: true)
 ├── AgentError            (retryable: false)
-└── SessionError          (retryable: false)
+├── SessionError          (retryable: false)
+├── StorageError          (retryable: false)
+└── ConfigurationError    (retryable: false)
 ```
 
 ### Error Types Reference
@@ -1183,6 +1361,73 @@ Error related to session management.
 
 ---
 
+#### StorageError
+
+Error related to storage operations.
+
+| Property   | Value             |
+| ---------- | ----------------- |
+| Code       | `STORAGE_ERROR`   |
+| Retryable  | `false`           |
+| Default Message | (custom)      |
+
+**When it occurs:**
+- Database initialization failed
+- Data serialization/deserialization error
+- Storage query failed
+- Data integrity violation
+
+**Client handling:**
+1. Restart the server to reinitialize storage
+2. Check for data corruption
+3. Clear storage and start fresh if necessary
+
+**Example response:**
+```json
+{
+  "name": "StorageError",
+  "message": "Failed to save session to storage",
+  "code": "STORAGE_ERROR",
+  "retryable": false
+}
+```
+
+---
+
+#### ConfigurationError
+
+Error related to invalid configuration.
+
+| Property   | Value                  |
+| ---------- | ---------------------- |
+| Code       | `CONFIGURATION_ERROR`  |
+| Retryable  | `false`                |
+| Default Message | (custom)           |
+
+**When it occurs:**
+- Required configuration missing (e.g., toolkit not provided to DebateEngine)
+- Invalid configuration values
+- Incompatible configuration combinations
+- Environment variable missing or invalid
+
+**Client handling:**
+1. Check required configuration parameters
+2. Verify environment variables are set
+3. Review configuration against documentation
+4. Fix configuration before retrying
+
+**Example response:**
+```json
+{
+  "name": "ConfigurationError",
+  "message": "AgentToolkit must be provided to DebateEngine",
+  "code": "MISSING_TOOLKIT",
+  "retryable": false
+}
+```
+
+---
+
 ### Retry Strategy Recommendations
 
 For retryable errors, implement exponential backoff:
@@ -1210,11 +1455,13 @@ async function retryWithBackoff<T>(
 
 ### Error Code Summary
 
-| Error Code          | Retryable | Typical Cause                  |
-| ------------------- | --------- | ------------------------------ |
-| `API_RATE_LIMIT`    | Yes       | Too many requests              |
-| `API_AUTH_FAILED`   | No        | Invalid/expired API key        |
-| `API_NETWORK_ERROR` | Yes       | Network connectivity issues    |
-| `API_TIMEOUT`       | Yes       | Request processing too slow    |
-| `AGENT_ERROR`       | No        | Agent execution failure        |
-| `SESSION_ERROR`     | No        | Invalid session state/ID       |
+| Error Code            | Retryable | Typical Cause                  |
+| --------------------- | --------- | ------------------------------ |
+| `API_RATE_LIMIT`      | Yes       | Too many requests              |
+| `API_AUTH_FAILED`     | No        | Invalid/expired API key        |
+| `API_NETWORK_ERROR`   | Yes       | Network connectivity issues    |
+| `API_TIMEOUT`         | Yes       | Request processing too slow    |
+| `AGENT_ERROR`         | No        | Agent execution failure        |
+| `SESSION_ERROR`       | No        | Invalid session state/ID       |
+| `STORAGE_ERROR`       | No        | Database/storage operation failure |
+| `CONFIGURATION_ERROR` | No        | Missing/invalid configuration  |

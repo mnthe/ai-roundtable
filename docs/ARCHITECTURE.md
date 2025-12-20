@@ -329,23 +329,28 @@ Round 2: Revision Based on Anonymous Summary
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    Server Startup (server.ts:104-107)                       │
+│                    DebateEngine Initialization                              │
 │                                                                             │
-│   aiConsensusAnalyzer = new AIConsensusAnalyzer({                           │
-│     registry: agentRegistry,                                                │
-│     fallbackToRuleBased: true                                               │
-│   })                                                                        │
+│   interface DebateEngineOptions {                                           │
+│     toolkit?: AgentToolkit;           // Required                           │
+│     aiConsensusAnalyzer?: AIConsensusAnalyzer;  // Optional                 │
+│   }                                                                         │
 │                                                                             │
-│   ⚠️ Always created → aiConsensusAnalyzer is NEVER null                     │
+│   ⚠️ aiConsensusAnalyzer CAN be null (optional dependency)                   │
 └─────────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│              get_consensus / get_round_details (server.ts:696-698)          │
+│              DebateEngine.analyzeConsensusWithAI()                          │
 │                                                                             │
-│   const consensus = aiConsensusAnalyzer                                     │
-│     ? await aiConsensusAnalyzer.analyzeConsensus(...)  ← Always executed    │
-│     : debateEngine.analyzeConsensus(...);              ← Never executed     │
+│   if (aiConsensusAnalyzer) {                                                │
+│     try {                                                                   │
+│       return await aiConsensusAnalyzer.analyzeConsensus(...)  ← Primary     │
+│     } catch {                                                               │
+│       // Fall back to rule-based on error                                   │
+│     }                                                                       │
+│   }                                                                         │
+│   return this.analyzeConsensus(responses);  ← Fallback (rule-based)         │
 └─────────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -376,8 +381,9 @@ Round 2: Revision Based on Anonymous Summary
 | API key exists + AI failure | `AIConsensusAnalyzer.performBasicAnalysis()` | `1 - (uniquePositionCount - 1) / n` |
 | No API key (no agents)      | `AIConsensusAnalyzer.performBasicAnalysis()` | `1 - (uniquePositionCount - 1) / n` |
 
-> **Note:** `ConsensusAnalyzer` (Jaccard-based, `consensus-analyzer.ts`) is NOT used in MCP server.
-> It exists in `DebateEngine` but is bypassed because `aiConsensusAnalyzer` is always present.
+> **Note:** `ConsensusAnalyzer` (rule-based, in `DebateEngine.analyzeConsensus()`) is used as a fallback when:
+> - `aiConsensusAnalyzer` is not provided to DebateEngine
+> - AI analysis fails due to API errors or other issues
 
 ### Light Models for Analysis
 
@@ -784,47 +790,68 @@ flowchart TD
 ```
 src/
 ├── agents/              # AI Agent implementations
-│   ├── base.ts          # BaseAgent abstract class
+│   ├── base.ts          # BaseAgent abstract class (Template Method)
 │   ├── claude.ts        # Anthropic Claude
 │   ├── chatgpt.ts       # OpenAI ChatGPT
 │   ├── gemini.ts        # Google Gemini
 │   ├── perplexity.ts    # Perplexity
 │   ├── registry.ts      # Agent registration & health tracking
-│   └── setup.ts         # Auto-setup with API keys
+│   ├── setup.ts         # Auto-setup with API keys
+│   └── utils/           # Shared agent utilities
+│       ├── openai-completion.ts  # OpenAI SDK helpers
+│       ├── error-converter.ts    # SDK → RoundtableError
+│       ├── tool-converters.ts    # Toolkit → provider format
+│       └── light-model-factory.ts
 │
 ├── core/                # Core business logic
-│   ├── DebateEngine.ts  # Main orchestrator
+│   ├── debate-engine.ts         # Main orchestrator
 │   ├── session-manager.ts
-│   ├── consensus-analyzer.ts      # Rule-based
-│   └── ai-consensus-analyzer.ts   # AI-based
+│   ├── consensus-analyzer.ts    # Rule-based
+│   ├── ai-consensus-analyzer.ts # AI-based
+│   └── key-points-extractor.ts  # For 4-layer responses
 │
 ├── modes/               # Debate mode strategies
+│   ├── base.ts          # BaseModeStrategy abstract class
 │   ├── collaborative.ts
 │   ├── adversarial.ts
 │   ├── socratic.ts
 │   ├── expert-panel.ts
 │   ├── devils-advocate.ts
 │   ├── delphi.ts
-│   └── red-team-blue-team.ts
+│   ├── red-team-blue-team.ts
+│   ├── registry.ts
+│   └── utils/           # Prompt builder utilities
+│       └── prompt-builder.ts  # 4-layer prompt structure
 │
 ├── mcp/                 # MCP server interface
-│   ├── server.ts        # Server setup & handlers
-│   └── tools.ts         # Tool definitions
+│   ├── server.ts        # Server setup & routing
+│   ├── tools.ts         # Tool definitions (JSON Schema)
+│   └── handlers/        # Domain-specific handlers
+│       ├── session.ts   # start, continue, control, list
+│       ├── query.ts     # consensus, round_details, response_detail, citations, thoughts
+│       ├── export.ts    # export_session, synthesize_debate
+│       ├── agents.ts    # get_agents
+│       └── utils.ts     # 4-layer response builder
 │
 ├── storage/             # Persistence
-│   └── sqlite.ts        # SQLite storage
+│   └── sqlite.ts        # sql.js SQLite storage
 │
 ├── tools/               # Agent tools
-│   └── toolkit.ts       # Web search, fact check
+│   ├── toolkit.ts       # DefaultAgentToolkit
+│   ├── schemas.ts       # Zod validation schemas
+│   ├── types.ts         # AgentToolkit interface
+│   └── index.ts         # Module exports
 │
 ├── types/               # TypeScript definitions
-│   ├── index.ts
-│   └── schemas.ts       # Zod schemas
+│   ├── index.ts         # Core type definitions
+│   └── schemas.ts       # Zod schemas for MCP inputs
 │
 ├── utils/               # Utilities
-│   ├── logger.ts
-│   └── retry.ts
+│   ├── logger.ts        # pino-based structured logging
+│   ├── retry.ts         # withRetry utility
+│   ├── env.ts           # Environment variable utilities
+│   └── index.ts         # Module exports
 │
 └── errors/              # Custom error types
-    └── index.ts
+    └── index.ts         # RoundtableError hierarchy
 ```

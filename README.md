@@ -14,7 +14,7 @@ AI Roundtable orchestrates debates between multiple AI models using various disc
 - **AI-Powered Analysis**: Semantic consensus analysis using lightweight AI models
 - **Health Check System**: Automatic agent health verification on startup
 - **Tool Support**: Agents can use web search, fact-checking, and Perplexity's advanced search
-- **Persistent Storage**: SQLite-based session storage
+- **In-Memory Storage**: SQLite-based session storage (sql.js WebAssembly)
 - **MCP Protocol**: Standard MCP server interface for integration with Claude Desktop and other MCP clients
 
 ## Quick Start
@@ -44,7 +44,6 @@ GOOGLE_API_KEY=...               # For Gemini agents
 PERPLEXITY_API_KEY=pplx-...      # For Perplexity agents
 
 # Optional
-DATABASE_PATH=./data/roundtable.db
 LOG_LEVEL=info
 ```
 
@@ -257,6 +256,7 @@ Control session execution state.
 │  ┌───────────────────┐      ┌──────────────────────┐    │
 │  │DefaultAgentToolkit│      │    SQLiteStorage     │    │
 │  │ ├─ get_context    │      │                      │    │
+│  │ ├─ submit_response│      │                      │    │
 │  │ ├─ search_web     │      │                      │    │
 │  │ ├─ fact_check     │      │                      │    │
 │  │ └─ perplexity_    │      │                      │    │
@@ -298,21 +298,27 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed structure.
 
 ```
 src/
-├── agents/       # AI Agent implementations
-│   ├── base.ts           # BaseAgent abstract class
+├── agents/           # AI Agent implementations
+│   ├── base.ts           # BaseAgent abstract class (Template Method)
 │   ├── claude.ts         # Anthropic Claude
 │   ├── chatgpt.ts        # OpenAI ChatGPT
 │   ├── gemini.ts         # Google Gemini
 │   ├── perplexity.ts     # Perplexity AI
 │   ├── registry.ts       # Agent registry
-│   └── setup.ts          # Auto-configuration
-├── core/         # Core debate logic
-│   ├── debate-engine.ts       # Main orchestrator
+│   ├── setup.ts          # Auto-configuration with API key detection
+│   └── utils/            # Shared agent utilities
+│       ├── openai-completion.ts  # OpenAI SDK helpers
+│       ├── error-converter.ts    # SDK → RoundtableError
+│       ├── tool-converters.ts    # Toolkit → provider format
+│       └── light-model-factory.ts
+├── core/             # Core debate logic
+│   ├── debate-engine.ts        # Main orchestrator
 │   ├── session-manager.ts
-│   ├── consensus-analyzer.ts  # Rule-based fallback
-│   └── ai-consensus-analyzer.ts  # AI semantic analysis
-├── modes/        # Debate mode strategies
-│   ├── base.ts           # DebateModeStrategy interface
+│   ├── consensus-analyzer.ts   # Rule-based fallback
+│   ├── ai-consensus-analyzer.ts  # AI semantic analysis
+│   └── key-points-extractor.ts # For 4-layer responses
+├── modes/            # Debate mode strategies
+│   ├── base.ts           # BaseModeStrategy abstract class
 │   ├── collaborative.ts
 │   ├── adversarial.ts
 │   ├── socratic.ts
@@ -320,18 +326,36 @@ src/
 │   ├── devils-advocate.ts
 │   ├── delphi.ts
 │   ├── red-team-blue-team.ts
-│   └── registry.ts
-├── tools/        # Agent toolkit
-│   └── toolkit.ts
-├── storage/      # Persistence layer
-│   └── sqlite.ts
-├── mcp/          # MCP server interface
-│   ├── server.ts
-│   └── tools.ts
-├── types/        # TypeScript types
-├── utils/        # Utilities (logger, retry)
-├── errors/       # Custom error types
-└── index.ts      # Entry point
+│   ├── registry.ts
+│   └── utils/            # Prompt builder utilities
+│       ├── prompt-builder.ts  # 4-layer prompt structure
+│       └── index.ts           # Module exports
+├── tools/            # Agent toolkit
+│   ├── toolkit.ts        # DefaultAgentToolkit
+│   ├── schemas.ts        # Zod validation schemas
+│   └── types.ts          # AgentToolkit interface
+├── storage/          # Persistence layer
+│   └── sqlite.ts         # sql.js implementation
+├── mcp/              # MCP server interface
+│   ├── server.ts         # Server setup and routing
+│   ├── tools.ts          # Tool definitions (JSON Schema)
+│   └── handlers/         # Domain-specific handlers
+│       ├── session.ts    # start, continue, control, list
+│       ├── query.ts      # consensus, round_details, citations
+│       ├── export.ts     # export_session, synthesize_debate
+│       ├── agents.ts     # get_agents
+│       └── utils.ts      # 4-layer response builder
+├── types/            # TypeScript types
+│   ├── index.ts          # Core type definitions
+│   └── schemas.ts        # Zod schemas for MCP inputs
+├── utils/            # Utilities
+│   ├── logger.ts         # pino-based structured logging
+│   ├── retry.ts          # withRetry utility
+│   ├── env.ts            # Environment variable utilities
+│   └── index.ts          # Module exports
+├── errors/           # Custom error types
+│   └── index.ts          # RoundtableError hierarchy
+└── index.ts          # Entry point
 ```
 
 ## Development
@@ -372,52 +396,53 @@ pnpm typecheck
 
 ### Adding a New AI Provider
 
-1. Create agent class extending `BaseAgent`:
+1. Create agent class extending `BaseAgent` (Template Method pattern):
 
 ```typescript
 // src/agents/my-agent.ts
 export class MyAgent extends BaseAgent {
-  async generateResponse(context: DebateContext): Promise<AgentResponse> {
-    const systemPrompt = this.buildSystemPrompt(context);
-    const userMessage = this.buildUserMessage(context);
-    // Call your AI provider API
-    // Handle tool calls if supported
-    return {
-      agentId: this.id,
-      agentName: this.name,
-      position: '...',
-      reasoning: '...',
-      confidence: 0.8,
-      timestamp: new Date(),
-    };
+  // Implement 3 abstract methods:
+
+  protected async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
+    // Primary API call with tool handling
+    return { rawText: '...', toolCalls: [], citations: [] };
+  }
+
+  protected async performHealthCheck(): Promise<void> {
+    // Minimal API call to verify connectivity
+  }
+
+  protected async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    // Raw completion for synthesis/analysis (no tool calls)
   }
 }
 ```
 
 2. Update `AIProvider` type in `src/types/index.ts`
 
-3. Register in `src/agents/setup.ts`
+3. Register in `src/agents/setup.ts` (DEFAULT_MODELS, LIGHT_MODELS, setupProviders)
 
 4. Add tests in `tests/unit/agents/`
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed guide.
+See [.claude/rules/adding-agents.md](.claude/rules/adding-agents.md) for complete guide.
 
 ### Adding a New Debate Mode
 
-1. Implement `DebateModeStrategy` interface:
+1. Extend `BaseModeStrategy` abstract class:
 
 ```typescript
 // src/modes/my-mode.ts
-export class MyMode implements DebateModeStrategy {
+export class MyMode extends BaseModeStrategy {
   readonly name = 'my-mode';
 
   async executeRound(agents, context, toolkit): Promise<AgentResponse[]> {
-    // Parallel: return Promise.all(agents.map(a => a.generateResponse(context)));
-    // Sequential: use for...of loop with context accumulation
+    // Use inherited methods:
+    return this.executeParallel(agents, context, toolkit);  // or executeSequential
   }
 
   buildAgentPrompt(context: DebateContext): string {
-    return `Your mode-specific prompt for ${context.topic}...`;
+    // Build 4-layer prompt using prompt-builder utilities
+    return buildModePrompt(config, context);
   }
 }
 ```
@@ -426,7 +451,7 @@ export class MyMode implements DebateModeStrategy {
 
 3. Update `DebateMode` type in `src/types/index.ts`
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed guide.
+See [.claude/rules/adding-modes.md](.claude/rules/adding-modes.md) for complete guide.
 
 ## Agent Tools
 
@@ -465,14 +490,15 @@ During debates, agents have access to these tools:
 
 ## Environment Variables
 
-| Variable             | Description                  | Required                             |
-| -------------------- | ---------------------------- | ------------------------------------ |
-| `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
-| `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
-| `GOOGLE_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
-| `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
-| `DATABASE_PATH`      | SQLite database path         | No (default: `./data/roundtable.db`) |
-| `LOG_LEVEL`          | Logging verbosity            | No (default: `info`)                 |
+| Variable             | Description                  | Required            |
+| -------------------- | ---------------------------- | ------------------- |
+| `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents   |
+| `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents  |
+| `GOOGLE_API_KEY`     | Google AI API key for Gemini | For Gemini agents   |
+| `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents |
+| `LOG_LEVEL`          | Logging verbosity            | No (default: `info`) |
+
+**Note:** Storage uses in-memory SQLite (sql.js WebAssembly). Sessions persist only during server runtime.
 
 ## Documentation
 
