@@ -3,6 +3,7 @@
  */
 
 import { jsonrepair } from 'jsonrepair';
+import { createLogger } from '../utils/logger.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -13,6 +14,12 @@ import type {
   ToolCallRecord,
   ImageResult,
 } from '../types/index.js';
+import type { AgentTool, AgentToolkit } from '../tools/types.js';
+
+// Re-export toolkit types for backwards compatibility
+export type { AgentTool, AgentToolkit } from '../tools/types.js';
+
+const logger = createLogger('BaseAgent');
 
 /**
  * Tool result structure that may contain citations
@@ -56,23 +63,6 @@ interface AgentResponseParams {
   toolCalls: ToolCallRecord[];
   images?: ImageResult[];
   relatedQuestions?: string[];
-}
-
-/**
- * Tool definition that agents can use during debates
- */
-export interface AgentTool {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-}
-
-/**
- * Toolkit interface that provides common tools to agents
- */
-export interface AgentToolkit {
-  getTools(): AgentTool[];
-  executeTool(name: string, input: unknown): Promise<unknown>;
 }
 
 /**
@@ -153,31 +143,36 @@ export abstract class BaseAgent {
    * Health check: Test if the agent's API connection is working
    * Returns true if the agent is healthy, false otherwise
    *
-   * Default implementation attempts a simple API call with minimal tokens.
-   * Override if provider requires specific health check logic.
+   * This is a template method that provides common logging and error handling.
+   * Subclasses should implement performHealthCheck() for provider-specific API calls.
    */
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      // Create a minimal test context
-      const testContext: DebateContext = {
-        sessionId: 'health-check',
-        topic: 'test',
-        mode: 'collaborative',
-        currentRound: 1,
-        totalRounds: 1,
-        previousResponses: [],
-      };
+    logger.debug({ agentId: this.id, agentName: this.name, provider: this.provider }, 'Starting health check');
 
-      // Attempt to generate a response with minimal input
-      await this.generateResponse(testContext);
+    try {
+      await this.performHealthCheck();
+      logger.info({ agentId: this.id, agentName: this.name, provider: this.provider }, 'Health check passed');
       return { healthy: true };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn(
+        { agentId: this.id, agentName: this.name, provider: this.provider, error: errorMessage },
+        'Health check failed'
+      );
       return {
         healthy: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       };
     }
   }
+
+  /**
+   * Perform provider-specific health check
+   *
+   * Subclasses must implement this method to make a minimal API call
+   * to verify connectivity. Should throw an error if the health check fails.
+   */
+  protected abstract performHealthCheck(): Promise<void>;
 
   /**
    * Generate a synthesis of debate responses
@@ -528,5 +523,12 @@ export class MockAgent extends BaseAgent {
       disagreementPoints: [],
       summary: `Mock analysis of: ${prompt.slice(0, 50)}...`,
     });
+  }
+
+  protected async performHealthCheck(): Promise<void> {
+    // Mock agent is always healthy
+    if (this.responseDelay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.responseDelay));
+    }
   }
 }

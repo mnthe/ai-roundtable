@@ -2,7 +2,12 @@
  * Agent Toolkit - Common tools available to all agents during debates
  */
 
-import type { AgentTool, AgentToolkit } from '../agents/base.js';
+import type {
+  AgentTool,
+  AgentToolkit,
+  ToolExecutor,
+  ToolDefinition,
+} from './types.js';
 import type {
   DebateContext,
   AgentResponse,
@@ -11,18 +16,8 @@ import type {
   ToolResult,
 } from '../types/index.js';
 
-/**
- * Tool executor function type
- */
-export type ToolExecutor = (input: unknown) => Promise<unknown>;
-
-/**
- * Tool definition with executor
- */
-export interface ToolDefinition {
-  tool: AgentTool;
-  executor: ToolExecutor;
-}
+// Re-export types from types.ts for backwards compatibility
+export type { AgentTool, AgentToolkit, ToolExecutor, ToolDefinition } from './types.js';
 
 /**
  * Interface for web search provider

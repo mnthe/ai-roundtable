@@ -18,7 +18,7 @@ import type {
   Citation,
   ToolCallRecord,
 } from '../../src/types/index.js';
-import type { AgentToolkit, ToolDefinition } from '../../src/agents/base.js';
+import type { AgentToolkit, ToolDefinition } from '../../src/tools/types.js';
 
 // =============================================================================
 // Mock Anthropic Client
