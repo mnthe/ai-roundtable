@@ -12,7 +12,7 @@ import type {
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
-import { buildOpenAITools } from './utils/index.js';
+import { buildOpenAITools, convertSDKError } from './utils/index.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -102,14 +102,6 @@ function hasPerplexityExtensions(response: unknown): response is PerplexityExten
 
   return true;
 }
-
-/** Perplexity API error types that should be retried (uses OpenAI SDK) */
-const RETRYABLE_ERRORS = [
-  'RateLimitError',
-  'APIConnectionError',
-  'InternalServerError',
-  'APIError', // 5xx errors
-];
 
 /**
  * Search recency filter options
@@ -206,74 +198,25 @@ export class PerplexityAgent extends BaseAgent {
       'Starting agent response generation'
     );
 
-    const systemPrompt = this.buildSystemPrompt(context);
-    const userMessage = this.buildUserMessage(context);
+    try {
+      const systemPrompt = this.buildSystemPrompt(context);
+      const userMessage = this.buildUserMessage(context);
 
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ];
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ];
 
-    const toolCalls: ToolCallRecord[] = [];
-    const citations: Citation[] = [];
+      const toolCalls: ToolCallRecord[] = [];
+      const citations: Citation[] = [];
 
-    // Build tools if toolkit is available (Perplexity supports function calling)
-    const tools = buildOpenAITools(this.toolkit);
+      // Build tools if toolkit is available (Perplexity supports function calling)
+      const tools = buildOpenAITools(this.toolkit);
 
-    // Make the API call with Perplexity-specific search options and retry logic
-    // Note: Perplexity returns citations in the response when using online models
-    let response: OpenAI.Chat.Completions.ChatCompletion = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          messages,
-          tools,
-          temperature: this.temperature,
-          // Perplexity-specific search options (passed as extra body params)
-          ...this.buildSearchParams(),
-        } as Parameters<typeof this.client.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>,
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-    );
-
-    let choice = response.choices[0];
-
-    // Handle tool call loop
-    while (choice?.finish_reason === 'tool_calls' && choice.message.tool_calls) {
-      const assistantMessage = choice.message;
-      const currentToolCalls = choice.message.tool_calls;
-      messages.push(assistantMessage);
-
-      for (const toolCall of currentToolCalls ?? []) {
-        // Skip non-function tool calls (e.g., custom tool calls in v6+)
-        if (toolCall.type !== 'function') continue;
-
-        const functionName = toolCall.function.name;
-        const functionArgs = JSON.parse(toolCall.function.arguments);
-
-        const result = await this.executeTool(functionName, functionArgs);
-
-        toolCalls.push({
-          toolName: functionName,
-          input: functionArgs,
-          output: result,
-          timestamp: new Date(),
-        });
-
-        // Extract citations from search results
-        const extractedCitations = this.extractCitationsFromToolResult(functionName, result);
-        citations.push(...extractedCitations);
-
-        const toolResultMessage: ChatCompletionToolMessageParam = {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        };
-        messages.push(toolResultMessage);
-      }
-
-      // Continue the conversation with tool results
-      response = await withRetry(
+      // Make the API call with Perplexity-specific search options and retry logic
+      // Note: Perplexity returns citations in the response when using online models
+      // OpenAI SDK handles retries for rate limits and transient errors automatically
+      let response: OpenAI.Chat.Completions.ChatCompletion = await withRetry(
         () =>
           this.client.chat.completions.create({
             model: this.model,
@@ -281,58 +224,125 @@ export class PerplexityAgent extends BaseAgent {
             messages,
             tools,
             temperature: this.temperature,
+            // Perplexity-specific search options (passed as extra body params)
             ...this.buildSearchParams(),
           } as Parameters<typeof this.client.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>,
-        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+        { maxRetries: 3 }
       );
 
-      choice = response.choices[0];
+      let choice = response.choices[0];
+
+      // Handle tool call loop
+      while (choice?.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+        const assistantMessage = choice.message;
+        const currentToolCalls = choice.message.tool_calls;
+        messages.push(assistantMessage);
+
+        for (const toolCall of currentToolCalls ?? []) {
+          // Skip non-function tool calls (e.g., custom tool calls in v6+)
+          if (toolCall.type !== 'function') continue;
+
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments);
+
+          const result = await this.executeTool(functionName, functionArgs);
+
+          toolCalls.push({
+            toolName: functionName,
+            input: functionArgs,
+            output: result,
+            timestamp: new Date(),
+          });
+
+          // Extract citations from search results
+          const extractedCitations = this.extractCitationsFromToolResult(functionName, result);
+          citations.push(...extractedCitations);
+
+          const toolResultMessage: ChatCompletionToolMessageParam = {
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(result),
+          };
+          messages.push(toolResultMessage);
+        }
+
+        // Continue the conversation with tool results
+        response = await withRetry(
+          () =>
+            this.client.chat.completions.create({
+              model: this.model,
+              max_tokens: this.maxTokens,
+              messages,
+              tools,
+              temperature: this.temperature,
+              ...this.buildSearchParams(),
+            } as Parameters<typeof this.client.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>,
+          { maxRetries: 3 }
+        );
+
+        choice = response.choices[0];
+      }
+
+      // Extract text from final response
+      const rawText = choice?.message?.content ?? '';
+
+      // Extract metadata from Perplexity's response (citations, images, related questions)
+      // Pass rawText to filter citations to only those actually referenced
+      const perplexityMetadata = this.extractPerplexityMetadata(response, rawText);
+      if (perplexityMetadata.citations.length > 0) {
+        citations.push(...perplexityMetadata.citations);
+      }
+
+      // Parse the response (Perplexity doesn't use submit_response tool)
+      const parsedResponse = this.parseResponse(rawText, context);
+      const parsed = {
+        position: parsedResponse.position || 'Unable to determine position',
+        reasoning: parsedResponse.reasoning || rawText || 'Unable to determine reasoning',
+        confidence: parsedResponse.confidence ?? 0.5,
+      };
+
+      // Build the final response with Perplexity-specific metadata
+      const result = this.buildAgentResponse({
+        parsed,
+        rawText,
+        citations,
+        toolCalls,
+        images: perplexityMetadata.images,
+        relatedQuestions: perplexityMetadata.relatedQuestions,
+      });
+
+      const durationMs = Date.now() - startTime;
+      logger.info(
+        {
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          durationMs,
+          toolCallCount: toolCalls.length,
+          citationCount: citations.length,
+          confidence: parsed.confidence,
+        },
+        'Agent response generation completed'
+      );
+
+      return result;
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const convertedError = convertSDKError(error, 'perplexity');
+      logger.error(
+        {
+          err: convertedError,
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          durationMs,
+        },
+        'Failed to generate agent response'
+      );
+      throw convertedError;
     }
-
-    // Extract text from final response
-    const rawText = choice?.message?.content ?? '';
-
-    // Extract metadata from Perplexity's response (citations, images, related questions)
-    // Pass rawText to filter citations to only those actually referenced
-    const perplexityMetadata = this.extractPerplexityMetadata(response, rawText);
-    if (perplexityMetadata.citations.length > 0) {
-      citations.push(...perplexityMetadata.citations);
-    }
-
-    // Parse the response (Perplexity doesn't use submit_response tool)
-    const parsedResponse = this.parseResponse(rawText, context);
-    const parsed = {
-      position: parsedResponse.position || 'Unable to determine position',
-      reasoning: parsedResponse.reasoning || rawText || 'Unable to determine reasoning',
-      confidence: parsedResponse.confidence ?? 0.5,
-    };
-
-    // Build the final response with Perplexity-specific metadata
-    const result = this.buildAgentResponse({
-      parsed,
-      rawText,
-      citations,
-      toolCalls,
-      images: perplexityMetadata.images,
-      relatedQuestions: perplexityMetadata.relatedQuestions,
-    });
-
-    const durationMs = Date.now() - startTime;
-    logger.info(
-      {
-        sessionId: context.sessionId,
-        agentId: this.id,
-        agentName: this.name,
-        round: context.currentRound,
-        durationMs,
-        toolCallCount: toolCalls.length,
-        citationCount: citations.length,
-        confidence: parsed.confidence,
-      },
-      'Agent response generation completed'
-    );
-
-    return result;
   }
 
   /**
@@ -505,21 +515,25 @@ export class PerplexityAgent extends BaseAgent {
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
-    const response = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-          temperature: this.temperature,
-        }),
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-    );
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage },
+            ],
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3 }
+      );
 
-    return response.choices[0]?.message?.content ?? '';
+      return response.choices[0]?.message?.content ?? '';
+    } catch (error) {
+      throw convertSDKError(error, 'perplexity');
+    }
   }
 
   /**
@@ -529,25 +543,29 @@ export class PerplexityAgent extends BaseAgent {
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
-    const response = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          messages: [
-            {
-              role: 'system',
-              content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-            },
-            { role: 'user', content: prompt },
-          ],
-          temperature: this.temperature,
-          // Disable web search for raw completion (consensus analysis doesn't need it)
-        }),
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-    );
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            messages: [
+              {
+                role: 'system',
+                content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+              },
+              { role: 'user', content: prompt },
+            ],
+            temperature: this.temperature,
+            // Disable web search for raw completion (consensus analysis doesn't need it)
+          }),
+        { maxRetries: 3 }
+      );
 
-    return response.choices[0]?.message?.content ?? '';
+      return response.choices[0]?.message?.content ?? '';
+    } catch (error) {
+      throw convertSDKError(error, 'perplexity');
+    }
   }
 
   /**
@@ -561,7 +579,7 @@ export class PerplexityAgent extends BaseAgent {
           max_tokens: 10,
           messages: [{ role: 'user', content: 'test' }],
         }),
-      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+      { maxRetries: 3 }
     );
   }
 
