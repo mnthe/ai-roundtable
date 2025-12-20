@@ -206,6 +206,8 @@ export class ChatGPTAgent extends BaseAgent {
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
+    logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
+
     try {
       const response = await withRetry(
         () =>
@@ -221,9 +223,15 @@ export class ChatGPTAgent extends BaseAgent {
         { maxRetries: 3 }
       );
 
+      logger.info({ agentId: this.id, agentName: this.name }, 'Synthesis generation completed');
       return response.choices[0]?.message?.content ?? '';
     } catch (error) {
-      throw convertSDKError(error, 'openai');
+      const convertedError = convertSDKError(error, 'openai');
+      logger.error(
+        { err: convertedError, agentId: this.id, agentName: this.name },
+        'Failed to generate synthesis'
+      );
+      throw convertedError;
     }
   }
 
@@ -254,7 +262,12 @@ export class ChatGPTAgent extends BaseAgent {
 
       return response.choices[0]?.message?.content ?? '';
     } catch (error) {
-      throw convertSDKError(error, 'openai');
+      const convertedError = convertSDKError(error, 'openai');
+      logger.error(
+        { err: convertedError, agentId: this.id },
+        'Failed to generate raw completion'
+      );
+      throw convertedError;
     }
   }
 

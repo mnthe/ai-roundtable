@@ -260,7 +260,12 @@ export class ClaudeAgent extends BaseAgent {
       );
       return textBlocks.map((block) => block.text).join('\n');
     } catch (error) {
-      throw convertSDKError(error, 'anthropic');
+      const convertedError = convertSDKError(error, 'anthropic');
+      logger.error(
+        { err: convertedError, agentId: this.id },
+        'Failed to generate raw completion'
+      );
+      throw convertedError;
     }
   }
 
