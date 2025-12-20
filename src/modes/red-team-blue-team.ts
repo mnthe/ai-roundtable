@@ -4,11 +4,16 @@
  * In red team/blue team mode, agents are divided into two opposing teams.
  * Red team takes a critical/attacking perspective (identifying risks and problems),
  * while blue team takes a constructive/defensive perspective (proposing solutions).
+ *
+ * Uses hooks:
+ * - getAgentRole: Assigns 'red' or 'blue' based on agent index (even = red, odd = blue)
+ * - transformContext: Injects agent role into context for prompt building
  */
 
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
 import {
   buildRoleAnchor,
   buildBehavioralContract,
@@ -20,10 +25,20 @@ import {
   type OutputSection,
 } from './utils/index.js';
 
+const logger = createLogger('RedTeamBlueTeamMode');
+
 /**
  * Team assignment for agents
  */
 type Team = 'red' | 'blue';
+
+/**
+ * Extended context for red-team-blue-team mode with role tracking
+ */
+interface RedTeamBlueTeamContext extends DebateContext {
+  /** Current agent's team role */
+  _agentTeam?: Team;
+}
 
 /**
  * Separator line used in prompts
@@ -150,19 +165,28 @@ const BLUE_TEAM_OUTPUT_SECTIONS: OutputSection[] = createOutputSections([
  * - Teams execute in parallel, then cross-evaluate
  * - Focus on adversarial but productive tension
  *
- * Note: Uses custom executeRound with team-based execution and interleaving
+ * Uses hooks:
+ * - getAgentRole: Assigns 'red' or 'blue' based on agent index
+ * - transformContext: Injects team role into context for prompt building
  */
 export class RedTeamBlueTeamMode extends BaseModeStrategy {
   readonly name = 'red-team-blue-team';
+  override readonly executionPattern = 'parallel' as const;
+
+  /**
+   * Stores agent indices for the current round execution.
+   * Used by transformContext to determine team assignment.
+   */
+  private agentIndices: Map<string, number> = new Map();
 
   /**
    * Execute a red team/blue team round
    *
-   * Agents are divided by index:
+   * Agents are divided by index via getAgentRole hook:
    * - Even indices (0, 2, 4, ...): Red Team
    * - Odd indices (1, 3, 5, ...): Blue Team
    *
-   * Both teams execute in parallel.
+   * Both teams execute in parallel using Promise.allSettled for error handling.
    */
   async executeRound(
     agents: BaseAgent[],
@@ -173,37 +197,46 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
       return [];
     }
 
-    // Divide agents into red and blue teams
-    const redTeam: BaseAgent[] = [];
-    const blueTeam: BaseAgent[] = [];
-
+    // Store agent indices for hook access
+    this.agentIndices.clear();
     agents.forEach((agent, index) => {
-      if (index % 2 === 0) {
-        redTeam.push(agent);
-      } else {
-        blueTeam.push(agent);
-      }
+      this.agentIndices.set(agent.id, index);
     });
 
-    // Execute both teams in parallel
-    const [redResponses, blueResponses] = await Promise.all([
-      this.executeTeam(redTeam, 'red', context, toolkit),
-      this.executeTeam(blueTeam, 'blue', context, toolkit),
-    ]);
+    // Execute all agents in parallel with team-specific prompts via hooks
+    const responsePromises = agents.map((agent, index) => {
+      agent.setToolkit(toolkit);
 
-    // Interleave responses to maintain original agent order
+      // Get team role via hook
+      const team = this.getAgentRole(agent, index, context) as Team;
+      logger.debug({ agentId: agent.id, team, index }, 'Agent team assigned');
+
+      // Build context with team-specific prompt via transformContext
+      const agentContext = this.transformContext(
+        {
+          ...context,
+          modePrompt: this.buildAgentPrompt(context),
+        },
+        agent
+      );
+
+      return agent.generateResponse(agentContext);
+    });
+
+    // Use allSettled to handle individual failures gracefully
+    const results = await Promise.allSettled(responsePromises);
+
     const responses: AgentResponse[] = [];
-    const maxLength = Math.max(redResponses.length, blueResponses.length);
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const agent = agents[i];
+      if (!result || !agent) continue;
 
-    for (let i = 0; i < maxLength; i++) {
-      const redResponse = redResponses[i];
-      const blueResponse = blueResponses[i];
-
-      if (redResponse) {
-        responses.push(redResponse);
-      }
-      if (blueResponse) {
-        responses.push(blueResponse);
+      if (result.status === 'fulfilled') {
+        responses.push(result.value);
+      } else {
+        // Log error but continue with other agents
+        logger.error({ err: result.reason, agentId: agent.id }, 'Error from agent');
       }
     }
 
@@ -211,53 +244,56 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
   }
 
   /**
-   * Execute a single team's responses in parallel
+   * Get the team role for an agent based on their index.
+   * Hook implementation for BaseModeStrategy.
+   *
+   * Team assignment:
+   * - Even indices (0, 2, 4, ...): red team
+   * - Odd indices (1, 3, 5, ...): blue team
    */
-  private async executeTeam(
-    teamAgents: BaseAgent[],
-    team: Team,
+  protected override getAgentRole(
+    _agent: BaseAgent,
+    index: number,
+    _context: DebateContext
+  ): Team {
+    return index % 2 === 0 ? 'red' : 'blue';
+  }
+
+  /**
+   * Transform context to inject the team role for prompt building.
+   * Hook implementation for BaseModeStrategy.
+   */
+  protected override transformContext(
     context: DebateContext,
-    toolkit: AgentToolkit
-  ): Promise<AgentResponse[]> {
-    if (teamAgents.length === 0) {
-      return [];
-    }
+    agent: BaseAgent
+  ): RedTeamBlueTeamContext {
+    const index = this.agentIndices.get(agent.id) ?? 0;
+    const team = this.getAgentRole(agent, index, context);
 
-    // Build team-specific prompt
-    const teamPrompt =
-      team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context);
-
-    // Build context with team-specific mode prompt
-    const teamContext: DebateContext = {
+    const transformedContext: RedTeamBlueTeamContext = {
       ...context,
-      modePrompt: teamPrompt,
+      _agentTeam: team,
+      // Rebuild modePrompt with the correct team role
+      modePrompt: team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context),
     };
-
-    // All team members see the same context and respond in parallel
-    const responsePromises = teamAgents.map((agent) => {
-      agent.setToolkit(toolkit);
-      return agent.generateResponse(teamContext);
-    });
-
-    return Promise.all(responsePromises);
+    return transformedContext;
   }
 
   /**
    * Build team-specific prompt
    *
    * Different prompts for red team (critical/attacking) and blue team (constructive/defensive)
+   *
+   * Note: When called from executeRound, the context will have been transformed
+   * by transformContext to include _agentTeam. Fallback to red team for direct calls.
    */
   buildAgentPrompt(context: DebateContext): string {
-    // Determine team based on response count in current round
-    const currentRoundResponses = this.getCurrentRoundResponses(context);
-    const agentIndex = currentRoundResponses.length;
-    const team: Team = agentIndex % 2 === 0 ? 'red' : 'blue';
+    // Use _agentTeam if available (set by transformContext),
+    // otherwise fallback to red team as default
+    const rtbtContext = context as RedTeamBlueTeamContext;
+    const team: Team = rtbtContext._agentTeam ?? 'red';
 
-    if (team === 'red') {
-      return this.buildRedTeamPrompt(context);
-    } else {
-      return this.buildBlueTeamPrompt(context);
-    }
+    return team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context);
   }
 
   /**
@@ -363,25 +399,6 @@ REQUIRED OUTPUT STRUCTURE:
     }
 
     return prompt;
-  }
-
-  /**
-   * Get responses from current round only
-   */
-  private getCurrentRoundResponses(context: DebateContext): AgentResponse[] {
-    if (context.previousResponses.length === 0) {
-      return [];
-    }
-
-    // Find responses from the most recent round
-    const allResponses = context.previousResponses;
-    const lastResponse = allResponses[allResponses.length - 1];
-    if (!lastResponse) {
-      return [];
-    }
-
-    const latestTimestamp = lastResponse.timestamp.getTime();
-    return allResponses.filter((r) => r.timestamp.getTime() === latestTimestamp);
   }
 
   /**

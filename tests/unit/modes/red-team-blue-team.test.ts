@@ -30,6 +30,38 @@ describe('RedTeamBlueTeamMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('red-team-blue-team');
     });
+
+    it('should have parallel execution pattern', () => {
+      expect(mode.executionPattern).toBe('parallel');
+    });
+  });
+
+  describe('getAgentRole hook', () => {
+    it('should assign red team to even indices', () => {
+      const agent = new MockAgent({ id: 'agent-0', name: 'Agent', provider: 'anthropic', model: 'mock' });
+      // Access protected method for testing
+      const role = (mode as any).getAgentRole(agent, 0, defaultContext);
+      expect(role).toBe('red');
+
+      const role2 = (mode as any).getAgentRole(agent, 2, defaultContext);
+      expect(role2).toBe('red');
+
+      const role4 = (mode as any).getAgentRole(agent, 4, defaultContext);
+      expect(role4).toBe('red');
+    });
+
+    it('should assign blue team to odd indices', () => {
+      const agent = new MockAgent({ id: 'agent-1', name: 'Agent', provider: 'anthropic', model: 'mock' });
+      // Access protected method for testing
+      const role = (mode as any).getAgentRole(agent, 1, defaultContext);
+      expect(role).toBe('blue');
+
+      const role3 = (mode as any).getAgentRole(agent, 3, defaultContext);
+      expect(role3).toBe('blue');
+
+      const role5 = (mode as any).getAgentRole(agent, 5, defaultContext);
+      expect(role5).toBe('blue');
+    });
   });
 
   describe('executeRound', () => {
@@ -322,7 +354,7 @@ describe('RedTeamBlueTeamMode', () => {
   });
 
   describe('error handling', () => {
-    it('should handle agent failure gracefully', async () => {
+    it('should handle agent failure gracefully and continue with other agents', async () => {
       const agents = [
         new MockAgent({ id: 'red-1', name: 'Red', provider: 'anthropic', model: 'mock' }),
         new MockAgent({ id: 'blue-1', name: 'Blue', provider: 'openai', model: 'mock' }),
@@ -339,7 +371,85 @@ describe('RedTeamBlueTeamMode', () => {
 
       vi.spyOn(agents[1], 'generateResponse').mockRejectedValue(new Error('Agent failed'));
 
-      await expect(mode.executeRound(agents, defaultContext, mockToolkit)).rejects.toThrow();
+      // Should not throw - gracefully handles failure
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Should have only the successful response
+      expect(responses).toHaveLength(1);
+      expect(responses[0]?.agentId).toBe('red-1');
+    });
+
+    it('should return empty array if all agents fail', async () => {
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue', provider: 'openai', model: 'mock' }),
+      ];
+
+      vi.spyOn(agents[0], 'generateResponse').mockRejectedValue(new Error('Agent failed'));
+      vi.spyOn(agents[1], 'generateResponse').mockRejectedValue(new Error('Agent failed'));
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+      expect(responses).toHaveLength(0);
+    });
+  });
+
+  describe('transformContext hook', () => {
+    it('should inject team role into context', async () => {
+      const receivedContexts: DebateContext[] = [];
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue', provider: 'openai', model: 'mock' }),
+      ];
+
+      agents.forEach((agent) => {
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx) => {
+          receivedContexts.push({ ...ctx });
+          return {
+            agentId: agent.id,
+            agentName: agent.name,
+            position: 'Position',
+            reasoning: 'Reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+      });
+
+      await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Red team agent should receive context with _agentTeam: 'red'
+      expect((receivedContexts[0] as any)._agentTeam).toBe('red');
+      // Blue team agent should receive context with _agentTeam: 'blue'
+      expect((receivedContexts[1] as any)._agentTeam).toBe('blue');
+    });
+
+    it('should inject team-specific modePrompt via transformContext', async () => {
+      const receivedContexts: DebateContext[] = [];
+      const agents = [
+        new MockAgent({ id: 'red-1', name: 'Red', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'blue-1', name: 'Blue', provider: 'openai', model: 'mock' }),
+      ];
+
+      agents.forEach((agent) => {
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx) => {
+          receivedContexts.push({ ...ctx });
+          return {
+            agentId: agent.id,
+            agentName: agent.name,
+            position: 'Position',
+            reasoning: 'Reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+      });
+
+      await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Red team agent should receive red team prompt
+      expect(receivedContexts[0]?.modePrompt?.toLowerCase()).toContain('red team');
+      // Blue team agent should receive blue team prompt
+      expect(receivedContexts[1]?.modePrompt?.toLowerCase()).toContain('blue team');
     });
   });
 });
