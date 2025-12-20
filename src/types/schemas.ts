@@ -207,6 +207,71 @@ export const SynthesisResultSchema = z.object({
 });
 
 // ============================================
+// SQLite Storage Schemas
+// ============================================
+
+/**
+ * Schema for stored session rows from SQLite
+ * Note: Dates are stored as Unix timestamps (numbers)
+ */
+export const StoredSessionRowSchema = z.object({
+  id: z.string(),
+  topic: z.string(),
+  mode: z.string(),
+  agent_ids: z.string(), // JSON array stored as string
+  status: z.string(),
+  current_round: z.number(),
+  total_rounds: z.number(),
+  created_at: z.number(), // Unix timestamp
+  updated_at: z.number(), // Unix timestamp
+});
+
+/**
+ * Schema for stored response rows from SQLite
+ */
+export const StoredResponseRowSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  agent_id: z.string(),
+  agent_name: z.string(),
+  position: z.string(),
+  reasoning: z.string(),
+  confidence: z.number(),
+  citations: z.string().nullable(), // JSON array or null
+  tool_calls: z.string().nullable(), // JSON array or null
+  timestamp: z.number(), // Unix timestamp
+});
+
+/**
+ * Schema for agent IDs array parsed from JSON
+ */
+export const AgentIdsArraySchema = z.array(z.string());
+
+/**
+ * Schema for citations array parsed from JSON in storage
+ * More lenient than CitationSchema to handle various stored formats
+ */
+export const StoredCitationsArraySchema = z.array(
+  z.object({
+    title: z.string(),
+    url: z.string(),
+    snippet: z.string().optional(),
+  })
+);
+
+/**
+ * Schema for tool calls array parsed from JSON in storage
+ */
+export const StoredToolCallsArraySchema = z.array(
+  z.object({
+    toolName: z.string(),
+    input: z.unknown(),
+    output: z.unknown(),
+    timestamp: z.union([z.string(), z.number(), z.coerce.date()]),
+  })
+);
+
+// ============================================
 // Type Inference Helpers
 // ============================================
 

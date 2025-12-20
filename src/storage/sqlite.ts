@@ -5,7 +5,15 @@
 
 import initSqlJs from 'sql.js';
 import type { SqlJsStatic, Database as SqlJsDatabase } from 'sql.js';
+import { ZodError } from 'zod';
 import { createLogger } from '../utils/logger.js';
+import {
+  StoredSessionRowSchema,
+  StoredResponseRowSchema,
+  AgentIdsArraySchema,
+  StoredCitationsArraySchema,
+  StoredToolCallsArraySchema,
+} from '../types/schemas.js';
 import type {
   Session,
   AgentResponse,
@@ -190,10 +198,22 @@ export class SQLiteStorage {
       return null;
     }
 
-    const row = stmt.getAsObject() as unknown as StoredSession;
+    const rawRow = stmt.getAsObject();
     stmt.free();
 
-    return this.mapStoredSessionToSession(row);
+    try {
+      const row = StoredSessionRowSchema.parse(rawRow) as StoredSession;
+      return this.mapStoredSessionToSession(row);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        logger.error(
+          { sessionId, error: error.issues },
+          'Invalid session data in database'
+        );
+        throw new Error(`Invalid session data for ${sessionId}: ${error.message}`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -322,8 +342,20 @@ export class SQLiteStorage {
     }
 
     while (stmt.step()) {
-      const row = stmt.getAsObject() as unknown as StoredSession;
-      results.push(await this.mapStoredSessionToSession(row));
+      const rawRow = stmt.getAsObject();
+      try {
+        const row = StoredSessionRowSchema.parse(rawRow) as StoredSession;
+        results.push(await this.mapStoredSessionToSession(row));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { rawRow, error: error.issues },
+            'Skipping invalid session row in listSessions'
+          );
+          continue;
+        }
+        throw error;
+      }
     }
     stmt.free();
 
@@ -383,8 +415,20 @@ export class SQLiteStorage {
     stmt.bind([sessionId]);
 
     while (stmt.step()) {
-      const row = stmt.getAsObject() as unknown as StoredResponse;
-      results.push(this.mapStoredResponseToAgentResponse(row));
+      const rawRow = stmt.getAsObject();
+      try {
+        const row = StoredResponseRowSchema.parse(rawRow) as StoredResponse;
+        results.push(this.mapStoredResponseToAgentResponse(row));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { sessionId, rawRow, error: error.issues },
+            'Skipping invalid response row in getResponses'
+          );
+          continue;
+        }
+        throw error;
+      }
     }
     stmt.free();
 
@@ -423,11 +467,28 @@ export class SQLiteStorage {
    */
   private async mapStoredSessionToSession(stored: StoredSession): Promise<Session> {
     const responses = await this.getResponses(stored.id);
+
+    // Parse and validate agent_ids JSON
+    let agentIds: string[];
+    try {
+      const parsed = JSON.parse(stored.agent_ids);
+      agentIds = AgentIdsArraySchema.parse(parsed);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        logger.error(
+          { sessionId: stored.id, agent_ids: stored.agent_ids, error: error.issues },
+          'Invalid agent_ids JSON in session'
+        );
+        throw new Error(`Invalid agent_ids for session ${stored.id}: ${error.message}`);
+      }
+      throw error;
+    }
+
     return {
       id: stored.id,
       topic: stored.topic,
       mode: stored.mode as DebateMode,
-      agentIds: JSON.parse(stored.agent_ids) as string[],
+      agentIds,
       status: stored.status as SessionStatus,
       currentRound: stored.current_round,
       totalRounds: stored.total_rounds,
@@ -441,14 +502,57 @@ export class SQLiteStorage {
    * Map stored response to AgentResponse type
    */
   private mapStoredResponseToAgentResponse(stored: StoredResponse): AgentResponse {
+    // Parse and validate citations JSON
+    let citations: Citation[] | undefined;
+    if (stored.citations) {
+      try {
+        const parsed = JSON.parse(stored.citations);
+        citations = StoredCitationsArraySchema.parse(parsed);
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { responseId: stored.id, citations: stored.citations, error: error.issues },
+            'Invalid citations JSON in response, skipping citations'
+          );
+          citations = undefined;
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // Parse and validate tool_calls JSON
+    let toolCalls: ToolCallRecord[] | undefined;
+    if (stored.tool_calls) {
+      try {
+        const parsed = JSON.parse(stored.tool_calls);
+        const validated = StoredToolCallsArraySchema.parse(parsed);
+        // Convert timestamp to Date if needed
+        toolCalls = validated.map((tc) => ({
+          ...tc,
+          timestamp: tc.timestamp instanceof Date ? tc.timestamp : new Date(tc.timestamp as string | number),
+        }));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { responseId: stored.id, tool_calls: stored.tool_calls, error: error.issues },
+            'Invalid tool_calls JSON in response, skipping tool calls'
+          );
+          toolCalls = undefined;
+        } else {
+          throw error;
+        }
+      }
+    }
+
     return {
       agentId: stored.agent_id,
       agentName: stored.agent_name,
       position: stored.position,
       reasoning: stored.reasoning,
       confidence: stored.confidence,
-      citations: stored.citations ? (JSON.parse(stored.citations) as Citation[]) : undefined,
-      toolCalls: stored.tool_calls ? (JSON.parse(stored.tool_calls) as ToolCallRecord[]) : undefined,
+      citations,
+      toolCalls,
       timestamp: new Date(stored.timestamp),
     };
   }

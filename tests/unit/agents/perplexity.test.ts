@@ -691,3 +691,253 @@ describe('createPerplexityAgent', () => {
     expect(agent).toBeInstanceOf(PerplexityAgent);
   });
 });
+
+describe('Perplexity extended field type validation', () => {
+  const defaultConfig: AgentConfig = {
+    id: 'perplexity-validation-test',
+    name: 'Perplexity Validation Test',
+    provider: 'perplexity',
+    model: 'sonar',
+  };
+
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'Test topic',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  it('should handle response with valid search_results format', async () => {
+    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+    const metadata: MockPerplexityMetadata = {
+      search_results: [
+        { url: 'https://example.com/1', title: 'Valid Title', date: '2025-01-15' },
+        { url: 'https://example.com/2', title: 'Another Title' },
+      ],
+    };
+
+    const mockClient = createMockClient(mockResponse, 'stop', metadata);
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    expect(response.citations).toHaveLength(2);
+    expect(response.citations?.[0]?.url).toBe('https://example.com/1');
+  });
+
+  it('should handle response with invalid search_results structure gracefully', async () => {
+    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+    // Invalid: search_results should be an array
+    const metadata = {
+      search_results: 'not an array',
+    };
+
+    const mockClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockResolvedValue({
+            choices: [
+              {
+                message: { content: mockResponse, role: 'assistant' },
+                finish_reason: 'stop',
+              },
+            ],
+            ...metadata,
+          }),
+        },
+      },
+    };
+
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    // Should return empty citations when validation fails
+    expect(response.citations).toBeUndefined();
+  });
+
+  it('should handle response with invalid citations object structure gracefully', async () => {
+    const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
+    // Invalid: citation objects missing required 'url' field
+    const metadata = {
+      citations: [
+        { title: 'Missing URL' }, // Missing required 'url'
+      ],
+    };
+
+    const mockClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockResolvedValue({
+            choices: [
+              {
+                message: { content: mockResponse, role: 'assistant' },
+                finish_reason: 'stop',
+              },
+            ],
+            ...metadata,
+          }),
+        },
+      },
+    };
+
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    // Should return empty citations when validation fails
+    expect(response.citations).toBeUndefined();
+  });
+
+  it('should handle response with invalid images structure gracefully', async () => {
+    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+    // Invalid: images should be an array
+    const metadata = {
+      images: { invalid: 'object' },
+    };
+
+    const mockClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockResolvedValue({
+            choices: [
+              {
+                message: { content: mockResponse, role: 'assistant' },
+                finish_reason: 'stop',
+              },
+            ],
+            ...metadata,
+          }),
+        },
+      },
+    };
+
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    // Should return undefined images when validation fails
+    expect(response.images).toBeUndefined();
+  });
+
+  it('should handle response with invalid related_questions structure gracefully', async () => {
+    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+    // Invalid: related_questions should be array of strings
+    const metadata = {
+      related_questions: [123, 456], // Numbers instead of strings
+    };
+
+    const mockClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockResolvedValue({
+            choices: [
+              {
+                message: { content: mockResponse, role: 'assistant' },
+                finish_reason: 'stop',
+              },
+            ],
+            ...metadata,
+          }),
+        },
+      },
+    };
+
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    // Should return undefined when validation fails
+    expect(response.relatedQuestions).toBeUndefined();
+  });
+
+  it('should handle response with valid mixed metadata', async () => {
+    const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
+    const metadata: MockPerplexityMetadata = {
+      search_results: [
+        { url: 'https://example.com/article', title: 'Article Title', date: '2025-01-01' },
+      ],
+      images: [
+        { url: 'https://example.com/img.jpg', description: 'Test image' },
+        'https://example.com/img2.jpg',
+      ],
+      related_questions: ['What is AI?', 'How does AI work?'],
+    };
+
+    const mockClient = createMockClient(mockResponse, 'stop', metadata);
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    expect(response.citations).toHaveLength(1);
+    expect(response.citations?.[0]?.url).toBe('https://example.com/article');
+    expect(response.images).toHaveLength(2);
+    expect(response.images?.[0]?.url).toBe('https://example.com/img.jpg');
+    expect(response.relatedQuestions).toHaveLength(2);
+    expect(response.relatedQuestions?.[0]).toBe('What is AI?');
+  });
+
+  it('should handle response with no Perplexity extensions', async () => {
+    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+    // No extended fields at all
+    const mockClient = createMockClient(mockResponse, 'stop', {});
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    expect(response.citations).toBeUndefined();
+    expect(response.images).toBeUndefined();
+    expect(response.relatedQuestions).toBeUndefined();
+  });
+
+  it('should handle image object with missing url gracefully', async () => {
+    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+    // Invalid: image object missing 'url'
+    const metadata = {
+      images: [
+        { description: 'Missing URL' }, // Missing required 'url'
+      ],
+    };
+
+    const mockClient = {
+      chat: {
+        completions: {
+          create: vi.fn().mockResolvedValue({
+            choices: [
+              {
+                message: { content: mockResponse, role: 'assistant' },
+                finish_reason: 'stop',
+              },
+            ],
+            ...metadata,
+          }),
+        },
+      },
+    };
+
+    const agent = new PerplexityAgent(defaultConfig, {
+      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+    });
+
+    const response = await agent.generateResponse(defaultContext);
+
+    // Should return undefined when validation fails
+    expect(response.images).toBeUndefined();
+  });
+});

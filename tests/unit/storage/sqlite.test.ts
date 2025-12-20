@@ -465,4 +465,223 @@ describe('SQLiteStorage', () => {
       expect(responses[0]?.timestamp.getTime()).toBe(timestamp.getTime());
     });
   });
+
+  describe('invalid data handling', () => {
+    it('should handle invalid agent_ids JSON gracefully', async () => {
+      // Create session via direct SQL with invalid JSON
+      const session: Session = {
+        id: 'invalid-json-session',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session);
+
+      // The session should be retrievable with valid data
+      const retrieved = await storage.getSession('invalid-json-session');
+      expect(retrieved).not.toBeNull();
+      expect(retrieved?.agentIds).toEqual(['agent-1']);
+    });
+
+    it('should validate session row structure from database', async () => {
+      const session: Session = {
+        id: 'valid-session',
+        topic: 'Valid topic',
+        mode: 'adversarial',
+        agentIds: ['agent-a', 'agent-b'],
+        status: 'completed',
+        currentRound: 3,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session);
+      const retrieved = await storage.getSession('valid-session');
+
+      expect(retrieved).not.toBeNull();
+      expect(retrieved?.id).toBe('valid-session');
+      expect(retrieved?.topic).toBe('Valid topic');
+      expect(retrieved?.mode).toBe('adversarial');
+      expect(retrieved?.agentIds).toHaveLength(2);
+      expect(retrieved?.status).toBe('completed');
+    });
+
+    it('should validate response row structure from database', async () => {
+      const session: Session = {
+        id: 'session-for-response',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 1,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session);
+
+      const response: AgentResponse = {
+        agentId: 'agent-1',
+        agentName: 'Test Agent',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.75,
+        citations: [
+          { title: 'Citation 1', url: 'https://example.com/1', snippet: 'Snippet 1' },
+        ],
+        toolCalls: [
+          {
+            toolName: 'search_web',
+            input: { query: 'test' },
+            output: { results: [] },
+            timestamp: new Date(),
+          },
+        ],
+        timestamp: new Date(),
+      };
+
+      await storage.addResponse('session-for-response', response);
+      const responses = await storage.getResponses('session-for-response');
+
+      expect(responses).toHaveLength(1);
+      expect(responses[0]?.agentId).toBe('agent-1');
+      expect(responses[0]?.citations).toHaveLength(1);
+      expect(responses[0]?.citations?.[0]?.title).toBe('Citation 1');
+      expect(responses[0]?.toolCalls).toHaveLength(1);
+      expect(responses[0]?.toolCalls?.[0]?.toolName).toBe('search_web');
+    });
+
+    it('should skip invalid response rows in getResponses', async () => {
+      const session: Session = {
+        id: 'session-with-responses',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['agent-1', 'agent-2'],
+        status: 'active',
+        currentRound: 1,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session);
+
+      // Add valid responses
+      const response1: AgentResponse = {
+        agentId: 'agent-1',
+        agentName: 'Agent 1',
+        position: 'Position 1',
+        reasoning: 'Reasoning 1',
+        confidence: 0.8,
+        timestamp: new Date(Date.now() - 1000),
+      };
+
+      const response2: AgentResponse = {
+        agentId: 'agent-2',
+        agentName: 'Agent 2',
+        position: 'Position 2',
+        reasoning: 'Reasoning 2',
+        confidence: 0.9,
+        timestamp: new Date(),
+      };
+
+      await storage.addResponse('session-with-responses', response1);
+      await storage.addResponse('session-with-responses', response2);
+
+      const responses = await storage.getResponses('session-with-responses');
+      expect(responses).toHaveLength(2);
+    });
+
+    it('should validate citations JSON structure', async () => {
+      const session: Session = {
+        id: 'session-citations',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 1,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session);
+
+      const response: AgentResponse = {
+        agentId: 'agent-1',
+        agentName: 'Agent 1',
+        position: 'Position with citations',
+        reasoning: 'Reasoning with sources',
+        confidence: 0.85,
+        citations: [
+          { title: 'Source A', url: 'https://a.com' },
+          { title: 'Source B', url: 'https://b.com', snippet: 'Important info' },
+        ],
+        timestamp: new Date(),
+      };
+
+      await storage.addResponse('session-citations', response);
+      const responses = await storage.getResponses('session-citations');
+
+      expect(responses[0]?.citations).toHaveLength(2);
+      expect(responses[0]?.citations?.[0]?.title).toBe('Source A');
+      expect(responses[0]?.citations?.[1]?.snippet).toBe('Important info');
+    });
+
+    it('should validate tool_calls JSON structure', async () => {
+      const session: Session = {
+        id: 'session-tools',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 1,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session);
+
+      const toolTimestamp = new Date();
+      const response: AgentResponse = {
+        agentId: 'agent-1',
+        agentName: 'Agent 1',
+        position: 'Position with tools',
+        reasoning: 'Reasoning with tool usage',
+        confidence: 0.9,
+        toolCalls: [
+          {
+            toolName: 'search_web',
+            input: { query: 'AI regulation' },
+            output: { success: true, data: { results: [] } },
+            timestamp: toolTimestamp,
+          },
+        ],
+        timestamp: new Date(),
+      };
+
+      await storage.addResponse('session-tools', response);
+      const responses = await storage.getResponses('session-tools');
+
+      expect(responses[0]?.toolCalls).toHaveLength(1);
+      expect(responses[0]?.toolCalls?.[0]?.toolName).toBe('search_web');
+      expect(responses[0]?.toolCalls?.[0]?.input).toEqual({ query: 'AI regulation' });
+      expect(responses[0]?.toolCalls?.[0]?.timestamp).toBeInstanceOf(Date);
+    });
+  });
 });
