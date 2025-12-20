@@ -30,3 +30,4 @@ export {
   type ProviderAvailability,
   type SetupResult,
 } from './setup.js';
+export { convertSDKError, isRetryableError } from './utils/index.js';
