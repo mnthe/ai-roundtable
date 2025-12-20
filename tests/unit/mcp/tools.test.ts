@@ -10,7 +10,7 @@ import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
 import type { AgentConfig } from '../../../src/types/index.js';
-import { tools, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
+import { TOOLS, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
@@ -731,7 +731,7 @@ describe('MCP Tools', () => {
 
   describe('Tool Definitions', () => {
     it('should expose all required tools', () => {
-      const toolNames = tools.map((t) => t.name);
+      const toolNames = TOOLS.map((t) => t.name);
 
       expect(toolNames).toContain('start_roundtable');
       expect(toolNames).toContain('continue_roundtable');
@@ -745,21 +745,21 @@ describe('MCP Tools', () => {
       expect(toolNames).toContain('get_response_detail');
       expect(toolNames).toContain('get_citations');
       expect(toolNames).toContain('synthesize_debate');
-      expect(tools.length).toBe(12);
+      expect(TOOLS.length).toBe(12);
     });
 
     it('should have proper schemas for each tool', () => {
-      const startTool = tools.find((t) => t.name === 'start_roundtable');
+      const startTool = TOOLS.find((t) => t.name === 'start_roundtable');
       expect(startTool).toBeDefined();
       expect(startTool?.inputSchema).toHaveProperty('properties');
       expect(startTool?.inputSchema.properties).toHaveProperty('topic');
 
-      const continueTool = tools.find((t) => t.name === 'continue_roundtable');
+      const continueTool = TOOLS.find((t) => t.name === 'continue_roundtable');
       expect(continueTool).toBeDefined();
       expect(continueTool?.inputSchema).toHaveProperty('properties');
       expect(continueTool?.inputSchema.properties).toHaveProperty('sessionId');
 
-      const consensusTool = tools.find((t) => t.name === 'get_consensus');
+      const consensusTool = TOOLS.find((t) => t.name === 'get_consensus');
       expect(consensusTool).toBeDefined();
       expect(consensusTool?.inputSchema).toHaveProperty('properties');
       expect(consensusTool?.inputSchema.properties).toHaveProperty('sessionId');
@@ -767,35 +767,35 @@ describe('MCP Tools', () => {
     });
 
     it('should have required fields marked correctly', () => {
-      const startTool = tools.find((t) => t.name === 'start_roundtable');
+      const startTool = TOOLS.find((t) => t.name === 'start_roundtable');
       expect(startTool?.inputSchema.required).toContain('topic');
 
-      const continueTool = tools.find((t) => t.name === 'continue_roundtable');
+      const continueTool = TOOLS.find((t) => t.name === 'continue_roundtable');
       expect(continueTool?.inputSchema.required).toContain('sessionId');
 
-      const consensusTool = tools.find((t) => t.name === 'get_consensus');
+      const consensusTool = TOOLS.find((t) => t.name === 'get_consensus');
       expect(consensusTool?.inputSchema.required).toContain('sessionId');
 
-      const thoughtsTool = tools.find((t) => t.name === 'get_thoughts');
+      const thoughtsTool = TOOLS.find((t) => t.name === 'get_thoughts');
       expect(thoughtsTool?.inputSchema.required).toContain('sessionId');
       expect(thoughtsTool?.inputSchema.required).toContain('agentId');
 
-      const exportTool = tools.find((t) => t.name === 'export_session');
+      const exportTool = TOOLS.find((t) => t.name === 'export_session');
       expect(exportTool?.inputSchema.required).toContain('sessionId');
 
-      const controlTool = tools.find((t) => t.name === 'control_session');
+      const controlTool = TOOLS.find((t) => t.name === 'control_session');
       expect(controlTool?.inputSchema.required).toContain('sessionId');
       expect(controlTool?.inputSchema.required).toContain('action');
 
-      const roundDetailsTool = tools.find((t) => t.name === 'get_round_details');
+      const roundDetailsTool = TOOLS.find((t) => t.name === 'get_round_details');
       expect(roundDetailsTool?.inputSchema.required).toContain('sessionId');
       expect(roundDetailsTool?.inputSchema.required).toContain('roundNumber');
 
-      const responseDetailTool = tools.find((t) => t.name === 'get_response_detail');
+      const responseDetailTool = TOOLS.find((t) => t.name === 'get_response_detail');
       expect(responseDetailTool?.inputSchema.required).toContain('sessionId');
       expect(responseDetailTool?.inputSchema.required).toContain('agentId');
 
-      const citationsTool = tools.find((t) => t.name === 'get_citations');
+      const citationsTool = TOOLS.find((t) => t.name === 'get_citations');
       expect(citationsTool?.inputSchema.required).toContain('sessionId');
     });
   });

@@ -2,6 +2,10 @@
  * Debate Engine - Orchestrates multi-agent debates
  */
 
+import type { BaseAgent, AgentToolkit } from '../agents/base.js';
+import { ConfigurationError } from '../errors/index.js';
+import type { DebateModeStrategy } from '../modes/base.js';
+import { getGlobalModeRegistry } from '../modes/registry.js';
 import type {
   DebateContext,
   AgentResponse,
@@ -9,11 +13,8 @@ import type {
   ConsensusResult,
   Session,
 } from '../types/index.js';
-import type { BaseAgent, AgentToolkit } from '../agents/base.js';
-import type { DebateModeStrategy } from '../modes/base.js';
-import { getGlobalModeRegistry } from '../modes/registry.js';
-import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
 import { createLogger } from '../utils/logger.js';
+import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
 
 const logger = createLogger('DebateEngine');
 
@@ -39,7 +40,9 @@ export class DebateEngine {
   constructor(options: DebateEngineOptions = {}) {
     // Toolkit must be provided as it's an interface
     if (!options.toolkit) {
-      throw new Error('AgentToolkit must be provided');
+      throw new ConfigurationError('AgentToolkit must be provided to DebateEngine', {
+        code: 'MISSING_TOOLKIT',
+      });
     }
     this.toolkit = options.toolkit;
     this.aiConsensusAnalyzer = options.aiConsensusAnalyzer;

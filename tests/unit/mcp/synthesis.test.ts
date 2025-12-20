@@ -10,7 +10,7 @@ import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
 import type { AgentConfig, AgentResponse } from '../../../src/types/index.js';
-import { tools, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
+import { TOOLS, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
 import { SynthesizeDebateInputSchema } from '../../../src/types/schemas.js';
 
 describe('Synthesize Debate Tool', () => {
@@ -53,12 +53,12 @@ describe('Synthesize Debate Tool', () => {
 
   describe('Tool Definition', () => {
     it('should be included in the tools list', () => {
-      const toolNames = tools.map((t) => t.name);
+      const toolNames = TOOLS.map((t) => t.name);
       expect(toolNames).toContain('synthesize_debate');
     });
 
     it('should have proper schema definition', () => {
-      const synthesizeDebateTool = tools.find((t) => t.name === 'synthesize_debate');
+      const synthesizeDebateTool = TOOLS.find((t) => t.name === 'synthesize_debate');
       expect(synthesizeDebateTool).toBeDefined();
       expect(synthesizeDebateTool!.name).toBe('synthesize_debate');
       expect(synthesizeDebateTool!.inputSchema).toHaveProperty('properties');

@@ -2,9 +2,10 @@
  * Session management for debate rounds
  */
 
-import type { Session, AgentResponse, SessionStatus, DebateConfig } from '../types/index.js';
-import { SQLiteStorage, type Storage } from '../storage/index.js';
 import { randomUUID } from 'crypto';
+import { SessionError } from '../errors/index.js';
+import { SQLiteStorage, type Storage } from '../storage/index.js';
+import type { Session, AgentResponse, SessionStatus, DebateConfig } from '../types/index.js';
 
 export interface SessionManagerOptions {
   /** Provide a custom storage implementation */
@@ -76,7 +77,9 @@ export class SessionManager {
   async addResponse(sessionId: string, response: AgentResponse): Promise<void> {
     const session = await this.getSession(sessionId);
     if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
+      throw new SessionError(`Session ${sessionId} not found`, {
+        code: 'SESSION_NOT_FOUND',
+      });
     }
 
     await this.storage.addResponse(sessionId, response);

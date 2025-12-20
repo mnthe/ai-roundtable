@@ -6,7 +6,7 @@
 import initSqlJs from 'sql.js';
 import type { SqlJsStatic, Database as SqlJsDatabase } from 'sql.js';
 import { ZodError } from 'zod';
-import { createLogger } from '../utils/logger.js';
+import { StorageError } from '../errors/index.js';
 import {
   StoredSessionRowSchema,
   StoredResponseRowSchema,
@@ -22,6 +22,7 @@ import type {
   Citation,
   ToolCallRecord,
 } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
 import type { Storage } from './index.js';
 
 const logger = createLogger('SQLiteStorage');
@@ -101,7 +102,9 @@ export class SQLiteStorage implements Storage {
 
   private getDb(): SqlJsDatabase {
     if (!this.db) {
-      throw new Error('Database not initialized. Call ensureInitialized() first.');
+      throw new StorageError('Database not initialized. Call ensureInitialized() first.', {
+        code: 'DB_NOT_INITIALIZED',
+      });
     }
     return this.db;
   }
@@ -211,7 +214,10 @@ export class SQLiteStorage implements Storage {
           { sessionId, error: error.issues },
           'Invalid session data in database'
         );
-        throw new Error(`Invalid session data for ${sessionId}: ${error.message}`);
+        throw new StorageError(`Invalid session data for ${sessionId}: ${error.message}`, {
+          code: 'INVALID_SESSION_DATA',
+          cause: error,
+        });
       }
       throw error;
     }
@@ -480,7 +486,10 @@ export class SQLiteStorage implements Storage {
           { sessionId: stored.id, agent_ids: stored.agent_ids, error: error.issues },
           'Invalid agent_ids JSON in session'
         );
-        throw new Error(`Invalid agent_ids for session ${stored.id}: ${error.message}`);
+        throw new StorageError(`Invalid agent_ids for session ${stored.id}: ${error.message}`, {
+          code: 'INVALID_AGENT_IDS',
+          cause: error,
+        });
       }
       throw error;
     }

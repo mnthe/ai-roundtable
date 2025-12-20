@@ -146,3 +146,37 @@ export class SessionError extends RoundtableError {
     });
   }
 }
+
+/**
+ * Storage-related error (database operations, data validation)
+ */
+export class StorageError extends RoundtableError {
+  constructor(
+    message: string,
+    options: Omit<ErrorOptions, 'code'> & Partial<Pick<ErrorOptions, 'code'>>
+  ) {
+    super(message, {
+      code: options.code ?? 'STORAGE_ERROR',
+      provider: options.provider,
+      retryable: options.retryable ?? false,
+      cause: options.cause,
+    });
+  }
+}
+
+/**
+ * Configuration/initialization error
+ */
+export class ConfigurationError extends RoundtableError {
+  constructor(
+    message: string,
+    options: Omit<ErrorOptions, 'code'> & Partial<Pick<ErrorOptions, 'code'>>
+  ) {
+    super(message, {
+      code: options.code ?? 'CONFIGURATION_ERROR',
+      provider: options.provider,
+      retryable: options.retryable ?? false,
+      cause: options.cause,
+    });
+  }
+}

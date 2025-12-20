@@ -9,7 +9,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
  *
  * Start a new AI debate roundtable
  */
-const startRoundtableTool: Tool = {
+const START_ROUNDTABLE_TOOL: Tool = {
   name: 'start_roundtable',
   description:
     'Start a new AI debate roundtable on a given topic. Agents will discuss the topic across multiple rounds, each providing their perspectives, reasoning, and citations.',
@@ -58,7 +58,7 @@ const startRoundtableTool: Tool = {
  *
  * Continue an existing debate with additional rounds
  */
-const continueRoundtableTool: Tool = {
+const CONTINUE_ROUNDTABLE_TOOL: Tool = {
   name: 'continue_roundtable',
   description:
     'Continue an existing debate roundtable with additional rounds. You can optionally provide a new focus question to guide the discussion.',
@@ -90,7 +90,7 @@ const continueRoundtableTool: Tool = {
  *
  * Get consensus analysis for a debate
  */
-const getConsensusTool: Tool = {
+const GET_CONSENSUS_TOOL: Tool = {
   name: 'get_consensus',
   description:
     'Analyze the consensus level in a debate session. Returns agreement level, common points of agreement, disagreement points, and a summary. By default, analyzes only the latest round to provide current consensus state.',
@@ -117,7 +117,7 @@ const getConsensusTool: Tool = {
  *
  * List available AI agents
  */
-const getAgentsTool: Tool = {
+const GET_AGENTS_TOOL: Tool = {
   name: 'get_agents',
   description:
     'List all available AI agents that can participate in debates. Returns agent ID, name, provider (e.g., anthropic, openai), and model information.',
@@ -132,7 +132,7 @@ const getAgentsTool: Tool = {
  *
  * List all debate sessions with optional filters
  */
-const listSessionsTool: Tool = {
+const LIST_SESSIONS_TOOL: Tool = {
   name: 'list_sessions',
   description:
     'List debate sessions with optional filters. Search by topic keyword, filter by mode/status, or date range.',
@@ -183,7 +183,7 @@ const listSessionsTool: Tool = {
  *
  * Get detailed reasoning and confidence evolution for a specific agent in a session
  */
-const getThoughtsTool: Tool = {
+const GET_THOUGHTS_TOOL: Tool = {
   name: 'get_thoughts',
   description:
     'Retrieve the detailed reasoning process and confidence evolution for a specific agent across all rounds in a debate session. Returns all responses including position, reasoning, confidence levels, and citations.',
@@ -208,7 +208,7 @@ const getThoughtsTool: Tool = {
  *
  * Export a debate session in various formats
  */
-const exportSessionTool: Tool = {
+const EXPORT_SESSION_TOOL: Tool = {
   name: 'export_session',
   description:
     'Export a debate session in markdown or JSON format. Markdown format includes title, participants, round-by-round responses, and consensus analysis. JSON format provides the full structured data.',
@@ -235,7 +235,7 @@ const exportSessionTool: Tool = {
  *
  * Control the execution state of a debate session
  */
-const controlSessionTool: Tool = {
+const CONTROL_SESSION_TOOL: Tool = {
   name: 'control_session',
   description:
     'Control a debate session execution state. Actions: pause (temporarily halt), resume (continue paused session), stop (permanently end session with completed status).',
@@ -262,7 +262,7 @@ const controlSessionTool: Tool = {
  *
  * Get detailed responses for a specific round
  */
-const getRoundDetailsTool: Tool = {
+const GET_ROUND_DETAILS_TOOL: Tool = {
   name: 'get_round_details',
   description:
     'Retrieve all agent responses and consensus analysis for a specific round in a debate session. Returns full position statements, reasoning, citations, and tool calls.',
@@ -288,7 +288,7 @@ const getRoundDetailsTool: Tool = {
  *
  * Get detailed response from a specific agent
  */
-const getResponseDetailTool: Tool = {
+const GET_RESPONSE_DETAIL_TOOL: Tool = {
   name: 'get_response_detail',
   description:
     'Retrieve detailed response from a specific agent in a debate session. If roundNumber is provided, returns the response for that round only. Otherwise, returns all responses from the agent across all rounds.',
@@ -318,7 +318,7 @@ const getResponseDetailTool: Tool = {
  *
  * Get citations from the debate
  */
-const getCitationsTool: Tool = {
+const GET_CITATIONS_TOOL: Tool = {
   name: 'get_citations',
   description:
     'Retrieve all citations used in a debate session. Can be filtered by round number and/or agent ID. Returns citation title, URL, and optional snippet.',
@@ -348,7 +348,7 @@ const getCitationsTool: Tool = {
  *
  * AI-powered synthesis of the entire debate
  */
-const synthesizeDebateTool: Tool = {
+const SYNTHESIZE_DEBATE_TOOL: Tool = {
   name: 'synthesize_debate',
   description:
     'Analyze and summarize the entire debate using AI. Use this after the debate is completed.',
@@ -371,19 +371,19 @@ const synthesizeDebateTool: Tool = {
 /**
  * All available tools
  */
-export const tools: Tool[] = [
-  startRoundtableTool,
-  continueRoundtableTool,
-  getConsensusTool,
-  getAgentsTool,
-  listSessionsTool,
-  getThoughtsTool,
-  exportSessionTool,
-  controlSessionTool,
-  getRoundDetailsTool,
-  getResponseDetailTool,
-  getCitationsTool,
-  synthesizeDebateTool,
+export const TOOLS: Tool[] = [
+  START_ROUNDTABLE_TOOL,
+  CONTINUE_ROUNDTABLE_TOOL,
+  GET_CONSENSUS_TOOL,
+  GET_AGENTS_TOOL,
+  LIST_SESSIONS_TOOL,
+  GET_THOUGHTS_TOOL,
+  EXPORT_SESSION_TOOL,
+  CONTROL_SESSION_TOOL,
+  GET_ROUND_DETAILS_TOOL,
+  GET_RESPONSE_DETAIL_TOOL,
+  GET_CITATIONS_TOOL,
+  SYNTHESIZE_DEBATE_TOOL,
 ];
 
 /**

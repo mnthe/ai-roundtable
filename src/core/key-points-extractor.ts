@@ -9,6 +9,7 @@ import { jsonrepair } from 'jsonrepair';
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
+import { AgentError } from '../errors/index.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -236,7 +237,9 @@ export class KeyPointsExtractor {
       }
 
       if (!jsonStr) {
-        throw new Error('No JSON found in response');
+        throw new AgentError('No JSON found in AI response for key points extraction', {
+          code: 'KEY_POINTS_PARSE_ERROR',
+        });
       }
 
       // Use jsonrepair to handle malformed JSON
@@ -257,7 +260,9 @@ export class KeyPointsExtractor {
         return keyPoints;
       }
 
-      throw new Error('keyPoints not found in parsed response');
+      throw new AgentError('keyPoints field not found in parsed AI response', {
+        code: 'KEY_POINTS_PARSE_ERROR',
+      });
     } catch (error) {
       logger.warn({ err: error }, 'Failed to parse AI response');
       // Fallback: extract from ORIGINAL reasoning, not AI response

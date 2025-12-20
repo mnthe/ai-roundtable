@@ -12,7 +12,7 @@ import { KeyPointsExtractor } from '../core/key-points-extractor.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
 import { DefaultAgentToolkit } from '../tools/toolkit.js';
-import { tools, createErrorResponse, type ToolResponse } from './tools.js';
+import { TOOLS, createErrorResponse, type ToolResponse } from './tools.js';
 import {
   handleStartRoundtable,
   handleContinueRoundtable,
@@ -113,7 +113,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
 
   // Register tool list handler
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools,
+    tools: TOOLS,
   }));
 
   // Register tool call handler
