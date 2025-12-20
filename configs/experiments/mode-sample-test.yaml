@@ -1,0 +1,33 @@
+# Mode Sample Test
+# Quick test of all 7 modes with 1 topic each (7 runs total)
+
+name: mode-sample-test
+description: Quick sampling of all debate modes with one topic
+
+variables:
+  modes:
+    - collaborative
+    - adversarial
+    - socratic
+    - expert-panel
+    - devils-advocate
+    - delphi
+    - red-team-blue-team
+
+  rounds: [2]
+
+  topics:
+    - "Is TypeScript worth the overhead compared to JavaScript for small projects?"
+
+  agents:
+    - default
+
+options:
+  parallel: false
+  delay_between: 2000
+  retry_on_failure: 1
+
+output:
+  include_raw_responses: true
+  include_tool_calls: true
+  include_citations: true

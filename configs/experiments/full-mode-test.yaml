@@ -1,0 +1,41 @@
+# Full Mode Test Experiment
+# Tests all 7 debate modes with diverse topics to analyze mode effectiveness
+
+name: full-mode-test
+description: Comprehensive test across all debate modes with diverse topic types
+
+variables:
+  modes:
+    - collaborative
+    - adversarial
+    - socratic
+    - expert-panel
+    - devils-advocate
+    - delphi
+    - red-team-blue-team
+
+  rounds: [2, 3]
+
+  topics:
+    # Technical/Engineering topics (with clear trade-offs)
+    - "Is TypeScript worth the overhead compared to JavaScript for small projects?"
+    - "Should software teams prioritize test coverage over shipping speed?"
+
+    # Abstract/Philosophical topics (no clear right answer)
+    - "Will AI eventually replace most software development jobs?"
+
+    # Current events / Factual (benefits from web search)
+    - "What are the most significant AI developments in 2024?"
+
+  agents:
+    - default
+
+options:
+  parallel: false
+  delay_between: 3000
+  retry_on_failure: 1
+
+output:
+  include_raw_responses: true
+  include_tool_calls: true
+  include_citations: true
