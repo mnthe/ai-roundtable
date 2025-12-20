@@ -3,6 +3,7 @@
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { type ZodType } from 'zod';
 
 /**
  * Tool: start_roundtable
@@ -416,12 +417,10 @@ export interface ToolResponse {
 }
 
 /**
- * Validate and parse tool arguments
+ * Validate and parse tool arguments using Zod schema
  */
-export function validateToolArgs<T>(schema: unknown, args: unknown): T {
-  // Using Zod schema validation
-  const zodSchema = schema as { parse: (data: unknown) => T };
-  return zodSchema.parse(args);
+export function validateToolArgs<T>(schema: ZodType<T>, args: unknown): T {
+  return schema.parse(args);
 }
 
 /**
