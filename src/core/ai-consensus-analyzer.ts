@@ -278,11 +278,13 @@ export class AIConsensusAnalyzer {
     }
 
     // Create new agent with light model config
+    // Use higher maxTokens to avoid truncation in consensus analysis responses
     const lightConfig = {
       id: `${info.id}-light-consensus`,
       name: `${info.name} (Light)`,
       provider: info.provider,
       model: lightModel,
+      maxTokens: 8192, // Higher limit for detailed analysis
     };
 
     return factory(lightConfig);
@@ -321,6 +323,16 @@ export class AIConsensusAnalyzer {
 
     // Use generateRawCompletion to get raw JSON without parsing
     const rawResponse = await agent.generateRawCompletion(prompt, systemPrompt);
+
+    // Log raw response for debugging (full content at debug level)
+    logger.debug(
+      {
+        analyzerId: agent.getInfo().id,
+        responseLength: rawResponse.length,
+        rawResponse, // Full response for debugging
+      },
+      'Received raw AI consensus response'
+    );
 
     // Parse the raw JSON response
     return this.parseRawAIResponse(rawResponse, agent.getInfo().id);
@@ -369,21 +381,33 @@ export class AIConsensusAnalyzer {
 
     // Strategy 3: Extract agreementLevel with regex as last resort
     const extractedLevel = this.extractAgreementLevelFromText(cleanedResponse);
+    const extractedSummary = this.extractSummaryFromText(cleanedResponse);
 
     logger.warn(
       {
         responseLength: rawResponse.length,
-        responsePreview: rawResponse.slice(0, 200),
+        responsePreview: rawResponse.slice(0, 500), // Preview for log readability
         extractedLevel,
+        hasExtractedSummary: !!extractedSummary,
       },
       'All JSON parsing strategies failed, using extracted/fallback values'
+    );
+
+    // Log full raw response at debug level for investigation
+    logger.debug(
+      {
+        rawResponse, // Full response preserved at debug level
+        analyzerId,
+      },
+      'Full raw response after parsing failure'
     );
 
     return {
       agreementLevel: extractedLevel ?? 0.5,
       commonPoints: extractedLevel !== null ? [] : ['Unable to determine common points'],
       disagreementPoints: [],
-      summary: this.extractSummaryFromText(cleanedResponse) || rawResponse.slice(0, 5000) || 'Analysis failed',
+      // Use extracted summary or full raw response (not truncated)
+      summary: extractedSummary || rawResponse || 'Analysis failed',
       analyzerId,
       reasoning: 'Parsed from partial/malformed response',
     };
