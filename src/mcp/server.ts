@@ -25,15 +25,6 @@ import {
   GetResponseDetailInputSchema,
   GetCitationsInputSchema,
   SynthesizeDebateInputSchema,
-  type StartRoundtableInputType,
-  type ContinueRoundtableInputType,
-  type GetThoughtsInputType,
-  type ExportSessionInputType,
-  type ControlSessionInputType,
-  type GetRoundDetailsInputType,
-  type GetResponseDetailInputType,
-  type GetCitationsInputType,
-  type SynthesizeDebateInputType,
 } from '../types/schemas.js';
 import type {
   DebateConfig,
@@ -575,7 +566,7 @@ async function handleStartRoundtable(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = StartRoundtableInputSchema.parse(args) as StartRoundtableInputType;
+    const input = StartRoundtableInputSchema.parse(args);
 
     // Determine which agents to use
     let agentIds = input.agents;
@@ -649,7 +640,7 @@ async function handleContinueRoundtable(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = ContinueRoundtableInputSchema.parse(args) as ContinueRoundtableInputType;
+    const input = ContinueRoundtableInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -835,7 +826,7 @@ async function handleGetThoughts(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = GetThoughtsInputSchema.parse(args) as GetThoughtsInputType;
+    const input = GetThoughtsInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -907,7 +898,7 @@ async function handleExportSession(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = ExportSessionInputSchema.parse(args) as ExportSessionInputType;
+    const input = ExportSessionInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -1079,7 +1070,7 @@ async function handleControlSession(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = ControlSessionInputSchema.parse(args) as ControlSessionInputType;
+    const input = ControlSessionInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -1154,7 +1145,7 @@ async function handleGetRoundDetails(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = GetRoundDetailsInputSchema.parse(args) as GetRoundDetailsInputType;
+    const input = GetRoundDetailsInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -1213,7 +1204,7 @@ async function handleGetResponseDetail(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = GetResponseDetailInputSchema.parse(args) as GetResponseDetailInputType;
+    const input = GetResponseDetailInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -1282,7 +1273,7 @@ async function handleGetCitations(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = GetCitationsInputSchema.parse(args) as GetCitationsInputType;
+    const input = GetCitationsInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
@@ -1350,7 +1341,7 @@ async function handleSynthesizeDebate(
 ): Promise<ToolResponse> {
   try {
     // Validate input
-    const input = SynthesizeDebateInputSchema.parse(args) as SynthesizeDebateInputType;
+    const input = SynthesizeDebateInputSchema.parse(args);
 
     // Get session
     const session = await sessionManager.getSession(input.sessionId);
