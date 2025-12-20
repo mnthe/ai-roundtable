@@ -115,6 +115,18 @@ export class PerplexityAgent extends BaseAgent {
    * Generate a response using Perplexity API
    */
   async generateResponse(context: DebateContext): Promise<AgentResponse> {
+    const startTime = Date.now();
+    logger.info(
+      {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        agentName: this.name,
+        round: context.currentRound,
+        topic: context.topic,
+      },
+      'Starting agent response generation'
+    );
+
     const systemPrompt = this.buildSystemPrompt(context);
     const userMessage = this.buildUserMessage(context);
 
@@ -232,6 +244,21 @@ export class PerplexityAgent extends BaseAgent {
     // Validate response has content - use || to catch empty strings (not just null/undefined)
     const position = parsed.position || 'Unable to determine position';
     const reasoning = parsed.reasoning || rawText || 'Unable to determine reasoning';
+
+    const durationMs = Date.now() - startTime;
+    logger.info(
+      {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        agentName: this.name,
+        round: context.currentRound,
+        durationMs,
+        toolCallCount: toolCalls.length,
+        citationCount: citations.length,
+        confidence: parsed.confidence ?? 0.5,
+      },
+      'Agent response generation completed'
+    );
 
     return {
       agentId: this.id,
@@ -440,6 +467,8 @@ export class PerplexityAgent extends BaseAgent {
    * Used by AIConsensusAnalyzer to get raw JSON responses
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
+
     const response = await withRetry(
       () =>
         this.client.chat.completions.create({

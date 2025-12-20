@@ -6,6 +6,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { Chat, FunctionDeclaration, Content } from '@google/genai';
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
+import { createLogger } from '../utils/logger.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -13,6 +14,8 @@ import type {
   ToolCallRecord,
   Citation,
 } from '../types/index.js';
+
+const logger = createLogger('GeminiAgent');
 
 /** Google Gen AI error types that should be retried */
 const RETRYABLE_ERRORS = [
@@ -59,6 +62,18 @@ export class GeminiAgent extends BaseAgent {
    * Generate a response using Gemini API
    */
   async generateResponse(context: DebateContext): Promise<AgentResponse> {
+    const startTime = Date.now();
+    logger.info(
+      {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        agentName: this.name,
+        round: context.currentRound,
+        topic: context.topic,
+      },
+      'Starting agent response generation'
+    );
+
     const systemPrompt = this.buildSystemPrompt(context);
     const userMessage = this.buildUserMessage(context);
 
@@ -204,6 +219,21 @@ export class GeminiAgent extends BaseAgent {
     const position = parsed.position || 'Unable to determine position';
     const reasoning = parsed.reasoning || rawText || 'Unable to determine reasoning';
 
+    const durationMs = Date.now() - startTime;
+    logger.info(
+      {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        agentName: this.name,
+        round: context.currentRound,
+        durationMs,
+        toolCallCount: toolCalls.length,
+        citationCount: citations.length,
+        confidence: parsed.confidence ?? 0.5,
+      },
+      'Agent response generation completed'
+    );
+
     return {
       agentId: this.id,
       agentName: this.name,
@@ -246,6 +276,8 @@ export class GeminiAgent extends BaseAgent {
    * Used by AIConsensusAnalyzer to get raw JSON responses
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
+
     const response = await withRetry(
       () =>
         this.ai.models.generateContent({
