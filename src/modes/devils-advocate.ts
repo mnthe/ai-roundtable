@@ -11,8 +11,139 @@ import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse, Stance } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
+import {
+  buildRoleAnchor,
+  buildBehavioralContract,
+  buildVerificationLoop,
+  type RoleAnchorConfig,
+  type BehavioralContractConfig,
+  type VerificationLoopConfig,
+} from './utils/index.js';
 
 const logger = createLogger('DevilsAdvocateMode');
+
+/**
+ * Separator line used in prompts
+ */
+const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+
+/**
+ * Primary (Affirmative) role configuration
+ */
+const PRIMARY_ROLE_ANCHOR: RoleAnchorConfig = {
+  emoji: '📢',
+  title: 'YOU ARE THE PRIMARY POSITION HOLDER - AFFIRMATIVE STANCE',
+  definition: 'You present the AFFIRMATIVE/YES/PRO position to be challenged.',
+  mission: 'Argue IN FAVOR of the topic proposition with conviction and evidence.',
+  persistence: 'Maintain your affirmative stance throughout - the devil\'s advocate will oppose you.',
+  helpfulMeans: 'presenting a strong AFFIRMATIVE position',
+  helpfulNotMeans: 'being balanced" or "being neutral" or "showing both sides',
+};
+
+const PRIMARY_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
+  mustBehaviors: [
+    'Set "stance": "YES" in your JSON response (MANDATORY)',
+    'Argue that the proposition IS true/worth it/should be done',
+    'Present 3 strong supporting arguments with evidence',
+    'Be confident and assertive in your position',
+  ],
+  mustNotBehaviors: [
+    'Set stance to "NO" or "NEUTRAL" (you MUST use "YES")',
+    'Argue AGAINST the topic proposition',
+    'Use hedging language or acknowledge opposing views',
+    'Present multiple positions or "both sides"',
+  ],
+  priorityHierarchy: [],
+  failureMode: 'If your stance is not "YES", you have FAILED your role.',
+};
+
+const PRIMARY_VERIFICATION: VerificationLoopConfig = {
+  checklistItems: [
+    'stance is exactly "YES"',
+    'position argues IN FAVOR of the topic',
+    'reasoning contains supporting arguments only',
+    'No hedging or balanced language',
+  ],
+};
+
+/**
+ * Opposition (Devil's Advocate) role configuration
+ */
+const OPPOSITION_ROLE_ANCHOR: RoleAnchorConfig = {
+  emoji: '😈',
+  title: 'YOU ARE THE DEVIL\'S ADVOCATE - YOU MUST OPPOSE',
+  definition: 'You MUST take the OPPOSITE position of the previous agent.',
+  mission: 'Argue AGAINST whatever stance was just presented with full conviction.',
+  persistence: 'Stay in opposition mode - NEVER agree or soften your stance.',
+  helpfulMeans: 'strongly OPPOSING the previous position',
+  helpfulNotMeans: 'being balanced" or "finding common ground',
+};
+
+const OPPOSITION_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
+  mustBehaviors: [
+    'Set "stance": "NO" in your JSON response (MANDATORY)',
+    'Your position MUST contradict the previous agent\'s position',
+    'Present 3 counter-arguments attacking their position',
+    'Argue with full conviction as the devil\'s advocate',
+  ],
+  mustNotBehaviors: [
+    'Set stance to "YES" or "NEUTRAL" (you MUST use "NO")',
+    'Agree with ANY part of the previous position',
+    'Conclude that "both sides have merit"',
+    'Soften your opposition with qualifications',
+  ],
+  priorityHierarchy: [],
+  failureMode: 'If your stance is not "NO", you have FAILED your role.',
+};
+
+const OPPOSITION_VERIFICATION: VerificationLoopConfig = {
+  checklistItems: [
+    'stance is exactly "NO"',
+    'position argues AGAINST the topic',
+    'reasoning contains counter-arguments only',
+    'No agreement or validation of previous position',
+  ],
+};
+
+/**
+ * Evaluator role configuration
+ */
+const EVALUATOR_ROLE_ANCHOR: RoleAnchorConfig = {
+  emoji: '⚖️',
+  title: 'YOU ARE THE NEUTRAL EVALUATOR',
+  definition: 'You objectively assess both positions.',
+  mission: 'Identify which arguments are stronger and why.',
+  persistence: 'Stay neutral - do not take sides unless evidence demands it.',
+  helpfulMeans: 'rigorous, evidence-based evaluation',
+  helpfulNotMeans: 'being nice to both sides" or "avoiding judgment',
+};
+
+const EVALUATOR_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
+  mustBehaviors: [
+    'Set "stance": "NEUTRAL" in your JSON response (MANDATORY)',
+    'Evaluate both positions fairly',
+    'Identify strongest and weakest arguments on each side',
+    'Make a judgment call on which position is stronger',
+    'Explain your reasoning with specific references',
+  ],
+  mustNotBehaviors: [
+    'Set stance to "YES" or "NO" (you MUST use "NEUTRAL")',
+    'Refuse to judge ("both have merit" without analysis)',
+    'Add your own position (evaluate, don\'t argue)',
+    'Be swayed by confident language over evidence',
+  ],
+  priorityHierarchy: [],
+  failureMode: 'If your stance is not "NEUTRAL", you have FAILED your role.',
+};
+
+const EVALUATOR_VERIFICATION: VerificationLoopConfig = {
+  checklistItems: [
+    'stance is exactly "NEUTRAL"',
+    'Both positions were analyzed',
+    'A clear judgment was made',
+    'Evaluation is evidence-based, not diplomatic',
+  ],
+};
 
 /**
  * Devil's Advocate mode strategy
@@ -172,48 +303,115 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     const isFirstRound = context.currentRound === 1;
 
     if (agentIndex === 0) {
-      // First agent: Primary Position (AFFIRMATIVE)
-      let prompt = `
+      return this.buildPrimaryPrompt(context, isFirstRound);
+    } else if (agentIndex === 1) {
+      return this.buildOppositionPrompt(context, isFirstRound);
+    } else {
+      return this.buildEvaluatorPrompt(context, isFirstRound);
+    }
+  }
+
+  /**
+   * Build Primary (Affirmative) role prompt
+   */
+  private buildPrimaryPrompt(context: DebateContext, isFirstRound: boolean): string {
+    let prompt = `
 Mode: Devil's Advocate - PRIMARY POSITION (AFFIRMATIVE)
+`;
 
-═══════════════════════════════════════════════════════════════════
-LAYER 1: ROLE ANCHOR
-═══════════════════════════════════════════════════════════════════
+    prompt += buildRoleAnchor(PRIMARY_ROLE_ANCHOR);
+    prompt += buildBehavioralContract(PRIMARY_BEHAVIORAL_CONTRACT);
+    prompt += this.buildPrimaryStructuralEnforcement();
+    prompt += buildVerificationLoop(PRIMARY_VERIFICATION);
 
-📢 YOU ARE THE PRIMARY POSITION HOLDER - AFFIRMATIVE STANCE 📢
+    if (!isFirstRound) {
+      prompt += `
+ROUND ${context.currentRound} CONTEXT:
+Strengthen your position based on prior exchanges.
+`;
+    }
 
-ROLE DEFINITION: You present the AFFIRMATIVE/YES/PRO position to be challenged.
-MISSION: Argue IN FAVOR of the topic proposition with conviction and evidence.
-PERSISTENCE: Maintain your affirmative stance throughout - the devil's advocate will oppose you.
+    if (context.focusQuestion) {
+      prompt += `
+FOCUS: ${context.focusQuestion}
+`;
+    }
 
-In this mode, "being helpful" = "presenting a strong AFFIRMATIVE position"
-NOT "being balanced" or "being neutral" or "showing both sides"
+    return prompt;
+  }
 
-═══════════════════════════════════════════════════════════════════
-LAYER 2: BEHAVIORAL CONTRACT
-═══════════════════════════════════════════════════════════════════
+  /**
+   * Build Opposition (Devil's Advocate) role prompt
+   */
+  private buildOppositionPrompt(context: DebateContext, isFirstRound: boolean): string {
+    let prompt = `
+Mode: Devil's Advocate - OPPOSITION ROLE
+`;
 
-MUST (Required Behaviors):
-□ Set "stance": "YES" in your JSON response (MANDATORY)
-□ Argue that the proposition IS true/worth it/should be done
-□ Present 3 strong supporting arguments with evidence
-□ Be confident and assertive in your position
+    prompt += buildRoleAnchor(OPPOSITION_ROLE_ANCHOR);
+    prompt += buildBehavioralContract(OPPOSITION_BEHAVIORAL_CONTRACT);
+    prompt += this.buildOppositionStructuralEnforcement();
+    prompt += buildVerificationLoop(OPPOSITION_VERIFICATION);
 
-MUST NOT (Prohibited Behaviors):
-✗ Set stance to "NO" or "NEUTRAL" (you MUST use "YES")
-✗ Argue AGAINST the topic proposition
-✗ Use hedging language or acknowledge opposing views
-✗ Present multiple positions or "both sides"
+    if (!isFirstRound) {
+      prompt += `
+ROUND ${context.currentRound} CONTEXT:
+Introduce NEW counter-arguments. Attack weaknesses revealed in prior rounds.
+`;
+    }
 
-⛔ FAILURE MODE: If your stance is not "YES", you have FAILED your role.
+    if (context.focusQuestion) {
+      prompt += `
+FOCUS: ${context.focusQuestion}
+Argue the OPPOSITE of whatever the previous agent said about this.
+`;
+    }
 
-═══════════════════════════════════════════════════════════════════
+    return prompt;
+  }
+
+  /**
+   * Build Evaluator role prompt
+   */
+  private buildEvaluatorPrompt(context: DebateContext, isFirstRound: boolean): string {
+    let prompt = `
+Mode: Devil's Advocate - EVALUATOR ROLE
+`;
+
+    prompt += buildRoleAnchor(EVALUATOR_ROLE_ANCHOR);
+    prompt += buildBehavioralContract(EVALUATOR_BEHAVIORAL_CONTRACT);
+    prompt += this.buildEvaluatorStructuralEnforcement();
+    prompt += buildVerificationLoop(EVALUATOR_VERIFICATION);
+
+    if (!isFirstRound) {
+      prompt += `
+ROUND ${context.currentRound} CONTEXT:
+Evaluate how positions have evolved. Which adapted better?
+`;
+    }
+
+    if (context.focusQuestion) {
+      prompt += `
+FOCUS: ${context.focusQuestion}
+Evaluate which position better addresses this question.
+`;
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Build structural enforcement for Primary role
+   */
+  private buildPrimaryStructuralEnforcement(): string {
+    return `
+${SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 
 Your JSON response MUST include:
 {
-  "stance": "YES",  // ← MANDATORY: Must be exactly "YES"
+  "stance": "YES",  // <- MANDATORY: Must be exactly "YES"
   "position": "Your affirmative position supporting the topic",
   "reasoning": "Your 3 arguments with evidence",
   "confidence": 0.0-1.0
@@ -223,76 +421,21 @@ FORBIDDEN PHRASES in position/reasoning:
 - "However" / "On the other hand" / "That said"
 - "It depends" / "Context matters"
 - "Both sides have merit"
-
-═══════════════════════════════════════════════════════════════════
-LAYER 4: VERIFICATION LOOP
-═══════════════════════════════════════════════════════════════════
-
-Before submitting, verify:
-☐ stance is exactly "YES"
-☐ position argues IN FAVOR of the topic
-☐ reasoning contains supporting arguments only
-☐ No hedging or balanced language
-
 `;
+  }
 
-      if (!isFirstRound) {
-        prompt += `
-ROUND ${context.currentRound} CONTEXT:
-Strengthen your position based on prior exchanges.
-`;
-      }
-
-      if (context.focusQuestion) {
-        prompt += `
-FOCUS: ${context.focusQuestion}
-`;
-      }
-
-      return prompt;
-    } else if (agentIndex === 1) {
-      // Second agent: Devil's Advocate (Opposition)
-      let prompt = `
-Mode: Devil's Advocate - OPPOSITION ROLE
-
-═══════════════════════════════════════════════════════════════════
-LAYER 1: ROLE ANCHOR
-═══════════════════════════════════════════════════════════════════
-
-😈 YOU ARE THE DEVIL'S ADVOCATE - YOU MUST OPPOSE 😈
-
-ROLE DEFINITION: You MUST take the OPPOSITE position of the previous agent.
-MISSION: Argue AGAINST whatever stance was just presented with full conviction.
-PERSISTENCE: Stay in opposition mode - NEVER agree or soften your stance.
-
-In this mode, "being helpful" = "strongly OPPOSING the previous position"
-NOT "being balanced" or "finding common ground"
-
-═══════════════════════════════════════════════════════════════════
-LAYER 2: BEHAVIORAL CONTRACT
-═══════════════════════════════════════════════════════════════════
-
-MUST (Required Behaviors):
-□ Set "stance": "NO" in your JSON response (MANDATORY)
-□ Your position MUST contradict the previous agent's position
-□ Present 3 counter-arguments attacking their position
-□ Argue with full conviction as the devil's advocate
-
-MUST NOT (Prohibited Behaviors):
-✗ Set stance to "YES" or "NEUTRAL" (you MUST use "NO")
-✗ Agree with ANY part of the previous position
-✗ Conclude that "both sides have merit"
-✗ Soften your opposition with qualifications
-
-⛔ FAILURE MODE: If your stance is not "NO", you have FAILED your role.
-
-═══════════════════════════════════════════════════════════════════
+  /**
+   * Build structural enforcement for Opposition role
+   */
+  private buildOppositionStructuralEnforcement(): string {
+    return `
+${SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 
 Your JSON response MUST include:
 {
-  "stance": "NO",  // ← MANDATORY: Must be exactly "NO"
+  "stance": "NO",  // <- MANDATORY: Must be exactly "NO"
   "position": "Your opposing position against the topic",
   "reasoning": "Your 3 counter-arguments with evidence",
   "confidence": 0.0-1.0
@@ -302,78 +445,21 @@ FORBIDDEN PHRASES in position/reasoning:
 - "I agree with..." / "They make a good point..."
 - "Both sides have merit" / "There's truth to both"
 - "I see their perspective" / "They're partially right"
-
-═══════════════════════════════════════════════════════════════════
-LAYER 4: VERIFICATION LOOP
-═══════════════════════════════════════════════════════════════════
-
-Before submitting, verify:
-☐ stance is exactly "NO"
-☐ position argues AGAINST the topic
-☐ reasoning contains counter-arguments only
-☐ No agreement or validation of previous position
-
 `;
+  }
 
-      if (!isFirstRound) {
-        prompt += `
-ROUND ${context.currentRound} CONTEXT:
-Introduce NEW counter-arguments. Attack weaknesses revealed in prior rounds.
-`;
-      }
-
-      if (context.focusQuestion) {
-        prompt += `
-FOCUS: ${context.focusQuestion}
-Argue the OPPOSITE of whatever the previous agent said about this.
-`;
-      }
-
-      return prompt;
-    } else {
-      // Remaining agents: Evaluators
-      let prompt = `
-Mode: Devil's Advocate - EVALUATOR ROLE
-
-═══════════════════════════════════════════════════════════════════
-LAYER 1: ROLE ANCHOR
-═══════════════════════════════════════════════════════════════════
-
-⚖️ YOU ARE THE NEUTRAL EVALUATOR ⚖️
-
-ROLE DEFINITION: You objectively assess both positions.
-MISSION: Identify which arguments are stronger and why.
-PERSISTENCE: Stay neutral - do not take sides unless evidence demands it.
-
-In this mode, "being helpful" = "rigorous, evidence-based evaluation"
-NOT "being nice to both sides" or "avoiding judgment"
-
-═══════════════════════════════════════════════════════════════════
-LAYER 2: BEHAVIORAL CONTRACT
-═══════════════════════════════════════════════════════════════════
-
-MUST (Required Behaviors):
-□ Set "stance": "NEUTRAL" in your JSON response (MANDATORY)
-□ Evaluate both positions fairly
-□ Identify strongest and weakest arguments on each side
-□ Make a judgment call on which position is stronger
-□ Explain your reasoning with specific references
-
-MUST NOT (Prohibited Behaviors):
-✗ Set stance to "YES" or "NO" (you MUST use "NEUTRAL")
-✗ Refuse to judge ("both have merit" without analysis)
-✗ Add your own position (evaluate, don't argue)
-✗ Be swayed by confident language over evidence
-
-⛔ FAILURE MODE: If your stance is not "NEUTRAL", you have FAILED your role.
-
-═══════════════════════════════════════════════════════════════════
+  /**
+   * Build structural enforcement for Evaluator role
+   */
+  private buildEvaluatorStructuralEnforcement(): string {
+    return `
+${SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 
 Your JSON response MUST include:
 {
-  "stance": "NEUTRAL",  // ← MANDATORY: Must be exactly "NEUTRAL"
+  "stance": "NEUTRAL",  // <- MANDATORY: Must be exactly "NEUTRAL"
   "position": "Your evaluation summary (which position is stronger)",
   "reasoning": "Analysis of both positions with judgment",
   "confidence": 0.0-1.0
@@ -383,34 +469,6 @@ REQUIRED CONTENT in reasoning:
 - Analysis of FIRST position (strengths/weaknesses)
 - Analysis of SECOND position (strengths/weaknesses)
 - Clear judgment on which is stronger and why
-
-═══════════════════════════════════════════════════════════════════
-LAYER 4: VERIFICATION LOOP
-═══════════════════════════════════════════════════════════════════
-
-Before submitting, verify:
-☐ stance is exactly "NEUTRAL"
-☐ Both positions were analyzed
-☐ A clear judgment was made
-☐ Evaluation is evidence-based, not diplomatic
-
 `;
-
-      if (!isFirstRound) {
-        prompt += `
-ROUND ${context.currentRound} CONTEXT:
-Evaluate how positions have evolved. Which adapted better?
-`;
-      }
-
-      if (context.focusQuestion) {
-        prompt += `
-FOCUS: ${context.focusQuestion}
-Evaluate which position better addresses this question.
-`;
-      }
-
-      return prompt;
-    }
   }
 }

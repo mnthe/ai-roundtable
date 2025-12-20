@@ -15,3 +15,23 @@ export {
   getGlobalModeRegistry,
   resetGlobalModeRegistry,
 } from './registry.js';
+
+// Prompt builder utilities
+export {
+  buildRoleAnchor,
+  buildBehavioralContract,
+  buildStructuralEnforcement,
+  buildVerificationLoop,
+  buildFocusQuestionSection,
+  buildModePrompt,
+  formatPreviousResponses,
+  buildRoundContext,
+  createOutputSections,
+  type RoleAnchorConfig,
+  type BehavioralContractConfig,
+  type StructuralEnforcementConfig,
+  type VerificationLoopConfig,
+  type FocusQuestionConfig,
+  type ModePromptConfig,
+  type OutputSection,
+} from './utils/index.js';

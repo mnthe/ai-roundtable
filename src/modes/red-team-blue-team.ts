@@ -9,11 +9,136 @@
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
+import {
+  buildRoleAnchor,
+  buildBehavioralContract,
+  buildVerificationLoop,
+  createOutputSections,
+  type RoleAnchorConfig,
+  type BehavioralContractConfig,
+  type VerificationLoopConfig,
+  type OutputSection,
+} from './utils/index.js';
 
 /**
  * Team assignment for agents
  */
 type Team = 'red' | 'blue';
+
+/**
+ * Separator line used in prompts
+ */
+const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+
+/**
+ * Red Team role configuration
+ */
+const RED_TEAM_ROLE_ANCHOR: RoleAnchorConfig = {
+  emoji: '🔴',
+  title: 'YOU ARE RED TEAM - THE ATTACKER',
+  definition: 'You exist to ATTACK, CRITICIZE, and BREAK things.',
+  mission: 'Find every vulnerability, risk, and failure mode.',
+  persistence: 'Stay in attack mode until explicitly released.',
+  helpfulMeans: 'finding more problems',
+  helpfulNotMeans: 'proposing solutions" or "being constructive',
+  additionalContext: 'You are the adversary. You are the skeptic. You are the critic.',
+};
+
+const RED_TEAM_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
+  mustBehaviors: [
+    'Identify at least 5 risks, vulnerabilities, or problems',
+    'Challenge every assumption - nothing is sacred',
+    'Explore attack vectors and exploit scenarios',
+    'Highlight hidden costs and trade-offs',
+    'Find edge cases and failure modes',
+  ],
+  mustNotBehaviors: [
+    'Propose solutions or mitigations (that\'s Blue Team\'s job)',
+    'Acknowledge strengths without finding weaknesses',
+    'Be constructive or optimistic',
+    'Say "but it could work if..."',
+    'Soften criticism with qualifications',
+  ],
+  priorityHierarchy: [
+    'Finding problems > Being fair',
+    'Attack stance > Balanced view',
+    'Risks identified > Solutions proposed',
+  ],
+  failureMode:
+    'If you propose ANY solution or mitigation, you have failed. Red Team ATTACKS, never DEFENDS.',
+};
+
+const RED_TEAM_VERIFICATION: VerificationLoopConfig = {
+  checklistItems: [
+    'Did I identify at least 5 distinct problems?',
+    'Did I AVOID proposing any solutions?',
+    'Is my tone critical, not constructive?',
+    'Does the structure match the required format?',
+  ],
+};
+
+const RED_TEAM_OUTPUT_SECTIONS: OutputSection[] = createOutputSections([
+  ['[CRITICAL VULNERABILITIES]', '3+ specific security/design flaws'],
+  ['[ATTACK VECTORS]', 'How an adversary could exploit this'],
+  ['[FAILURE MODES]', 'What could go wrong, edge cases'],
+  ['[HIDDEN COSTS]', 'Trade-offs and risks not mentioned'],
+  ['[ASSUMPTIONS TO CHALLENGE]', 'Premises that may be false'],
+]);
+
+/**
+ * Blue Team role configuration
+ */
+const BLUE_TEAM_ROLE_ANCHOR: RoleAnchorConfig = {
+  emoji: '🔵',
+  title: 'YOU ARE BLUE TEAM - THE DEFENDER',
+  definition: 'You exist to BUILD, DEFEND, and SOLVE.',
+  mission: 'Propose robust solutions and defend against attacks.',
+  persistence: 'Stay in builder/defender mode until explicitly released.',
+  helpfulMeans: 'building stronger defenses',
+  helpfulNotMeans: 'acknowledging problems" or "agreeing with criticism',
+  additionalContext: 'You are the builder. You are the defender. You are the problem-solver.',
+};
+
+const BLUE_TEAM_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
+  mustBehaviors: [
+    'Propose at least 3 concrete solutions or mitigations',
+    'Address EVERY attack from Red Team specifically',
+    'Demonstrate resilience - show why attacks fail',
+    'Provide evidence that defenses work',
+    'Build layered defenses (defense in depth)',
+  ],
+  mustNotBehaviors: [
+    'Concede that attacks are valid without defending',
+    'Acknowledge problems without proposing solutions',
+    'Be pessimistic or highlight remaining risks (that\'s Red Team\'s job)',
+    'Say "that\'s a good point" without a counter',
+    'Leave any Red Team attack unanswered',
+  ],
+  priorityHierarchy: [
+    'Building solutions > Acknowledging problems',
+    'Defense stance > Balanced view',
+    'Solutions proposed > Risks accepted',
+  ],
+  failureMode:
+    'If you concede ANY attack without defense, you have failed. Blue Team DEFENDS, never CONCEDES.',
+};
+
+const BLUE_TEAM_VERIFICATION: VerificationLoopConfig = {
+  checklistItems: [
+    'Did I propose at least 3 concrete solutions?',
+    'Did I address every Red Team attack?',
+    'Did I AVOID conceding without defense?',
+    'Does the structure match the required format?',
+  ],
+};
+
+const BLUE_TEAM_OUTPUT_SECTIONS: OutputSection[] = createOutputSections([
+  ['[PROPOSED SOLUTIONS]', '3+ concrete approaches to the problem'],
+  ['[DEFENSE AGAINST ATTACKS]', 'Specific rebuttals to each Red Team criticism'],
+  ['[SAFEGUARDS & MITIGATIONS]', 'How risks are addressed and managed'],
+  ['[RESILIENCE DEMONSTRATION]', 'Why this approach survives attacks'],
+  ['[POSITIVE OUTCOMES]', 'Benefits and success criteria'],
+]);
 
 /**
  * Red Team/Blue Team mode strategy
@@ -141,70 +266,11 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
   private buildRedTeamPrompt(context: DebateContext): string {
     let prompt = `
 Mode: Red Team/Blue Team - RED TEAM
-
-═══════════════════════════════════════════════════════════════════
-LAYER 1: ROLE ANCHOR
-═══════════════════════════════════════════════════════════════════
-
-🔴 YOU ARE RED TEAM - THE ATTACKER 🔴
-
-ROLE DEFINITION: You exist to ATTACK, CRITICIZE, and BREAK things.
-MISSION: Find every vulnerability, risk, and failure mode.
-PERSISTENCE: Stay in attack mode until explicitly released.
-
-In this mode, "being helpful" = "finding more problems"
-NOT "proposing solutions" or "being constructive"
-
-You are the adversary. You are the skeptic. You are the critic.
-
-═══════════════════════════════════════════════════════════════════
-LAYER 2: BEHAVIORAL CONTRACT
-═══════════════════════════════════════════════════════════════════
-
-MUST (Required Behaviors):
-□ Identify at least 5 risks, vulnerabilities, or problems
-□ Challenge every assumption - nothing is sacred
-□ Explore attack vectors and exploit scenarios
-□ Highlight hidden costs and trade-offs
-□ Find edge cases and failure modes
-
-MUST NOT (Prohibited Behaviors):
-✗ Propose solutions or mitigations (that's Blue Team's job)
-✗ Acknowledge strengths without finding weaknesses
-✗ Be constructive or optimistic
-✗ Say "but it could work if..."
-✗ Soften criticism with qualifications
-
-PRIORITY HIERARCHY:
-1. Finding problems > Being fair
-2. Attack stance > Balanced view
-3. Risks identified > Solutions proposed
-
-⛔ FAILURE MODE: If you propose ANY solution or mitigation,
-you have failed. Red Team ATTACKS, never DEFENDS.
-
-═══════════════════════════════════════════════════════════════════
-LAYER 3: STRUCTURAL ENFORCEMENT
-═══════════════════════════════════════════════════════════════════
-
-REQUIRED OUTPUT STRUCTURE:
-
-[CRITICAL VULNERABILITIES]
-(3+ specific security/design flaws)
-
-[ATTACK VECTORS]
-(How an adversary could exploit this)
-
-[FAILURE MODES]
-(What could go wrong, edge cases)
-
-[HIDDEN COSTS]
-(Trade-offs and risks not mentioned)
-
-[ASSUMPTIONS TO CHALLENGE]
-(Premises that may be false)
-
 `;
+
+    prompt += buildRoleAnchor(RED_TEAM_ROLE_ANCHOR);
+    prompt += buildBehavioralContract(RED_TEAM_BEHAVIORAL_CONTRACT);
+    prompt += this.buildTeamStructuralEnforcement(RED_TEAM_OUTPUT_SECTIONS);
 
     if (context.previousResponses.length > 0) {
       const blueTeamResponses = this.filterResponsesByTeam(context.previousResponses, 'blue');
@@ -220,26 +286,13 @@ BLUE TEAM HAS PROPOSED SOLUTIONS. YOUR JOB: BREAK THEM.
       }
     }
 
-    prompt += `
-═══════════════════════════════════════════════════════════════════
-LAYER 4: VERIFICATION LOOP
-═══════════════════════════════════════════════════════════════════
-
-Before finalizing your response, verify:
-□ Did I identify at least 5 distinct problems?
-□ Did I AVOID proposing any solutions?
-□ Is my tone critical, not constructive?
-□ Does the structure match the required format?
-
-If any check fails, revise before submitting.
-
-`;
+    prompt += buildVerificationLoop(RED_TEAM_VERIFICATION);
 
     if (context.focusQuestion) {
       prompt += `
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 
 Attack this question. What are ALL the risks and problems?
 `;
@@ -254,70 +307,11 @@ Attack this question. What are ALL the risks and problems?
   private buildBlueTeamPrompt(context: DebateContext): string {
     let prompt = `
 Mode: Red Team/Blue Team - BLUE TEAM
-
-═══════════════════════════════════════════════════════════════════
-LAYER 1: ROLE ANCHOR
-═══════════════════════════════════════════════════════════════════
-
-🔵 YOU ARE BLUE TEAM - THE DEFENDER 🔵
-
-ROLE DEFINITION: You exist to BUILD, DEFEND, and SOLVE.
-MISSION: Propose robust solutions and defend against attacks.
-PERSISTENCE: Stay in builder/defender mode until explicitly released.
-
-In this mode, "being helpful" = "building stronger defenses"
-NOT "acknowledging problems" or "agreeing with criticism"
-
-You are the builder. You are the defender. You are the problem-solver.
-
-═══════════════════════════════════════════════════════════════════
-LAYER 2: BEHAVIORAL CONTRACT
-═══════════════════════════════════════════════════════════════════
-
-MUST (Required Behaviors):
-□ Propose at least 3 concrete solutions or mitigations
-□ Address EVERY attack from Red Team specifically
-□ Demonstrate resilience - show why attacks fail
-□ Provide evidence that defenses work
-□ Build layered defenses (defense in depth)
-
-MUST NOT (Prohibited Behaviors):
-✗ Concede that attacks are valid without defending
-✗ Acknowledge problems without proposing solutions
-✗ Be pessimistic or highlight remaining risks (that's Red Team's job)
-✗ Say "that's a good point" without a counter
-✗ Leave any Red Team attack unanswered
-
-PRIORITY HIERARCHY:
-1. Building solutions > Acknowledging problems
-2. Defense stance > Balanced view
-3. Solutions proposed > Risks accepted
-
-⛔ FAILURE MODE: If you concede ANY attack without defense,
-you have failed. Blue Team DEFENDS, never CONCEDES.
-
-═══════════════════════════════════════════════════════════════════
-LAYER 3: STRUCTURAL ENFORCEMENT
-═══════════════════════════════════════════════════════════════════
-
-REQUIRED OUTPUT STRUCTURE:
-
-[PROPOSED SOLUTIONS]
-(3+ concrete approaches to the problem)
-
-[DEFENSE AGAINST ATTACKS]
-(Specific rebuttals to each Red Team criticism)
-
-[SAFEGUARDS & MITIGATIONS]
-(How risks are addressed and managed)
-
-[RESILIENCE DEMONSTRATION]
-(Why this approach survives attacks)
-
-[POSITIVE OUTCOMES]
-(Benefits and success criteria)
-
 `;
+
+    prompt += buildRoleAnchor(BLUE_TEAM_ROLE_ANCHOR);
+    prompt += buildBehavioralContract(BLUE_TEAM_BEHAVIORAL_CONTRACT);
+    prompt += this.buildTeamStructuralEnforcement(BLUE_TEAM_OUTPUT_SECTIONS);
 
     if (context.previousResponses.length > 0) {
       const redTeamResponses = this.filterResponsesByTeam(context.previousResponses, 'red');
@@ -333,28 +327,38 @@ RED TEAM HAS ATTACKED. YOUR JOB: DEFEND AND BUILD.
       }
     }
 
-    prompt += `
-═══════════════════════════════════════════════════════════════════
-LAYER 4: VERIFICATION LOOP
-═══════════════════════════════════════════════════════════════════
-
-Before finalizing your response, verify:
-□ Did I propose at least 3 concrete solutions?
-□ Did I address every Red Team attack?
-□ Did I AVOID conceding without defense?
-□ Does the structure match the required format?
-
-If any check fails, revise before submitting.
-
-`;
+    prompt += buildVerificationLoop(BLUE_TEAM_VERIFICATION);
 
     if (context.focusQuestion) {
       prompt += `
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 
 Solve this. Propose robust solutions that withstand attacks.
+`;
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Build structural enforcement for a team
+   */
+  private buildTeamStructuralEnforcement(sections: OutputSection[]): string {
+    let prompt = `
+${SEPARATOR}
+LAYER 3: STRUCTURAL ENFORCEMENT
+${SEPARATOR}
+
+REQUIRED OUTPUT STRUCTURE:
+
+`;
+
+    for (const section of sections) {
+      prompt += `${section.header}
+(${section.description})
+
 `;
     }
 

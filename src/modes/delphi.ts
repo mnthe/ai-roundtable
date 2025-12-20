@@ -9,6 +9,18 @@
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
+import {
+  buildRoleAnchor,
+  buildBehavioralContract,
+  buildVerificationLoop,
+  buildFocusQuestionSection,
+  createOutputSections,
+  type RoleAnchorConfig,
+  type BehavioralContractConfig,
+  type VerificationLoopConfig,
+  type FocusQuestionConfig,
+  type OutputSection,
+} from './utils/index.js';
 
 /**
  * Statistical summary for Delphi rounds
@@ -19,6 +31,94 @@ interface DelphiStatistics {
   consensusLevel: number;
   participantCount: number;
 }
+
+/**
+ * Separator line used in prompts
+ */
+const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+
+/**
+ * Delphi mode role anchor configuration
+ */
+const DELPHI_ROLE_ANCHOR: RoleAnchorConfig = {
+  emoji: '🔮',
+  title: 'YOU ARE AN ANONYMOUS INDEPENDENT EXPERT',
+  definition: 'You provide independent expert opinion in an anonymous consensus process.',
+  mission: 'Offer your genuine assessment while thoughtfully considering group statistics.',
+  persistence: 'Maintain intellectual independence - your identity is hidden, so be HONEST.',
+  helpfulMeans: 'providing your true, independent assessment',
+  helpfulNotMeans: 'converging to the majority" or "going along with the group',
+  additionalContext: 'Anonymity protects you. Use it to be maximally honest.',
+};
+
+/**
+ * Delphi mode behavioral contract configuration
+ */
+const DELPHI_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
+  mustBehaviors: [
+    'State your position clearly and unambiguously',
+    'Provide explicit confidence level (0-100%)',
+    'Explain reasoning with evidence',
+    'Consider group statistics thoughtfully, not blindly',
+    'Adjust only when genuinely persuaded, not for conformity',
+  ],
+  mustNotBehaviors: [
+    'Change position just because others disagree (groupthink)',
+    'Hide uncertainty behind vague language',
+    'Ignore valid arguments from the group entirely',
+    'Overstate confidence to seem authoritative',
+    'Understate confidence to avoid commitment',
+  ],
+  priorityHierarchy: [
+    'Honest assessment > Social conformity',
+    'Evidence-based adjustment > Pressure to converge',
+    'Clear confidence statement > Vague hedging',
+    'Genuine reasoning > Appearing agreeable',
+  ],
+  failureMode:
+    'If you change your position without genuine new reasoning, or conform just to match the majority, you have failed the Delphi process.',
+};
+
+/**
+ * Delphi mode verification loop configuration
+ */
+const DELPHI_VERIFICATION_LOOP: VerificationLoopConfig = {
+  checklistItems: [
+    'Is my position clearly stated?',
+    'Did I provide an explicit confidence percentage?',
+    'If I changed my position, do I have genuine new reasons?',
+    'Am I being honest, or conforming to the group?',
+    'Does the structure match the required format?',
+  ],
+};
+
+/**
+ * Delphi mode focus question configuration
+ */
+const DELPHI_FOCUS_QUESTION: FocusQuestionConfig = {
+  instructions: 'Provide your independent expert opinion on this specific question.\nBe honest - anonymity protects you.',
+};
+
+/**
+ * First round output sections
+ */
+const FIRST_ROUND_SECTIONS: OutputSection[] = createOutputSections([
+  ['[MY POSITION]', 'Clear, unambiguous statement of your view'],
+  ['[CONFIDENCE LEVEL]', 'Explicit percentage 0-100% with brief justification'],
+  ['[REASONING & EVIDENCE]', 'Support for your position'],
+  ['[KEY UNCERTAINTIES]', 'What could change your mind'],
+]);
+
+/**
+ * Subsequent round output sections
+ */
+const SUBSEQUENT_ROUND_SECTIONS: OutputSection[] = createOutputSections([
+  ['[MY POSITION]', 'Clear, unambiguous statement of your view'],
+  ['[CONFIDENCE LEVEL]', 'Explicit percentage 0-100% with brief justification'],
+  ['[RESPONSE TO GROUP]', 'How you\'ve considered group statistics - agreement or disagreement with reasoning'],
+  ['[REASONING & EVIDENCE]', 'Support for your position'],
+  ['[POSITION CHANGE JUSTIFICATION] (if applicable)', 'If you changed your position, explain what genuinely persuaded you'],
+]);
 
 /**
  * Delphi Method mode strategy
@@ -64,52 +164,34 @@ export class DelphiMode extends BaseModeStrategy {
   buildAgentPrompt(context: DebateContext): string {
     let prompt = `
 Mode: Delphi Method
+`;
 
-═══════════════════════════════════════════════════════════════════
-LAYER 1: ROLE ANCHOR
-═══════════════════════════════════════════════════════════════════
+    // Layer 1: Role Anchor
+    prompt += buildRoleAnchor(DELPHI_ROLE_ANCHOR);
 
-🔮 YOU ARE AN ANONYMOUS INDEPENDENT EXPERT 🔮
+    // Layer 2: Behavioral Contract
+    prompt += buildBehavioralContract(DELPHI_BEHAVIORAL_CONTRACT);
 
-ROLE DEFINITION: You provide independent expert opinion in an anonymous consensus process.
-MISSION: Offer your genuine assessment while thoughtfully considering group statistics.
-PERSISTENCE: Maintain intellectual independence - your identity is hidden, so be HONEST.
+    // Layer 3: Structural Enforcement (custom for Delphi due to statistics)
+    prompt += this.buildStructuralEnforcementWithStats(context);
 
-In this mode, "being helpful" = "providing your true, independent assessment"
-NOT "converging to the majority" or "going along with the group"
+    // Layer 4: Verification Loop
+    prompt += buildVerificationLoop(DELPHI_VERIFICATION_LOOP);
 
-Anonymity protects you. Use it to be maximally honest.
+    // Focus Question (if present)
+    prompt += buildFocusQuestionSection(context, DELPHI_FOCUS_QUESTION);
 
-═══════════════════════════════════════════════════════════════════
-LAYER 2: BEHAVIORAL CONTRACT
-═══════════════════════════════════════════════════════════════════
+    return prompt;
+  }
 
-MUST (Required Behaviors):
-□ State your position clearly and unambiguously
-□ Provide explicit confidence level (0-100%)
-□ Explain reasoning with evidence
-□ Consider group statistics thoughtfully, not blindly
-□ Adjust only when genuinely persuaded, not for conformity
-
-MUST NOT (Prohibited Behaviors):
-✗ Change position just because others disagree (groupthink)
-✗ Hide uncertainty behind vague language
-✗ Ignore valid arguments from the group entirely
-✗ Overstate confidence to seem authoritative
-✗ Understate confidence to avoid commitment
-
-PRIORITY HIERARCHY:
-1. Honest assessment > Social conformity
-2. Evidence-based adjustment > Pressure to converge
-3. Clear confidence statement > Vague hedging
-4. Genuine reasoning > Appearing agreeable
-
-⛔ FAILURE MODE: If you change your position without genuine new reasoning,
-or conform just to match the majority, you have failed the Delphi process.
-
-═══════════════════════════════════════════════════════════════════
+  /**
+   * Build structural enforcement layer with Delphi statistics
+   */
+  private buildStructuralEnforcementWithStats(context: DebateContext): string {
+    let prompt = `
+${SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-═══════════════════════════════════════════════════════════════════
+${SEPARATOR}
 
 `;
 
@@ -117,8 +199,7 @@ LAYER 3: STRUCTURAL ENFORCEMENT
       // Calculate and present statistics from previous round(s)
       const stats = this.calculateStatistics(context.previousResponses);
 
-      prompt += `
-PREVIOUS ROUND STATISTICS:
+      prompt += `PREVIOUS ROUND STATISTICS:
 - Participants: ${stats.participantCount}
 - Average Confidence: ${stats.averageConfidence.toFixed(1)}%
 - Consensus Level: ${stats.consensusLevel.toFixed(1)}%
@@ -128,67 +209,27 @@ ${this.formatPositionDistribution(stats.positionDistribution)}
 
 REQUIRED OUTPUT STRUCTURE:
 
-[MY POSITION]
-(Clear, unambiguous statement of your view)
+`;
 
-[CONFIDENCE LEVEL]
-(Explicit percentage 0-100% with brief justification)
-
-[RESPONSE TO GROUP]
-(How you've considered group statistics - agreement or disagreement with reasoning)
-
-[REASONING & EVIDENCE]
-(Support for your position)
-
-[POSITION CHANGE JUSTIFICATION] (if applicable)
-(If you changed your position, explain what genuinely persuaded you)
+      for (const section of SUBSEQUENT_ROUND_SECTIONS) {
+        prompt += `${section.header}
+(${section.description})
 
 `;
+      }
     } else {
-      prompt += `
-REQUIRED OUTPUT STRUCTURE (First Round):
-
-[MY POSITION]
-(Clear, unambiguous statement of your view)
-
-[CONFIDENCE LEVEL]
-(Explicit percentage 0-100% with brief justification)
-
-[REASONING & EVIDENCE]
-(Support for your position)
-
-[KEY UNCERTAINTIES]
-(What could change your mind)
-
-Your response will be anonymized and shared with aggregate statistics.
-
-`;
-    }
-
-    prompt += `
-═══════════════════════════════════════════════════════════════════
-LAYER 4: VERIFICATION LOOP
-═══════════════════════════════════════════════════════════════════
-
-Before finalizing your response, verify:
-□ Is my position clearly stated?
-□ Did I provide an explicit confidence percentage?
-□ If I changed my position, do I have genuine new reasons?
-□ Am I being honest, or conforming to the group?
-□ Does the structure match the required format?
-
-If any check fails, revise before submitting.
+      prompt += `REQUIRED OUTPUT STRUCTURE (First Round):
 
 `;
 
-    if (context.focusQuestion) {
-      prompt += `
-═══════════════════════════════════════════════════════════════════
-FOCUS QUESTION: ${context.focusQuestion}
-═══════════════════════════════════════════════════════════════════
+      for (const section of FIRST_ROUND_SECTIONS) {
+        prompt += `${section.header}
+(${section.description})
 
-Provide your independent expert opinion on this specific question.
-Be honest - anonymity protects you.
+`;
+      }
+
+      prompt += `Your response will be anonymized and shared with aggregate statistics.
 `;
     }
 
