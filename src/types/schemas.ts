@@ -217,9 +217,9 @@ export const SynthesisResultSchema = z.object({
 export const StoredSessionRowSchema = z.object({
   id: z.string(),
   topic: z.string(),
-  mode: z.string(),
+  mode: DebateModeSchema,
   agent_ids: z.string(), // JSON array stored as string
-  status: z.string(),
+  status: SessionStatusSchema,
   current_round: z.number(),
   total_rounds: z.number(),
   created_at: z.number(), // Unix timestamp

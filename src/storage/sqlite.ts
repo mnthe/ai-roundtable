@@ -22,6 +22,7 @@ import type {
   Citation,
   ToolCallRecord,
 } from '../types/index.js';
+import type { Storage } from './index.js';
 
 const logger = createLogger('SQLiteStorage');
 
@@ -76,7 +77,7 @@ async function getSqlJs(): Promise<SqlJsStatic> {
   return sqlJsInstance;
 }
 
-export class SQLiteStorage {
+export class SQLiteStorage implements Storage {
   private db: SqlJsDatabase | null = null;
   private initPromise: Promise<void> | null = null;
 
@@ -487,9 +488,9 @@ export class SQLiteStorage {
     return {
       id: stored.id,
       topic: stored.topic,
-      mode: stored.mode as DebateMode,
+      mode: stored.mode,
       agentIds,
-      status: stored.status as SessionStatus,
+      status: stored.status,
       currentRound: stored.current_round,
       totalRounds: stored.total_rounds,
       responses,

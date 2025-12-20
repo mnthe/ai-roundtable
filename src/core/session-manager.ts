@@ -3,16 +3,18 @@
  */
 
 import type { Session, AgentResponse, SessionStatus, DebateConfig } from '../types/index.js';
-import { SQLiteStorage } from '../storage/sqlite.js';
+import { SQLiteStorage, type Storage } from '../storage/index.js';
 import { randomUUID } from 'crypto';
 
 export interface SessionManagerOptions {
-  storage?: SQLiteStorage;
+  /** Provide a custom storage implementation */
+  storage?: Storage;
+  /** Filename for SQLite storage (ignored if storage is provided) */
   storageFilename?: string;
 }
 
 export class SessionManager {
-  private storage: SQLiteStorage;
+  private storage: Storage;
   private ownsStorage: boolean;
 
   constructor(options: SessionManagerOptions = {}) {
