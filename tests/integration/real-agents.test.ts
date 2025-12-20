@@ -8,27 +8,28 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { getTestConfig, isProviderAvailable, getAvailableProviders } from './setup.js';
+import {
+  getTestConfig,
+  isProviderAvailable,
+  getAvailableProviders,
+  withProviderErrorHandling,
+} from './setup.js';
 import { AgentRegistry } from '../../src/agents/registry.js';
 import { ClaudeAgent } from '../../src/agents/claude.js';
 import { ChatGPTAgent } from '../../src/agents/chatgpt.js';
 import { GeminiAgent } from '../../src/agents/gemini.js';
 import { PerplexityAgent } from '../../src/agents/perplexity.js';
-import { SessionManager } from '../../src/core/session-manager.js';
-import { DebateEngine } from '../../src/core/debate-engine.js';
 import { ConsensusAnalyzer } from '../../src/core/consensus-analyzer.js';
-import { getGlobalModeRegistry, resetGlobalModeRegistry } from '../../src/modes/registry.js';
+import { resetGlobalModeRegistry } from '../../src/modes/registry.js';
 import { DefaultAgentToolkit } from '../../src/tools/toolkit.js';
 import type { DebateContext, AgentResponse } from '../../src/types/index.js';
 
 describe('Real Agent Integration Tests', () => {
   let agentRegistry: AgentRegistry;
-  let sessionManager: SessionManager;
   const config = getTestConfig();
 
   beforeEach(() => {
     agentRegistry = new AgentRegistry();
-    sessionManager = new SessionManager();
     resetGlobalModeRegistry();
   });
 
@@ -145,28 +146,30 @@ describe('Real Agent Integration Tests', () => {
       });
 
       it('should generate a response from Perplexity', async () => {
-        const agent = new PerplexityAgent({
-          id: 'perplexity-test',
-          name: 'Perplexity Test',
-          model: 'sonar-pro',
-          apiKey: config.perplexityApiKey!,
+        await withProviderErrorHandling('perplexity', async () => {
+          const agent = new PerplexityAgent({
+            id: 'perplexity-test',
+            name: 'Perplexity Test',
+            model: 'sonar-pro',
+            apiKey: config.perplexityApiKey!,
+          });
+
+          const context: DebateContext = {
+            sessionId: 'test-session',
+            topic: 'What are the latest trends in software architecture?',
+            mode: 'collaborative',
+            currentRound: 1,
+            totalRounds: 1,
+            previousResponses: [],
+          };
+
+          const response = await agent.generateResponse(context);
+
+          expect(response.agentId).toBe('perplexity-test');
+          expect(response.agentName).toBe('Perplexity Test');
+          expect(response.position).toBeTruthy();
+          expect(response.reasoning).toBeTruthy();
         });
-
-        const context: DebateContext = {
-          sessionId: 'test-session',
-          topic: 'What are the latest trends in software architecture?',
-          mode: 'collaborative',
-          currentRound: 1,
-          totalRounds: 1,
-          previousResponses: [],
-        };
-
-        const response = await agent.generateResponse(context);
-
-        expect(response.agentId).toBe('perplexity-test');
-        expect(response.agentName).toBe('Perplexity Test');
-        expect(response.position).toBeTruthy();
-        expect(response.reasoning).toBeTruthy();
       }, 60000);
     });
   });
