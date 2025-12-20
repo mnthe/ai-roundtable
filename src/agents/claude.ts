@@ -6,11 +6,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, Tool, ToolUseBlock, TextBlock } from '@anthropic-ai/sdk/resources/messages';
 import { createLogger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
-import { BaseAgent, type AgentToolkit } from './base.js';
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
 import { convertSDKError } from './utils/error-converter.js';
 import type {
   AgentConfig,
-  AgentResponse,
   DebateContext,
   ToolCallRecord,
   Citation,
@@ -52,48 +51,35 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Generate a response using Claude API
+   * Call Claude API to generate a response
+   *
+   * Implements the provider-specific API call for the template method pattern.
    */
-  async generateResponse(context: DebateContext): Promise<AgentResponse> {
-    const startTime = Date.now();
-    logger.info(
-      {
-        sessionId: context.sessionId,
-        agentId: this.id,
-        agentName: this.name,
-        round: context.currentRound,
-        topic: context.topic,
-      },
-      'Starting agent response generation'
+  protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
+    const systemPrompt = this.buildSystemPrompt(context);
+    const userMessage = this.buildUserMessage(context);
+
+    const messages: MessageParam[] = [{ role: 'user', content: userMessage }];
+
+    const toolCalls: ToolCallRecord[] = [];
+    const citations: Citation[] = [];
+
+    // Build tools if toolkit is available
+    const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
+
+    // Make the API call with retry logic
+    let response = await withRetry(
+      () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemPrompt,
+          messages,
+          tools,
+          temperature: this.temperature,
+        }),
+      { maxRetries: 3 }
     );
-
-    try {
-      const systemPrompt = this.buildSystemPrompt(context);
-      const userMessage = this.buildUserMessage(context);
-
-      const messages: MessageParam[] = [
-        { role: 'user', content: userMessage },
-      ];
-
-      const toolCalls: ToolCallRecord[] = [];
-      const citations: Citation[] = [];
-
-      // Build tools if toolkit is available
-      const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
-
-      // Make the API call with retry logic
-      let response = await withRetry(
-        () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: systemPrompt,
-            messages,
-            tools,
-            temperature: this.temperature,
-          }),
-        { maxRetries: 3 }
-      );
 
     // Handle tool use loop
     while (response.stop_reason === 'tool_use') {
@@ -148,49 +134,14 @@ export class ClaudeAgent extends BaseAgent {
     );
     const rawText = textBlocks.map((block) => block.text).join('\n');
 
-      // Extract response from tool calls or text
-      const parsed = this.extractResponseFromToolCallsOrText(toolCalls, rawText, context);
+    return { rawText, toolCalls, citations };
+  }
 
-      // Build the final response
-      const result = this.buildAgentResponse({
-        parsed,
-        rawText,
-        citations,
-        toolCalls,
-      });
-
-      const durationMs = Date.now() - startTime;
-      logger.info(
-        {
-          sessionId: context.sessionId,
-          agentId: this.id,
-          agentName: this.name,
-          round: context.currentRound,
-          durationMs,
-          confidence: parsed.confidence,
-          toolCallCount: toolCalls.length,
-          citationCount: citations.length,
-        },
-        'Agent response generation completed'
-      );
-
-      return result;
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      const convertedError = convertSDKError(error, 'anthropic');
-      logger.error(
-        {
-          err: convertedError,
-          sessionId: context.sessionId,
-          agentId: this.id,
-          agentName: this.name,
-          round: context.currentRound,
-          durationMs,
-        },
-        'Failed to generate agent response'
-      );
-      throw convertedError;
-    }
+  /**
+   * Convert Anthropic SDK errors to standard error types
+   */
+  protected override convertError(error: unknown): Error {
+    return convertSDKError(error, 'anthropic');
   }
 
   /**

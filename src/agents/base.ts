@@ -33,6 +33,22 @@ interface ToolResultWithCitations {
 }
 
 /**
+ * Result from provider-specific API call
+ */
+export interface ProviderApiResult {
+  /** Raw text response from the API */
+  rawText: string;
+  /** Tool calls made during the API call */
+  toolCalls: ToolCallRecord[];
+  /** Citations extracted from tool results */
+  citations: Citation[];
+  /** Optional images (Perplexity only) */
+  images?: ImageResult[];
+  /** Optional related questions (Perplexity only) */
+  relatedQuestions?: string[];
+}
+
+/**
  * submit_response tool output structure
  */
 interface SubmitResponseOutput {
@@ -121,9 +137,100 @@ export abstract class BaseAgent {
 
   /**
    * Generate a response for the current debate context
-   * Must be implemented by each provider-specific agent
+   *
+   * This is a template method that provides common logging, timing, and error handling.
+   * Subclasses should implement callProviderApi() for provider-specific API calls.
    */
-  abstract generateResponse(context: DebateContext): Promise<AgentResponse>;
+  async generateResponse(context: DebateContext): Promise<AgentResponse> {
+    const startTime = Date.now();
+    logger.info(
+      {
+        sessionId: context.sessionId,
+        agentId: this.id,
+        agentName: this.name,
+        round: context.currentRound,
+        topic: context.topic,
+      },
+      'Starting agent response generation'
+    );
+
+    try {
+      // Call provider-specific API implementation
+      const apiResult = await this.callProviderApi(context);
+
+      // Extract response from tool calls or text
+      const parsed = this.extractResponseFromToolCallsOrText(
+        apiResult.toolCalls,
+        apiResult.rawText,
+        context
+      );
+
+      // Build the final response
+      const result = this.buildAgentResponse({
+        parsed,
+        rawText: apiResult.rawText,
+        citations: apiResult.citations,
+        toolCalls: apiResult.toolCalls,
+        images: apiResult.images,
+        relatedQuestions: apiResult.relatedQuestions,
+      });
+
+      const durationMs = Date.now() - startTime;
+      logger.info(
+        {
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          durationMs,
+          confidence: parsed.confidence,
+          toolCallCount: apiResult.toolCalls.length,
+          citationCount: apiResult.citations.length,
+        },
+        'Agent response generation completed'
+      );
+
+      return result;
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const convertedError = this.convertError(error);
+      logger.error(
+        {
+          err: convertedError,
+          sessionId: context.sessionId,
+          agentId: this.id,
+          agentName: this.name,
+          round: context.currentRound,
+          durationMs,
+        },
+        'Failed to generate agent response'
+      );
+      throw convertedError;
+    }
+  }
+
+  /**
+   * Call the provider-specific API to generate a response
+   *
+   * Subclasses must implement this method to:
+   * 1. Build provider-specific messages/prompts
+   * 2. Make API calls with retry logic
+   * 3. Handle tool use loops
+   * 4. Return raw text, tool calls, and citations
+   *
+   * The common logging, timing, and error handling is done by generateResponse().
+   */
+  protected abstract callProviderApi(context: DebateContext): Promise<ProviderApiResult>;
+
+  /**
+   * Convert SDK-specific errors to standard error types
+   *
+   * Subclasses should override this to convert provider-specific SDK errors.
+   * Default implementation returns the error as-is.
+   */
+  protected convertError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+  }
 
   /**
    * Generate a raw text completion without parsing into structured format
@@ -503,7 +610,11 @@ export class MockAgent extends BaseAgent {
     this.mockResponse = response;
   }
 
-  async generateResponse(context: DebateContext): Promise<AgentResponse> {
+  /**
+   * Override generateResponse to bypass template method for testing
+   * MockAgent needs full control over the response for test assertions
+   */
+  override async generateResponse(context: DebateContext): Promise<AgentResponse> {
     if (this.responseDelay > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.responseDelay));
     }
@@ -524,6 +635,18 @@ export class MockAgent extends BaseAgent {
       reasoning: `This is a mock response for testing. Round ${context.currentRound}/${context.totalRounds}.`,
       confidence: 0.75,
       timestamp: new Date(),
+    };
+  }
+
+  /**
+   * Mock implementation of callProviderApi
+   * Not used since generateResponse is overridden, but required by abstract class
+   */
+  protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
+    return {
+      rawText: `Mock response for ${context.topic}`,
+      toolCalls: [],
+      citations: [],
     };
   }
 

@@ -4,17 +4,11 @@
 
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Chat, FunctionDeclaration, Content } from '@google/genai';
-import { BaseAgent, type AgentToolkit } from './base.js';
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
 import { convertSDKError } from './utils/error-converter.js';
-import type {
-  AgentConfig,
-  AgentResponse,
-  DebateContext,
-  ToolCallRecord,
-  Citation,
-} from '../types/index.js';
+import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
 
 const logger = createLogger('GeminiAgent');
 
@@ -53,146 +47,100 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
-   * Generate a response using Gemini API
+   * Call Gemini API to generate a response
+   *
+   * Implements the provider-specific API call for the template method pattern.
    */
-  async generateResponse(context: DebateContext): Promise<AgentResponse> {
-    const startTime = Date.now();
-    logger.info(
-      {
-        sessionId: context.sessionId,
-        agentId: this.id,
-        agentName: this.name,
-        round: context.currentRound,
-        topic: context.topic,
+  protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
+    const systemPrompt = this.buildSystemPrompt(context);
+    const userMessage = this.buildUserMessage(context);
+
+    const toolCalls: ToolCallRecord[] = [];
+    const citations: Citation[] = [];
+
+    // Build tools if toolkit is available
+    const tools = this.toolkit ? this.buildGeminiTools() : undefined;
+
+    // Build chat history
+    const history: Content[] = [];
+
+    // Create chat session with system instruction in config
+    const chat: Chat = this.client.chats.create({
+      model: this.model,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: this.temperature,
+        maxOutputTokens: this.maxTokens,
+        tools: tools ? [{ functionDeclarations: tools }] : undefined,
       },
-      'Starting agent response generation'
-    );
+      history,
+    });
 
-    try {
-      const systemPrompt = this.buildSystemPrompt(context);
-      const userMessage = this.buildUserMessage(context);
+    // Send message with retry logic
+    let response = await withRetry(() => chat.sendMessage({ message: userMessage }), {
+      maxRetries: 3,
+    });
 
-      const toolCalls: ToolCallRecord[] = [];
-      const citations: Citation[] = [];
+    // Handle function calling loop
+    while (response.functionCalls && response.functionCalls.length > 0) {
+      const functionCalls = response.functionCalls;
+      const functionResponses: Array<{
+        id?: string;
+        name: string;
+        response: Record<string, unknown>;
+      }> = [];
 
-      // Build tools if toolkit is available
-      const tools = this.toolkit ? this.buildGeminiTools() : undefined;
+      for (const functionCall of functionCalls) {
+        const toolResult = await this.executeTool(functionCall.name ?? '', functionCall.args);
 
-      // Build chat history
-      const history: Content[] = [];
+        toolCalls.push({
+          toolName: functionCall.name ?? 'unknown',
+          input: functionCall.args,
+          output: toolResult,
+          timestamp: new Date(),
+        });
 
-      // Create chat session with system instruction in config
-      const chat: Chat = this.client.chats.create({
-        model: this.model,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: this.temperature,
-          maxOutputTokens: this.maxTokens,
-          tools: tools ? [{ functionDeclarations: tools }] : undefined,
-        },
-        history,
-      });
-
-      // Send message with retry logic
-      let response = await withRetry(() => chat.sendMessage({ message: userMessage }), {
-        maxRetries: 3,
-      });
-
-      // Handle function calling loop
-      while (response.functionCalls && response.functionCalls.length > 0) {
-        const functionCalls = response.functionCalls;
-        const functionResponses: Array<{
-          id?: string;
-          name: string;
-          response: Record<string, unknown>;
-        }> = [];
-
-        for (const functionCall of functionCalls) {
-          const toolResult = await this.executeTool(functionCall.name ?? '', functionCall.args);
-
-          toolCalls.push({
-            toolName: functionCall.name ?? 'unknown',
-            input: functionCall.args,
-            output: toolResult,
-            timestamp: new Date(),
-          });
-
-          // Extract citations from search results
-          const extractedCitations = this.extractCitationsFromToolResult(
-            functionCall.name ?? '',
-            toolResult
-          );
-          citations.push(...extractedCitations);
-
-          functionResponses.push({
-            id: functionCall.id,
-            name: functionCall.name ?? '',
-            response: toolResult as Record<string, unknown>,
-          });
-        }
-
-        // Send function responses back
-        response = await withRetry(
-          () =>
-            chat.sendMessage({
-              message: functionResponses.map((fr) => ({
-                functionResponse: {
-                  id: fr.id,
-                  name: fr.name,
-                  response: fr.response,
-                },
-              })),
-            }),
-          { maxRetries: 3 }
+        // Extract citations from search results
+        const extractedCitations = this.extractCitationsFromToolResult(
+          functionCall.name ?? '',
+          toolResult
         );
+        citations.push(...extractedCitations);
+
+        functionResponses.push({
+          id: functionCall.id,
+          name: functionCall.name ?? '',
+          response: toolResult as Record<string, unknown>,
+        });
       }
 
-      // Extract text from final response
-      const rawText = response.text ?? '';
-
-      // Extract response from tool calls or text
-      const parsed = this.extractResponseFromToolCallsOrText(toolCalls, rawText, context);
-
-      // Build the final response
-      const result = this.buildAgentResponse({
-        parsed,
-        rawText,
-        citations,
-        toolCalls,
-      });
-
-      const durationMs = Date.now() - startTime;
-      logger.info(
-        {
-          sessionId: context.sessionId,
-          agentId: this.id,
-          agentName: this.name,
-          round: context.currentRound,
-          durationMs,
-          toolCallCount: toolCalls.length,
-          citationCount: citations.length,
-          confidence: parsed.confidence,
-        },
-        'Agent response generation completed'
+      // Send function responses back
+      response = await withRetry(
+        () =>
+          chat.sendMessage({
+            message: functionResponses.map((fr) => ({
+              functionResponse: {
+                id: fr.id,
+                name: fr.name,
+                response: fr.response,
+              },
+            })),
+          }),
+        { maxRetries: 3 }
       );
-
-      return result;
-    } catch (error) {
-      const durationMs = Date.now() - startTime;
-      const convertedError = convertSDKError(error, 'google');
-      logger.error(
-        {
-          err: convertedError,
-          sessionId: context.sessionId,
-          agentId: this.id,
-          agentName: this.name,
-          round: context.currentRound,
-          durationMs,
-        },
-        'Failed to generate agent response'
-      );
-      throw convertedError;
     }
+
+    // Extract text from final response
+    const rawText = response.text ?? '';
+
+    return { rawText, toolCalls, citations };
+  }
+
+  /**
+   * Convert Google SDK errors to standard error types
+   */
+  protected override convertError(error: unknown): Error {
+    return convertSDKError(error, 'google');
   }
 
   /**
