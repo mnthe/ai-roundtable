@@ -8,7 +8,7 @@ import { z } from 'zod';
 // Provider Schemas
 // ============================================
 
-export const AIProviderSchema = z.enum(['anthropic', 'openai', 'google', 'perplexity']);
+const AIProviderSchema = z.enum(['anthropic', 'openai', 'google', 'perplexity']);
 
 // ============================================
 // Agent Schemas
@@ -30,7 +30,7 @@ export const CitationSchema = z.object({
   snippet: z.string().optional(),
 });
 
-export const ToolCallRecordSchema = z.object({
+const ToolCallRecordSchema = z.object({
   toolName: z.string(),
   input: z.unknown(),
   output: z.unknown(),
@@ -70,16 +70,6 @@ export const DebateConfigSchema = z.object({
   focusQuestion: z.string().optional(),
 });
 
-export const DebateContextSchema = z.object({
-  sessionId: z.string().min(1),
-  topic: z.string().min(1),
-  mode: DebateModeSchema,
-  currentRound: z.number().int().positive(),
-  totalRounds: z.number().int().positive(),
-  previousResponses: z.array(AgentResponseSchema),
-  focusQuestion: z.string().optional(),
-});
-
 // ============================================
 // Session Schemas
 // ============================================
@@ -107,29 +97,9 @@ export const SessionSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 
-export const RoundResultSchema = z.object({
-  roundNumber: z.number().int().positive(),
-  responses: z.array(AgentResponseSchema),
-  consensus: ConsensusResultSchema,
-});
-
 // ============================================
 // Tool Schemas
 // ============================================
-
-export const ToolResultSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
-  z.object({
-    success: z.boolean(),
-    data: dataSchema.optional(),
-    error: z.string().optional(),
-  });
-
-export const SearchResultSchema = z.object({
-  title: z.string(),
-  url: z.string().url(),
-  snippet: z.string(),
-  publishedDate: z.string().optional(),
-});
 
 export const SearchOptionsSchema = z.object({
   maxResults: z.number().int().positive().max(20).optional().default(5),
@@ -193,17 +163,6 @@ export const GetCitationsInputSchema = z.object({
 export const SynthesizeDebateInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
   synthesizer: z.string().optional(),
-});
-
-export const SynthesisResultSchema = z.object({
-  commonGround: z.array(z.string()),
-  keyDifferences: z.array(z.string()),
-  evolutionSummary: z.string(),
-  conclusion: z.string(),
-  recommendation: z.string(),
-  confidence: z.number().min(0).max(1),
-  synthesizerId: z.string(),
-  timestamp: z.coerce.date(),
 });
 
 // ============================================
@@ -270,18 +229,3 @@ export const StoredToolCallsArraySchema = z.array(
     timestamp: z.union([z.string(), z.number(), z.coerce.date()]),
   })
 );
-
-// ============================================
-// Type Inference Helpers
-// ============================================
-
-export type StartRoundtableInputType = z.infer<typeof StartRoundtableInputSchema>;
-export type ContinueRoundtableInputType = z.infer<typeof ContinueRoundtableInputSchema>;
-export type GetConsensusInputType = z.infer<typeof GetConsensusInputSchema>;
-export type GetThoughtsInputType = z.infer<typeof GetThoughtsInputSchema>;
-export type ExportSessionInputType = z.infer<typeof ExportSessionInputSchema>;
-export type ControlSessionInputType = z.infer<typeof ControlSessionInputSchema>;
-export type GetRoundDetailsInputType = z.infer<typeof GetRoundDetailsInputSchema>;
-export type GetResponseDetailInputType = z.infer<typeof GetResponseDetailInputSchema>;
-export type GetCitationsInputType = z.infer<typeof GetCitationsInputSchema>;
-export type SynthesizeDebateInputType = z.infer<typeof SynthesizeDebateInputSchema>;
