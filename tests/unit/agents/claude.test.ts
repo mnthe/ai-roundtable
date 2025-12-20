@@ -2,74 +2,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClaudeAgent, createClaudeAgent } from '../../../src/agents/claude.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
-
-// Mock Anthropic client
-const createMockClient = (responseContent: string, stopReason = 'end_turn') => {
-  return {
-    messages: {
-      create: vi.fn().mockResolvedValue({
-        content: [{ type: 'text', text: responseContent }],
-        stop_reason: stopReason,
-      }),
-    },
-  };
-};
-
-// Mock client that simulates tool use
-const createMockClientWithToolUse = (
-  toolCallName: string,
-  toolCallInput: unknown,
-  toolResult: unknown,
-  finalResponse: string
-) => {
-  let callCount = 0;
-  return {
-    messages: {
-      create: vi.fn().mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) {
-          return Promise.resolve({
-            content: [
-              {
-                type: 'tool_use',
-                id: 'tool-1',
-                name: toolCallName,
-                input: toolCallInput,
-              },
-            ],
-            stop_reason: 'tool_use',
-          });
-        }
-        return Promise.resolve({
-          content: [{ type: 'text', text: finalResponse }],
-          stop_reason: 'end_turn',
-        });
-      }),
-    },
-  };
-};
+import {
+  createMockAnthropicClient,
+  createMockAnthropicClientWithToolUse,
+  createMockContext,
+  createMockAgentConfig,
+  createMockToolkit,
+  createJsonResponse,
+} from '../../utils/index.js';
 
 describe('ClaudeAgent', () => {
-  const defaultConfig: AgentConfig = {
+  const defaultConfig: AgentConfig = createMockAgentConfig({
     id: 'claude-test',
     name: 'Claude Test',
     provider: 'anthropic',
     model: 'claude-3-opus-20240229',
-    temperature: 0.7,
-  };
+  });
 
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
+  const defaultContext: DebateContext = createMockContext({
     topic: 'Should AI be regulated?',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
+  });
 
   describe('constructor', () => {
     it('should create agent with custom client', () => {
-      const mockClient = createMockClient('test');
+      const mockClient = createMockAnthropicClient('test');
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
@@ -81,13 +37,13 @@ describe('ClaudeAgent', () => {
 
   describe('generateResponse', () => {
     it('should generate response from Claude API', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'AI should be regulated',
         reasoning: 'To ensure safety and fairness',
         confidence: 0.85,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockAnthropicClient(mockResponse);
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
@@ -103,7 +59,9 @@ describe('ClaudeAgent', () => {
     });
 
     it('should call API with correct parameters', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
@@ -120,7 +78,7 @@ describe('ClaudeAgent', () => {
     });
 
     it('should handle non-JSON response gracefully', async () => {
-      const mockClient = createMockClient('This is a plain text response without JSON');
+      const mockClient = createMockAnthropicClient('This is a plain text response without JSON');
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
@@ -133,13 +91,13 @@ describe('ClaudeAgent', () => {
     });
 
     it('should clamp confidence to 0-1 range', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'Test',
         reasoning: 'Test',
-        confidence: 1.5, // Above 1
+        confidence: 1.5,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockAnthropicClient(mockResponse);
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
@@ -150,15 +108,17 @@ describe('ClaudeAgent', () => {
     });
 
     it('should include context in system prompt', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
 
-      const contextWithFocus: DebateContext = {
-        ...defaultContext,
+      const contextWithFocus: DebateContext = createMockContext({
+        topic: 'Should AI be regulated?',
         focusQuestion: 'What about privacy concerns?',
-      };
+      });
 
       await agent.generateResponse(contextWithFocus);
 
@@ -169,13 +129,15 @@ describe('ClaudeAgent', () => {
     });
 
     it('should include previous responses in user message', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
       });
 
-      const contextWithPrevious: DebateContext = {
-        ...defaultContext,
+      const contextWithPrevious: DebateContext = createMockContext({
+        topic: 'Should AI be regulated?',
         previousResponses: [
           {
             agentId: 'other-agent',
@@ -186,7 +148,7 @@ describe('ClaudeAgent', () => {
             timestamp: new Date(),
           },
         ],
-      };
+      });
 
       await agent.generateResponse(contextWithPrevious);
 
@@ -199,19 +161,23 @@ describe('ClaudeAgent', () => {
 
   describe('tool use', () => {
     it('should handle tool use response', async () => {
-      const mockClient = createMockClientWithToolUse(
+      const mockClient = createMockAnthropicClientWithToolUse(
         'search_web',
         { query: 'AI regulation' },
         { results: [{ title: 'AI News', url: 'https://example.com', snippet: 'Recent developments...' }] },
-        '{"position":"Based on research","reasoning":"Found relevant sources","confidence":0.9}'
+        createJsonResponse({
+          position: 'Based on research',
+          reasoning: 'Found relevant sources',
+          confidence: 0.9,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'search_web',
             description: 'Search the web',
-            parameters: { query: { type: 'string' } },
+            parameters: { query: { type: 'string', description: 'Search query' } },
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
@@ -222,7 +188,7 @@ describe('ClaudeAgent', () => {
             ],
           },
         }),
-      };
+      });
 
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
@@ -239,17 +205,18 @@ describe('ClaudeAgent', () => {
     });
 
     it('should provide tools to API when toolkit is set', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'test_tool',
             description: 'A test tool',
-            parameters: { input: { type: 'string' } },
+            parameters: { input: { type: 'string', description: 'Input' } },
           },
         ],
-        executeTool: vi.fn(),
-      };
+      });
 
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
@@ -265,23 +232,27 @@ describe('ClaudeAgent', () => {
     });
 
     it('should handle tool execution errors', async () => {
-      const mockClient = createMockClientWithToolUse(
+      const mockClient = createMockAnthropicClientWithToolUse(
         'failing_tool',
         { input: 'test' },
         { error: 'Tool failed' },
-        '{"position":"Handled error","reasoning":"Continued despite tool failure","confidence":0.6}'
+        createJsonResponse({
+          position: 'Handled error',
+          reasoning: 'Continued despite tool failure',
+          confidence: 0.6,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'failing_tool',
             description: 'A failing tool',
-            parameters: { input: { type: 'string' } },
+            parameters: { input: { type: 'string', description: 'Input' } },
           },
         ],
         executeTool: vi.fn().mockRejectedValue(new Error('Tool failed')),
-      };
+      });
 
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
@@ -294,7 +265,7 @@ describe('ClaudeAgent', () => {
     });
 
     it('should extract citations from perplexity_search tool', async () => {
-      const mockClient = createMockClientWithToolUse(
+      const mockClient = createMockAnthropicClientWithToolUse(
         'perplexity_search',
         { query: 'AI regulation', recency_filter: 'week' },
         {
@@ -304,15 +275,19 @@ describe('ClaudeAgent', () => {
             { title: 'US AI Policy', url: 'https://us.example.com', snippet: 'Policy updates...' },
           ],
         },
-        '{"position":"Based on recent research","reasoning":"Found regulatory updates","confidence":0.88}'
+        createJsonResponse({
+          position: 'Based on recent research',
+          reasoning: 'Found regulatory updates',
+          confidence: 0.88,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'perplexity_search',
             description: 'Search with Perplexity',
-            parameters: { query: { type: 'string' } },
+            parameters: { query: { type: 'string', description: 'Search query' } },
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
@@ -325,7 +300,7 @@ describe('ClaudeAgent', () => {
             ],
           },
         }),
-      };
+      });
 
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
@@ -348,7 +323,7 @@ describe('ClaudeAgent', () => {
     it('should extract position/reasoning from submit_response tool call', async () => {
       // Simulate Claude calling submit_response tool with actual position/reasoning
       // Then returning meta-commentary in text response
-      const mockClient = createMockClientWithToolUse(
+      const mockClient = createMockAnthropicClientWithToolUse(
         'submit_response',
         {
           position: 'AI should be carefully regulated to balance innovation and safety',
@@ -366,15 +341,15 @@ describe('ClaudeAgent', () => {
         '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.'
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'submit_response',
             description: 'Submit your response',
             parameters: {
-              position: { type: 'string' },
-              reasoning: { type: 'string' },
-              confidence: { type: 'number' },
+              position: { type: 'string', description: 'Your position' },
+              reasoning: { type: 'string', description: 'Your reasoning' },
+              confidence: { type: 'number', description: 'Confidence level' },
             },
           },
         ],
@@ -386,7 +361,7 @@ describe('ClaudeAgent', () => {
             confidence: 0.85,
           },
         }),
-      };
+      });
 
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
@@ -409,13 +384,13 @@ describe('ClaudeAgent', () => {
 
 describe('createClaudeAgent', () => {
   it('should create agent with factory function', () => {
-    const mockClient = createMockClient('test');
-    const config: AgentConfig = {
+    const mockClient = createMockAnthropicClient('test');
+    const config: AgentConfig = createMockAgentConfig({
       id: 'factory-agent',
       name: 'Factory Agent',
       provider: 'anthropic',
       model: 'claude-3-opus',
-    };
+    });
 
     const agent = createClaudeAgent(config, undefined, {
       client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
@@ -426,19 +401,16 @@ describe('createClaudeAgent', () => {
   });
 
   it('should set toolkit when provided', () => {
-    const mockClient = createMockClient('test');
-    const mockToolkit: AgentToolkit = {
-      getTools: () => [],
-      executeTool: vi.fn(),
-    };
+    const mockClient = createMockAnthropicClient('test');
+    const mockToolkit: AgentToolkit = createMockToolkit();
 
     const agent = createClaudeAgent(
-      {
+      createMockAgentConfig({
         id: 'test',
         name: 'Test',
         provider: 'anthropic',
         model: 'claude',
-      },
+      }),
       mockToolkit,
       {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],

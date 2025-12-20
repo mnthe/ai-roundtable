@@ -2,60 +2,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GeminiAgent, createGeminiAgent } from '../../../src/agents/gemini.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
-
-// Mock GoogleGenAI client for new @google/genai SDK
-const createMockClient = (
-  responseText: string,
-  functionCalls?: Array<{ id?: string; name: string; args: unknown }>
-) => {
-  let callCount = 0;
-
-  const mockSendMessage = vi.fn().mockImplementation(() => {
-    callCount++;
-    if (functionCalls && callCount === 1) {
-      return Promise.resolve({
-        text: responseText,
-        functionCalls: functionCalls,
-      });
-    }
-    return Promise.resolve({
-      text: responseText,
-      functionCalls: undefined,
-    });
-  });
-
-  return {
-    chats: {
-      create: vi.fn().mockReturnValue({
-        sendMessage: mockSendMessage,
-        getHistory: vi.fn().mockReturnValue([]),
-      }),
-    },
-    models: {
-      generateContent: vi.fn().mockResolvedValue({
-        text: 'ok',
-      }),
-    },
-  };
-};
+import {
+  createMockGeminiClient,
+  createMockContext,
+  createMockAgentConfig,
+  createMockToolkit,
+  createJsonResponse,
+} from '../../utils/index.js';
 
 describe('GeminiAgent', () => {
-  const defaultConfig: AgentConfig = {
+  const defaultConfig: AgentConfig = createMockAgentConfig({
     id: 'gemini-test',
     name: 'Gemini Test',
     provider: 'google',
     model: 'gemini-3-flash-preview',
-    temperature: 0.7,
-  };
+  });
 
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
+  const defaultContext: DebateContext = createMockContext({
     topic: 'Should AI be regulated?',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -63,7 +28,7 @@ describe('GeminiAgent', () => {
 
   describe('constructor', () => {
     it('should create agent with custom client', () => {
-      const mockClient = createMockClient('test');
+      const mockClient = createMockGeminiClient('test');
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
@@ -75,13 +40,13 @@ describe('GeminiAgent', () => {
 
   describe('generateResponse', () => {
     it('should generate response from Gemini API', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'AI should be regulated',
         reasoning: 'To ensure safety and fairness',
         confidence: 0.85,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockGeminiClient(mockResponse);
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
@@ -97,7 +62,7 @@ describe('GeminiAgent', () => {
     });
 
     it('should handle non-JSON response gracefully', async () => {
-      const mockClient = createMockClient('This is a plain text response without JSON');
+      const mockClient = createMockGeminiClient('This is a plain text response without JSON');
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
@@ -111,7 +76,7 @@ describe('GeminiAgent', () => {
 
     it('should handle empty response text gracefully', async () => {
       // Simulate Gemini returning empty text (e.g., thinking models or tool-only responses)
-      const mockClient = createMockClient('');
+      const mockClient = createMockGeminiClient('');
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
@@ -154,13 +119,13 @@ describe('GeminiAgent', () => {
     });
 
     it('should clamp confidence to 0-1 range', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'Test',
         reasoning: 'Test',
-        confidence: 1.5, // Above 1
+        confidence: 1.5,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockGeminiClient(mockResponse);
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
@@ -171,15 +136,15 @@ describe('GeminiAgent', () => {
     });
 
     it('should include previous responses in context', async () => {
-      const mockClient = createMockClient(
-        '{"position":"test","reasoning":"test","confidence":0.5}'
+      const mockClient = createMockGeminiClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
 
-      const contextWithPrevious: DebateContext = {
-        ...defaultContext,
+      const contextWithPrevious: DebateContext = createMockContext({
+        topic: 'Should AI be regulated?',
         previousResponses: [
           {
             agentId: 'other-agent',
@@ -190,7 +155,7 @@ describe('GeminiAgent', () => {
             timestamp: new Date(),
           },
         ],
-      };
+      });
 
       const response = await agent.generateResponse(contextWithPrevious);
       expect(response.position).toBeDefined();
@@ -199,7 +164,7 @@ describe('GeminiAgent', () => {
 
   describe('healthCheck', () => {
     it('should return healthy when API responds', async () => {
-      const mockClient = createMockClient('test');
+      const mockClient = createMockGeminiClient('test');
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
       });
@@ -248,7 +213,11 @@ describe('GeminiAgent', () => {
                 });
               }
               return Promise.resolve({
-                text: '{"position":"Based on research","reasoning":"Found relevant sources","confidence":0.9}',
+                text: createJsonResponse({
+                  position: 'Based on research',
+                  reasoning: 'Found relevant sources',
+                  confidence: 0.9,
+                }),
                 functionCalls: undefined,
               });
             }),
@@ -260,8 +229,8 @@ describe('GeminiAgent', () => {
         },
       };
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'search_web',
             description: 'Search the web',
@@ -276,7 +245,7 @@ describe('GeminiAgent', () => {
             ],
           },
         }),
-      };
+      });
 
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
@@ -308,7 +277,11 @@ describe('GeminiAgent', () => {
                 });
               }
               return Promise.resolve({
-                text: '{"position":"Handled error","reasoning":"Continued despite tool failure","confidence":0.6}',
+                text: createJsonResponse({
+                  position: 'Handled error',
+                  reasoning: 'Continued despite tool failure',
+                  confidence: 0.6,
+                }),
                 functionCalls: undefined,
               });
             }),
@@ -320,8 +293,8 @@ describe('GeminiAgent', () => {
         },
       };
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'failing_tool',
             description: 'A failing tool',
@@ -329,7 +302,7 @@ describe('GeminiAgent', () => {
           },
         ],
         executeTool: vi.fn().mockRejectedValue(new Error('Tool failed')),
-      };
+      });
 
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
@@ -377,8 +350,8 @@ describe('GeminiAgent', () => {
         },
       };
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'submit_response',
             description: 'Submit your response',
@@ -398,7 +371,7 @@ describe('GeminiAgent', () => {
             confidence: 0.85,
           },
         }),
-      };
+      });
 
       const agent = new GeminiAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
@@ -425,13 +398,13 @@ describe('GeminiAgent', () => {
 
 describe('createGeminiAgent', () => {
   it('should create agent with factory function', () => {
-    const mockClient = createMockClient('test');
-    const config: AgentConfig = {
+    const mockClient = createMockGeminiClient('test');
+    const config: AgentConfig = createMockAgentConfig({
       id: 'factory-agent',
       name: 'Factory Agent',
       provider: 'google',
       model: 'gemini-3-flash-preview',
-    };
+    });
 
     const agent = createGeminiAgent(config, undefined, {
       client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
@@ -442,19 +415,16 @@ describe('createGeminiAgent', () => {
   });
 
   it('should set toolkit when provided', () => {
-    const mockClient = createMockClient('test');
-    const mockToolkit: AgentToolkit = {
-      getTools: () => [],
-      executeTool: vi.fn(),
-    };
+    const mockClient = createMockGeminiClient('test');
+    const mockToolkit: AgentToolkit = createMockToolkit();
 
     const agent = createGeminiAgent(
-      {
+      createMockAgentConfig({
         id: 'test',
         name: 'Test',
         provider: 'google',
         model: 'gemini',
-      },
+      }),
       mockToolkit,
       {
         client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],

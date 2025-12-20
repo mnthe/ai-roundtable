@@ -2,95 +2,30 @@ import { describe, it, expect, vi } from 'vitest';
 import { ChatGPTAgent, createChatGPTAgent } from '../../../src/agents/chatgpt.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
-
-// Mock OpenAI client
-const createMockClient = (responseContent: string, finishReason = 'stop') => {
-  return {
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          choices: [
-            {
-              message: { content: responseContent, role: 'assistant' },
-              finish_reason: finishReason,
-            },
-          ],
-        }),
-      },
-    },
-  };
-};
-
-// Mock client that simulates tool calls
-const createMockClientWithToolCalls = (
-  toolCallName: string,
-  toolCallArgs: Record<string, unknown>,
-  finalResponse: string
-) => {
-  let callCount = 0;
-  return {
-    chat: {
-      completions: {
-        create: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.resolve({
-              choices: [
-                {
-                  message: {
-                    content: null,
-                    role: 'assistant',
-                    tool_calls: [
-                      {
-                        id: 'call-1',
-                        type: 'function',
-                        function: {
-                          name: toolCallName,
-                          arguments: JSON.stringify(toolCallArgs),
-                        },
-                      },
-                    ],
-                  },
-                  finish_reason: 'tool_calls',
-                },
-              ],
-            });
-          }
-          return Promise.resolve({
-            choices: [
-              {
-                message: { content: finalResponse, role: 'assistant' },
-                finish_reason: 'stop',
-              },
-            ],
-          });
-        }),
-      },
-    },
-  };
-};
+import {
+  createMockOpenAIClient,
+  createMockOpenAIClientWithToolCalls,
+  createMockContext,
+  createMockAgentConfig,
+  createMockToolkit,
+  createJsonResponse,
+} from '../../utils/index.js';
 
 describe('ChatGPTAgent', () => {
-  const defaultConfig: AgentConfig = {
+  const defaultConfig: AgentConfig = createMockAgentConfig({
     id: 'chatgpt-test',
     name: 'ChatGPT Test',
     provider: 'openai',
     model: 'gpt-4-turbo',
-    temperature: 0.7,
-  };
+  });
 
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
+  const defaultContext: DebateContext = createMockContext({
     topic: 'Should AI be regulated?',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
+  });
 
   describe('constructor', () => {
     it('should create agent with custom client', () => {
-      const mockClient = createMockClient('test');
+      const mockClient = createMockOpenAIClient('test');
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -102,13 +37,13 @@ describe('ChatGPTAgent', () => {
 
   describe('generateResponse', () => {
     it('should generate response from OpenAI API', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'AI should be regulated carefully',
         reasoning: 'To balance innovation and safety',
         confidence: 0.8,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockOpenAIClient(mockResponse);
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -124,7 +59,9 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should call API with correct parameters', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockOpenAIClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -141,7 +78,9 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should include system message', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockOpenAIClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -155,7 +94,7 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should handle non-JSON response gracefully', async () => {
-      const mockClient = createMockClient('This is a plain text response');
+      const mockClient = createMockOpenAIClient('This is a plain text response');
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -193,13 +132,15 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should include previous responses in messages', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockOpenAIClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
 
-      const contextWithPrevious: DebateContext = {
-        ...defaultContext,
+      const contextWithPrevious: DebateContext = createMockContext({
+        topic: 'Should AI be regulated?',
         previousResponses: [
           {
             agentId: 'other-agent',
@@ -210,7 +151,7 @@ describe('ChatGPTAgent', () => {
             timestamp: new Date(),
           },
         ],
-      };
+      });
 
       await agent.generateResponse(contextWithPrevious);
 
@@ -223,18 +164,22 @@ describe('ChatGPTAgent', () => {
 
   describe('tool calls', () => {
     it('should handle function calls', async () => {
-      const mockClient = createMockClientWithToolCalls(
+      const mockClient = createMockOpenAIClientWithToolCalls(
         'search_web',
         { query: 'AI regulation policies' },
-        '{"position":"Based on research","reasoning":"Found sources","confidence":0.85}'
+        createJsonResponse({
+          position: 'Based on research',
+          reasoning: 'Found sources',
+          confidence: 0.85,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'search_web',
             description: 'Search the web',
-            parameters: { query: { type: 'string' } },
+            parameters: { query: { type: 'string', description: 'Search query' } },
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
@@ -245,7 +190,7 @@ describe('ChatGPTAgent', () => {
             ],
           },
         }),
-      };
+      });
 
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
@@ -263,17 +208,18 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should provide tools to API when toolkit is set', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockClient = createMockOpenAIClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'test_tool',
             description: 'A test tool',
-            parameters: { input: { type: 'string' } },
+            parameters: { input: { type: 'string', description: 'Input' } },
           },
         ],
-        executeTool: vi.fn(),
-      };
+      });
 
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
@@ -289,18 +235,22 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should extract citations from perplexity_search tool', async () => {
-      const mockClient = createMockClientWithToolCalls(
+      const mockClient = createMockOpenAIClientWithToolCalls(
         'perplexity_search',
         { query: 'climate change policies', recency_filter: 'month' },
-        '{"position":"Environmental policies are evolving","reasoning":"Recent findings","confidence":0.82}'
+        createJsonResponse({
+          position: 'Environmental policies are evolving',
+          reasoning: 'Recent findings',
+          confidence: 0.82,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'perplexity_search',
             description: 'Search with Perplexity',
-            parameters: { query: { type: 'string' } },
+            parameters: { query: { type: 'string', description: 'Search query' } },
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
@@ -314,7 +264,7 @@ describe('ChatGPTAgent', () => {
             ],
           },
         }),
-      };
+      });
 
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
@@ -336,22 +286,26 @@ describe('ChatGPTAgent', () => {
     });
 
     it('should handle tool execution errors', async () => {
-      const mockClient = createMockClientWithToolCalls(
+      const mockClient = createMockOpenAIClientWithToolCalls(
         'failing_tool',
         { input: 'test' },
-        '{"position":"Handled error","reasoning":"Continued","confidence":0.6}'
+        createJsonResponse({
+          position: 'Handled error',
+          reasoning: 'Continued',
+          confidence: 0.6,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'failing_tool',
             description: 'A failing tool',
-            parameters: { input: { type: 'string' } },
+            parameters: { input: { type: 'string', description: 'Input' } },
           },
         ],
         executeTool: vi.fn().mockRejectedValue(new Error('Tool failed')),
-      };
+      });
 
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
@@ -366,13 +320,13 @@ describe('ChatGPTAgent', () => {
 
 describe('createChatGPTAgent', () => {
   it('should create agent with factory function', () => {
-    const mockClient = createMockClient('test');
-    const config: AgentConfig = {
+    const mockClient = createMockOpenAIClient('test');
+    const config: AgentConfig = createMockAgentConfig({
       id: 'factory-chatgpt',
       name: 'Factory ChatGPT',
       provider: 'openai',
       model: 'gpt-4',
-    };
+    });
 
     const agent = createChatGPTAgent(config, undefined, {
       client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
@@ -383,19 +337,16 @@ describe('createChatGPTAgent', () => {
   });
 
   it('should set toolkit when provided', () => {
-    const mockClient = createMockClient('test');
-    const mockToolkit: AgentToolkit = {
-      getTools: () => [],
-      executeTool: vi.fn(),
-    };
+    const mockClient = createMockOpenAIClient('test');
+    const mockToolkit: AgentToolkit = createMockToolkit();
 
     const agent = createChatGPTAgent(
-      {
+      createMockAgentConfig({
         id: 'test',
         name: 'Test',
         provider: 'openai',
         model: 'gpt-4',
-      },
+      }),
       mockToolkit,
       {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],

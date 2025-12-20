@@ -6,111 +6,31 @@ import {
 } from '../../../src/agents/perplexity.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
-
-// Extended mock response metadata for Perplexity
-interface MockPerplexityMetadata {
-  citations?: Array<string | { url: string; title?: string }>; // Deprecated
-  search_results?: Array<{ url: string; title?: string; date?: string }>; // New format (2025+)
-  images?: Array<string | { url: string; description?: string }>;
-  related_questions?: string[];
-}
-
-// Mock OpenAI-compatible client (Perplexity uses OpenAI API format)
-const createMockClient = (
-  responseContent: string,
-  finishReason = 'stop',
-  metadata?: MockPerplexityMetadata
-) => {
-  return {
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          choices: [
-            {
-              message: { content: responseContent, role: 'assistant' },
-              finish_reason: finishReason,
-            },
-          ],
-          citations: metadata?.citations,
-          search_results: metadata?.search_results,
-          images: metadata?.images,
-          related_questions: metadata?.related_questions,
-        }),
-      },
-    },
-  };
-};
-
-// Mock client that simulates tool use
-const createMockClientWithToolUse = (
-  toolCallName: string,
-  toolCallArgs: string,
-  finalResponse: string
-) => {
-  let callCount = 0;
-  return {
-    chat: {
-      completions: {
-        create: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.resolve({
-              choices: [
-                {
-                  message: {
-                    content: null,
-                    role: 'assistant',
-                    tool_calls: [
-                      {
-                        id: 'tool-1',
-                        type: 'function',
-                        function: {
-                          name: toolCallName,
-                          arguments: toolCallArgs,
-                        },
-                      },
-                    ],
-                  },
-                  finish_reason: 'tool_calls',
-                },
-              ],
-            });
-          }
-          return Promise.resolve({
-            choices: [
-              {
-                message: { content: finalResponse, role: 'assistant' },
-                finish_reason: 'stop',
-              },
-            ],
-          });
-        }),
-      },
-    },
-  };
-};
+import {
+  createMockPerplexityClient,
+  createMockPerplexityClientWithToolUse,
+  createMockContext,
+  createMockAgentConfig,
+  createMockToolkit,
+  createJsonResponse,
+  type MockPerplexityMetadata,
+} from '../../utils/index.js';
 
 describe('PerplexityAgent', () => {
-  const defaultConfig: AgentConfig = {
+  const defaultConfig: AgentConfig = createMockAgentConfig({
     id: 'perplexity-test',
     name: 'Perplexity Test',
     provider: 'perplexity',
     model: 'llama-3.1-sonar-large-128k-online',
-    temperature: 0.7,
-  };
+  });
 
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
+  const defaultContext: DebateContext = createMockContext({
     topic: 'Should AI be regulated?',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
+  });
 
   describe('constructor', () => {
     it('should create agent with custom client', () => {
-      const mockClient = createMockClient('test');
+      const mockClient = createMockPerplexityClient('test');
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -122,13 +42,13 @@ describe('PerplexityAgent', () => {
 
   describe('generateResponse', () => {
     it('should generate response from Perplexity API', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'AI should be regulated',
         reasoning: 'To ensure safety and fairness',
         confidence: 0.85,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockPerplexityClient(mockResponse);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -144,7 +64,9 @@ describe('PerplexityAgent', () => {
     });
 
     it('should call API with correct parameters', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockPerplexityClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -161,7 +83,7 @@ describe('PerplexityAgent', () => {
     });
 
     it('should handle non-JSON response gracefully', async () => {
-      const mockClient = createMockClient('This is a plain text response without JSON');
+      const mockClient = createMockPerplexityClient('This is a plain text response without JSON');
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -174,13 +96,13 @@ describe('PerplexityAgent', () => {
     });
 
     it('should clamp confidence to 0-1 range', async () => {
-      const mockResponse = JSON.stringify({
+      const mockResponse = createJsonResponse({
         position: 'Test',
         reasoning: 'Test',
-        confidence: 1.5, // Above 1
+        confidence: 1.5,
       });
 
-      const mockClient = createMockClient(mockResponse);
+      const mockClient = createMockPerplexityClient(mockResponse);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -199,7 +121,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -220,7 +142,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -243,7 +165,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -266,7 +188,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -288,7 +210,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -310,7 +232,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -337,7 +259,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -360,7 +282,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -381,7 +303,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -403,7 +325,7 @@ describe('PerplexityAgent', () => {
         ],
       };
 
-      const mockClient = createMockClient(mockResponse, 'stop', metadata);
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
@@ -416,13 +338,15 @@ describe('PerplexityAgent', () => {
     });
 
     it('should include previous responses in user message', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+      const mockClient = createMockPerplexityClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
       });
 
-      const contextWithPrevious: DebateContext = {
-        ...defaultContext,
+      const contextWithPrevious: DebateContext = createMockContext({
+        topic: 'Should AI be regulated?',
         previousResponses: [
           {
             agentId: 'other-agent',
@@ -433,7 +357,7 @@ describe('PerplexityAgent', () => {
             timestamp: new Date(),
           },
         ],
-      };
+      });
 
       await agent.generateResponse(contextWithPrevious);
 
@@ -446,18 +370,22 @@ describe('PerplexityAgent', () => {
 
   describe('tool use', () => {
     it('should handle tool use response', async () => {
-      const mockClient = createMockClientWithToolUse(
+      const mockClient = createMockPerplexityClientWithToolUse(
         'search_web',
         JSON.stringify({ query: 'AI regulation' }),
-        '{"position":"Based on research","reasoning":"Found relevant sources","confidence":0.9}'
+        createJsonResponse({
+          position: 'Based on research',
+          reasoning: 'Found relevant sources',
+          confidence: 0.9,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'search_web',
             description: 'Search the web',
-            parameters: { query: { type: 'string' } },
+            parameters: { query: { type: 'string', description: 'Search query' } },
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
@@ -468,7 +396,7 @@ describe('PerplexityAgent', () => {
             ],
           },
         }),
-      };
+      });
 
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
@@ -485,17 +413,18 @@ describe('PerplexityAgent', () => {
     });
 
     it('should provide tools to API when toolkit is set', async () => {
-      const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockClient = createMockPerplexityClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'test_tool',
             description: 'A test tool',
-            parameters: { input: { type: 'string' } },
+            parameters: { input: { type: 'string', description: 'Input' } },
           },
         ],
-        executeTool: vi.fn(),
-      };
+      });
 
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
@@ -511,22 +440,26 @@ describe('PerplexityAgent', () => {
     });
 
     it('should handle tool execution errors', async () => {
-      const mockClient = createMockClientWithToolUse(
+      const mockClient = createMockPerplexityClientWithToolUse(
         'failing_tool',
         JSON.stringify({ input: 'test' }),
-        '{"position":"Handled error","reasoning":"Continued despite tool failure","confidence":0.6}'
+        createJsonResponse({
+          position: 'Handled error',
+          reasoning: 'Continued despite tool failure',
+          confidence: 0.6,
+        })
       );
 
-      const mockToolkit: AgentToolkit = {
-        getTools: () => [
+      const mockToolkit: AgentToolkit = createMockToolkit({
+        tools: [
           {
             name: 'failing_tool',
             description: 'A failing tool',
-            parameters: { input: { type: 'string' } },
+            parameters: { input: { type: 'string', description: 'Input' } },
           },
         ],
         executeTool: vi.fn().mockRejectedValue(new Error('Tool failed')),
-      };
+      });
 
       const agent = new PerplexityAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
@@ -541,24 +474,19 @@ describe('PerplexityAgent', () => {
 });
 
 describe('search options', () => {
-  const defaultConfig: AgentConfig = {
+  const defaultConfig: AgentConfig = createMockAgentConfig({
     id: 'perplexity-test',
     name: 'Perplexity Test',
     provider: 'perplexity',
     model: 'llama-3.1-sonar-large-128k-online',
-  };
+  });
 
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
+  const defaultContext: DebateContext = createMockContext({
     topic: 'Should AI be regulated?',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
+  });
 
   it('should initialize with search options from constructor', () => {
-    const mockClient = createMockClient('test');
+    const mockClient = createMockPerplexityClient('test');
     const searchOptions: PerplexitySearchOptions = {
       recencyFilter: 'day',
       domainFilter: ['example.com', 'test.com'],
@@ -575,7 +503,7 @@ describe('search options', () => {
   });
 
   it('should update search options with setSearchOptions', () => {
-    const mockClient = createMockClient('test');
+    const mockClient = createMockPerplexityClient('test');
     const agent = new PerplexityAgent(defaultConfig, {
       client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
     });
@@ -589,7 +517,9 @@ describe('search options', () => {
   });
 
   it('should pass search options to API call', async () => {
-    const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+    const mockClient = createMockPerplexityClient(
+      createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+    );
     const searchOptions: PerplexitySearchOptions = {
       recencyFilter: 'month',
       domainFilter: ['arxiv.org', 'nature.com'],
@@ -615,7 +545,9 @@ describe('search options', () => {
   });
 
   it('should limit domain filter to 3 domains', async () => {
-    const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+    const mockClient = createMockPerplexityClient(
+      createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+    );
     const searchOptions: PerplexitySearchOptions = {
       domainFilter: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'],
     };
@@ -635,7 +567,9 @@ describe('search options', () => {
   });
 
   it('should not include undefined search options', async () => {
-    const mockClient = createMockClient('{"position":"test","reasoning":"test","confidence":0.5}');
+    const mockClient = createMockPerplexityClient(
+      createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+    );
     const agent = new PerplexityAgent(defaultConfig, {
       client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
     });
@@ -652,13 +586,13 @@ describe('search options', () => {
 
 describe('createPerplexityAgent', () => {
   it('should create agent with factory function', () => {
-    const mockClient = createMockClient('test');
-    const config: AgentConfig = {
+    const mockClient = createMockPerplexityClient('test');
+    const config: AgentConfig = createMockAgentConfig({
       id: 'factory-agent',
       name: 'Factory Agent',
       provider: 'perplexity',
       model: 'llama-3.1-sonar-small-128k-online',
-    };
+    });
 
     const agent = createPerplexityAgent(config, undefined, {
       client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
@@ -669,19 +603,16 @@ describe('createPerplexityAgent', () => {
   });
 
   it('should set toolkit when provided', () => {
-    const mockClient = createMockClient('test');
-    const mockToolkit: AgentToolkit = {
-      getTools: () => [],
-      executeTool: vi.fn(),
-    };
+    const mockClient = createMockPerplexityClient('test');
+    const mockToolkit: AgentToolkit = createMockToolkit();
 
     const agent = createPerplexityAgent(
-      {
+      createMockAgentConfig({
         id: 'test',
         name: 'Test',
         provider: 'perplexity',
         model: 'sonar',
-      },
+      }),
       mockToolkit,
       {
         client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
@@ -693,21 +624,16 @@ describe('createPerplexityAgent', () => {
 });
 
 describe('Perplexity extended field type validation', () => {
-  const defaultConfig: AgentConfig = {
+  const defaultConfig: AgentConfig = createMockAgentConfig({
     id: 'perplexity-validation-test',
     name: 'Perplexity Validation Test',
     provider: 'perplexity',
     model: 'sonar',
-  };
+  });
 
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
+  const defaultContext: DebateContext = createMockContext({
     topic: 'Test topic',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
+  });
 
   it('should handle response with valid search_results format', async () => {
     const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
@@ -718,7 +644,7 @@ describe('Perplexity extended field type validation', () => {
       ],
     };
 
-    const mockClient = createMockClient(mockResponse, 'stop', metadata);
+    const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
     const agent = new PerplexityAgent(defaultConfig, {
       client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
     });
@@ -876,7 +802,7 @@ describe('Perplexity extended field type validation', () => {
       related_questions: ['What is AI?', 'How does AI work?'],
     };
 
-    const mockClient = createMockClient(mockResponse, 'stop', metadata);
+    const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
     const agent = new PerplexityAgent(defaultConfig, {
       client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
     });
@@ -894,7 +820,7 @@ describe('Perplexity extended field type validation', () => {
   it('should handle response with no Perplexity extensions', async () => {
     const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
     // No extended fields at all
-    const mockClient = createMockClient(mockResponse, 'stop', {});
+    const mockClient = createMockPerplexityClient(mockResponse, 'stop', {});
     const agent = new PerplexityAgent(defaultConfig, {
       client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
     });
