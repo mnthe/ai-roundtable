@@ -227,7 +227,7 @@ Uses lightweight AI models for semantic analysis of debate positions:
 **Light Models Used:**
 | Provider   | Model                 |
 | ---------- | --------------------- |
-| Anthropic  | cclaude-haiku-4-5     |
+| Anthropic  | claude-haiku-4-5      |
 | OpenAI     | gpt-5-mini            |
 | Google     | gemini-2.5-flash-lite |
 | Perplexity | sonar                 |

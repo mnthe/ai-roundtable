@@ -31,7 +31,7 @@ interface AgentConfig {
   id: string;           // Unique identifier
   name: string;         // Display name
   provider: AIProvider; // AI provider
-  model: string;        // Model name (e.g., 'claude-3-5-sonnet-20241022')
+  model: string;        // Model name (e.g., 'claude-sonnet-4-5')
   systemPrompt?: string; // Custom system prompt
   temperature?: number;  // 0.0-1.0 (default: 0.7)
   maxTokens?: number;    // Max response tokens (default: 4096)
@@ -496,12 +496,12 @@ interface DebateModeStrategy {
 
 ### CollaborativeMode
 
-Agents build on each other's ideas sequentially.
+Agents find common ground and build consensus in parallel.
 
 ```typescript
 class CollaborativeMode implements DebateModeStrategy {
   readonly name = 'collaborative';
-  // Sequential execution, consensus-building prompts
+  // Parallel execution, consensus-building prompts
 }
 ```
 
@@ -569,13 +569,12 @@ Interface for toolkit that agents use.
 interface AgentToolkit {
   getTools(): AgentTool[];
   executeTool(name: string, input: unknown): Promise<unknown>;
-  setContext?(context: DebateContext): void;
 }
 
 interface AgentTool {
   name: string;
   description: string;
-  parameters: Record<string, ToolParameter>;
+  parameters: Record<string, unknown>;
 }
 ```
 

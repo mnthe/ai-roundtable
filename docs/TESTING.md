@@ -90,7 +90,7 @@ describe('ClaudeAgent', () => {
     id: 'claude-test',
     name: 'Claude Test',
     provider: 'anthropic',
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-sonnet-4-5',
   };
 
   const defaultContext: DebateContext = {
@@ -402,7 +402,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY)('Claude Integration', () => {
       id: 'claude-integration',
       name: 'Claude',
       provider: 'anthropic',
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5',
     });
 
     const response = await agent.generateResponse({
