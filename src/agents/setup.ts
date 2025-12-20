@@ -12,6 +12,7 @@ import { GeminiAgent } from './gemini.js';
 import { PerplexityAgent } from './perplexity.js';
 import type { AIProvider, AgentConfig } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
+import { getEnvOptional } from '../utils/env.js';
 
 const logger = createLogger('AgentSetup');
 
@@ -78,10 +79,10 @@ const DEFAULT_AGENT_NAMES: Record<AIProvider, string> = {
  */
 export function detectApiKeys(): ApiKeyConfig {
   return {
-    anthropic: process.env.ANTHROPIC_API_KEY,
-    openai: process.env.OPENAI_API_KEY,
-    google: process.env.GOOGLE_API_KEY,
-    perplexity: process.env.PERPLEXITY_API_KEY,
+    anthropic: getEnvOptional('ANTHROPIC_API_KEY'),
+    openai: getEnvOptional('OPENAI_API_KEY'),
+    google: getEnvOptional('GOOGLE_API_KEY'),
+    perplexity: getEnvOptional('PERPLEXITY_API_KEY'),
   };
 }
 
