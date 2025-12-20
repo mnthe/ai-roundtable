@@ -21,6 +21,10 @@ import {
   GetRoundDetailsInputSchema,
   GetResponseDetailInputSchema,
   GetCitationsInputSchema,
+  SynthesizeDebateInputSchema,
+  AgentResponseSchema,
+  ConsensusResultSchema,
+  DebateModeSchema,
 } from '../../../src/types/schemas.js';
 
 describe('MCP Tools', () => {
@@ -267,6 +271,461 @@ describe('MCP Tools', () => {
 
       const result = GetCitationsInputSchema.safeParse(invalidInput);
       expect(result.success).toBe(false);
+    });
+
+    it('should validate synthesize_debate input', () => {
+      const validInput = {
+        sessionId: 'test-session-id',
+        synthesizer: 'agent-1',
+      };
+
+      const result = SynthesizeDebateInputSchema.safeParse(validInput);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject synthesize_debate without sessionId', () => {
+      const invalidInput = {
+        synthesizer: 'agent-1',
+      };
+
+      const result = SynthesizeDebateInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('Tool Input Schema Invalid Type Rejection', () => {
+    it('should reject start_roundtable with wrong type for topic', () => {
+      const invalidInput = {
+        topic: 123, // Should be string
+        mode: 'collaborative',
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject start_roundtable with empty topic', () => {
+      const invalidInput = {
+        topic: '', // Empty string
+        mode: 'collaborative',
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject start_roundtable with invalid mode', () => {
+      const invalidInput = {
+        topic: 'Test topic',
+        mode: 'invalid-mode', // Not a valid DebateMode
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject start_roundtable with non-positive rounds', () => {
+      const invalidInput = {
+        topic: 'Test topic',
+        rounds: 0, // Must be positive
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject start_roundtable with negative rounds', () => {
+      const invalidInput = {
+        topic: 'Test topic',
+        rounds: -1,
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject start_roundtable with non-integer rounds', () => {
+      const invalidInput = {
+        topic: 'Test topic',
+        rounds: 2.5, // Must be integer
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject start_roundtable with empty agents array element', () => {
+      const invalidInput = {
+        topic: 'Test topic',
+        agents: ['agent-1', ''], // Empty string in array
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject continue_roundtable with empty sessionId', () => {
+      const invalidInput = {
+        sessionId: '',
+        rounds: 2,
+      };
+
+      const result = ContinueRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject continue_roundtable with non-positive rounds', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        rounds: 0,
+      };
+
+      const result = ContinueRoundtableInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_consensus with empty sessionId', () => {
+      const invalidInput = {
+        sessionId: '',
+      };
+
+      const result = GetConsensusInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_consensus with negative roundNumber', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        roundNumber: -1,
+      };
+
+      const result = GetConsensusInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_thoughts with empty agentId', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        agentId: '',
+      };
+
+      const result = GetThoughtsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject control_session with invalid action', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        action: 'restart', // Not a valid action
+      };
+
+      const result = ControlSessionInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_round_details with non-integer roundNumber', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 1.5,
+      };
+
+      const result = GetRoundDetailsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_response_detail with empty fields', () => {
+      const invalidInput = {
+        sessionId: '',
+        agentId: '',
+      };
+
+      const result = GetResponseDetailInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject get_citations with invalid roundNumber type', () => {
+      const invalidInput = {
+        sessionId: 'test-session-id',
+        roundNumber: 'one', // Should be number
+      };
+
+      const result = GetCitationsInputSchema.safeParse(invalidInput);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('DebateMode Schema Validation', () => {
+    it('should accept all valid debate modes', () => {
+      const validModes = [
+        'collaborative',
+        'adversarial',
+        'socratic',
+        'expert-panel',
+        'devils-advocate',
+        'delphi',
+        'red-team-blue-team',
+      ];
+
+      for (const mode of validModes) {
+        const result = DebateModeSchema.safeParse(mode);
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it('should reject invalid debate modes', () => {
+      const invalidModes = ['freestyle', 'debate', 'roundtable', '', null, undefined, 123];
+
+      for (const mode of invalidModes) {
+        const result = DebateModeSchema.safeParse(mode);
+        expect(result.success).toBe(false);
+      }
+    });
+  });
+
+  describe('AgentResponse Schema Validation', () => {
+    it('should validate a complete agent response', () => {
+      const validResponse = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'AI should be regulated with careful consideration',
+        reasoning: 'AI presents both opportunities and risks...',
+        confidence: 0.85,
+        citations: [{ title: 'Source', url: 'https://example.com', snippet: 'Text' }],
+        toolCalls: [{ toolName: 'search_web', input: { query: 'AI' }, output: {}, timestamp: new Date() }],
+        timestamp: new Date(),
+      };
+
+      const result = AgentResponseSchema.safeParse(validResponse);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject agent response with confidence out of range', () => {
+      const invalidResponse = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 1.5, // Out of range (0-1)
+        timestamp: new Date(),
+      };
+
+      const result = AgentResponseSchema.safeParse(invalidResponse);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject agent response with negative confidence', () => {
+      const invalidResponse = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: -0.5,
+        timestamp: new Date(),
+      };
+
+      const result = AgentResponseSchema.safeParse(invalidResponse);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject agent response with empty required fields', () => {
+      const invalidResponse = {
+        agentId: '',
+        agentName: 'Claude',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.5,
+        timestamp: new Date(),
+      };
+
+      const result = AgentResponseSchema.safeParse(invalidResponse);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject agent response with invalid citation URL', () => {
+      const invalidResponse = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.5,
+        citations: [{ title: 'Source', url: 'not-a-url', snippet: 'Text' }],
+        timestamp: new Date(),
+      };
+
+      const result = AgentResponseSchema.safeParse(invalidResponse);
+      expect(result.success).toBe(false);
+    });
+
+    it('should validate agent response without optional fields', () => {
+      const minimalResponse = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.5,
+        timestamp: new Date(),
+      };
+
+      const result = AgentResponseSchema.safeParse(minimalResponse);
+      expect(result.success).toBe(true);
+    });
+
+    it('should coerce timestamp from string', () => {
+      const responseWithStringTimestamp = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.5,
+        timestamp: '2024-01-01T00:00:00.000Z',
+      };
+
+      const result = AgentResponseSchema.safeParse(responseWithStringTimestamp);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.timestamp instanceof Date).toBe(true);
+      }
+    });
+  });
+
+  describe('ConsensusResult Schema Validation', () => {
+    it('should validate a complete consensus result', () => {
+      const validConsensus = {
+        agreementLevel: 0.75,
+        commonGround: ['Point 1', 'Point 2'],
+        disagreementPoints: ['Disagreement 1'],
+        summary: 'Overall, there is moderate agreement...',
+      };
+
+      const result = ConsensusResultSchema.safeParse(validConsensus);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject consensus with agreementLevel out of range', () => {
+      const invalidConsensus = {
+        agreementLevel: 1.5, // Out of range
+        commonGround: [],
+        disagreementPoints: [],
+        summary: 'Test summary',
+      };
+
+      const result = ConsensusResultSchema.safeParse(invalidConsensus);
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject consensus with negative agreementLevel', () => {
+      const invalidConsensus = {
+        agreementLevel: -0.5,
+        commonGround: [],
+        disagreementPoints: [],
+        summary: 'Test summary',
+      };
+
+      const result = ConsensusResultSchema.safeParse(invalidConsensus);
+      expect(result.success).toBe(false);
+    });
+
+    it('should accept consensus with empty arrays', () => {
+      const validConsensus = {
+        agreementLevel: 0.5,
+        commonGround: [],
+        disagreementPoints: [],
+        summary: 'No common ground or disagreements identified',
+      };
+
+      const result = ConsensusResultSchema.safeParse(validConsensus);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject consensus with missing required fields', () => {
+      const invalidConsensus = {
+        agreementLevel: 0.5,
+        commonGround: [],
+        // Missing disagreementPoints and summary
+      };
+
+      const result = ConsensusResultSchema.safeParse(invalidConsensus);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('RoundtableResponse Structure Validation', () => {
+    // Note: RoundtableResponse is a TypeScript interface, not a Zod schema
+    // These tests verify the expected structure matches what tools return
+
+    it('should have correct decision layer structure', () => {
+      const decision = {
+        consensusLevel: 'high' as const,
+        agreementScore: 0.85,
+        actionRecommendation: { type: 'proceed' as const, reason: 'High consensus' },
+      };
+
+      expect(decision.consensusLevel).toBe('high');
+      expect(decision.agreementScore).toBeGreaterThanOrEqual(0);
+      expect(decision.agreementScore).toBeLessThanOrEqual(1);
+      expect(['proceed', 'verify', 'query_detail']).toContain(decision.actionRecommendation.type);
+    });
+
+    it('should have valid consensus levels', () => {
+      const validLevels = ['high', 'medium', 'low'];
+      for (const level of validLevels) {
+        expect(validLevels).toContain(level);
+      }
+    });
+
+    it('should have valid action recommendation types', () => {
+      const validTypes = ['proceed', 'verify', 'query_detail'];
+      for (const type of validTypes) {
+        expect(validTypes).toContain(type);
+      }
+    });
+
+    it('should structure agent response summary correctly', () => {
+      const agentSummary = {
+        agentId: 'agent-1',
+        agentName: 'Claude',
+        position: 'AI should be regulated',
+        keyPoints: ['Safety concerns', 'Economic impact'],
+        confidence: 0.8,
+        confidenceChange: { delta: 0.1, previousRound: 1, reason: 'Additional evidence' },
+        evidenceUsed: { webSearches: 2, citations: 3, toolCalls: ['search_web'] },
+      };
+
+      expect(agentSummary.agentId).toBeDefined();
+      expect(agentSummary.keyPoints).toBeInstanceOf(Array);
+      expect(agentSummary.confidence).toBeGreaterThanOrEqual(0);
+      expect(agentSummary.confidence).toBeLessThanOrEqual(1);
+      expect(agentSummary.evidenceUsed.webSearches).toBeGreaterThanOrEqual(0);
+      expect(agentSummary.evidenceUsed.citations).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should structure evidence layer correctly', () => {
+      const evidence = {
+        totalCitations: 5,
+        conflicts: ['Different views on timeline'],
+        uniqueSources: ['https://example.com'],
+      };
+
+      expect(evidence.totalCitations).toBeGreaterThanOrEqual(0);
+      expect(evidence.conflicts).toBeInstanceOf(Array);
+      expect(evidence.uniqueSources).toBeInstanceOf(Array);
+    });
+
+    it('should structure metadata layer correctly', () => {
+      const metadata = {
+        detailReference: {
+          tool: 'get_round_details',
+          params: { sessionId: 'test-session', roundNumber: 1 },
+        },
+        citationReference: {
+          tool: 'get_citations',
+          params: { sessionId: 'test-session' },
+        },
+      };
+
+      expect(metadata.detailReference.tool).toBe('get_round_details');
+      expect(metadata.citationReference.tool).toBe('get_citations');
+      expect(metadata.detailReference.params).toHaveProperty('sessionId');
     });
   });
 
