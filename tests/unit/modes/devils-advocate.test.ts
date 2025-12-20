@@ -30,6 +30,10 @@ describe('DevilsAdvocateMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('devils-advocate');
     });
+
+    it('should have sequential execution pattern', () => {
+      expect(mode.executionPattern).toBe('sequential');
+    });
   });
 
   describe('executeRound', () => {
@@ -430,6 +434,249 @@ describe('DevilsAdvocateMode', () => {
       expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY POSITION');
       expect(receivedPrompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
       expect(receivedPrompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
+    });
+  });
+
+  describe('stance validation (validateResponse hook)', () => {
+    it('should enforce YES stance for primary agent', async () => {
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+      ];
+
+      // Agent responds without stance
+      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
+        agentId: 'agent-1',
+        agentName: 'Primary',
+        position: 'Pro position',
+        reasoning: 'Pro reasoning',
+        confidence: 0.8,
+        timestamp: new Date(),
+        // No stance provided
+      });
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Stance should be enforced to YES
+      expect(responses[0].stance).toBe('YES');
+    });
+
+    it('should enforce NO stance for opposition agent', async () => {
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+      ];
+
+      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
+        agentId: 'agent-1',
+        agentName: 'Primary',
+        position: 'Pro position',
+        reasoning: 'Pro reasoning',
+        confidence: 0.8,
+        timestamp: new Date(),
+        stance: 'YES',
+      });
+
+      // Opposition agent responds with wrong stance
+      vi.spyOn(agents[1], 'generateResponse').mockResolvedValue({
+        agentId: 'agent-2',
+        agentName: 'Opposition',
+        position: 'Counter position',
+        reasoning: 'Counter reasoning',
+        confidence: 0.7,
+        timestamp: new Date(),
+        stance: 'YES', // Wrong stance
+      });
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // First agent: YES
+      expect(responses[0].stance).toBe('YES');
+      // Second agent: should be corrected to NO
+      expect(responses[1].stance).toBe('NO');
+    });
+
+    it('should enforce NEUTRAL stance for evaluator agents', async () => {
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'agent-3', name: 'Evaluator', provider: 'google', model: 'mock' }),
+      ];
+
+      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
+        agentId: 'agent-1',
+        agentName: 'Primary',
+        position: 'Pro position',
+        reasoning: 'Pro reasoning',
+        confidence: 0.8,
+        timestamp: new Date(),
+        stance: 'YES',
+      });
+
+      vi.spyOn(agents[1], 'generateResponse').mockResolvedValue({
+        agentId: 'agent-2',
+        agentName: 'Opposition',
+        position: 'Counter position',
+        reasoning: 'Counter reasoning',
+        confidence: 0.7,
+        timestamp: new Date(),
+        stance: 'NO',
+      });
+
+      // Evaluator responds with wrong stance
+      vi.spyOn(agents[2], 'generateResponse').mockResolvedValue({
+        agentId: 'agent-3',
+        agentName: 'Evaluator',
+        position: 'Evaluation',
+        reasoning: 'Analysis',
+        confidence: 0.75,
+        timestamp: new Date(),
+        stance: 'YES', // Wrong stance
+      });
+
+      const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      expect(responses[0].stance).toBe('YES');
+      expect(responses[1].stance).toBe('NO');
+      expect(responses[2].stance).toBe('NEUTRAL');
+    });
+
+    it('should not modify response when stance is correct', async () => {
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+        new MockAgent({ id: 'agent-3', name: 'Evaluator', provider: 'google', model: 'mock' }),
+      ];
+
+      const responses = [
+        {
+          agentId: 'agent-1',
+          agentName: 'Primary',
+          position: 'Pro position',
+          reasoning: 'Pro reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+          stance: 'YES' as const,
+        },
+        {
+          agentId: 'agent-2',
+          agentName: 'Opposition',
+          position: 'Counter position',
+          reasoning: 'Counter reasoning',
+          confidence: 0.7,
+          timestamp: new Date(),
+          stance: 'NO' as const,
+        },
+        {
+          agentId: 'agent-3',
+          agentName: 'Evaluator',
+          position: 'Evaluation',
+          reasoning: 'Analysis',
+          confidence: 0.75,
+          timestamp: new Date(),
+          stance: 'NEUTRAL' as const,
+        },
+      ];
+
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockResolvedValue(responses[i]);
+      }
+
+      const results = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      expect(results[0].stance).toBe('YES');
+      expect(results[1].stance).toBe('NO');
+      expect(results[2].stance).toBe('NEUTRAL');
+    });
+
+    it('should reset agent index tracker between rounds', async () => {
+      const agents = [
+        new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
+        new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
+      ];
+
+      // Round 1 - agents respond without stance
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockResolvedValueOnce({
+          agentId: agents[i].id,
+          agentName: agents[i].name,
+          position: `Round 1 position from ${agents[i].name}`,
+          reasoning: `Round 1 reasoning from ${agents[i].name}`,
+          confidence: 0.75,
+          timestamp: new Date(),
+          // No stance
+        });
+      }
+
+      const round1Results = await mode.executeRound(agents, defaultContext, mockToolkit);
+
+      // Verify round 1 stance enforcement
+      expect(round1Results[0].stance).toBe('YES');
+      expect(round1Results[1].stance).toBe('NO');
+
+      // Round 2 - agents respond without stance again
+      const round2Context: DebateContext = {
+        ...defaultContext,
+        currentRound: 2,
+        previousResponses: round1Results,
+      };
+
+      for (let i = 0; i < agents.length; i++) {
+        vi.spyOn(agents[i], 'generateResponse').mockResolvedValueOnce({
+          agentId: agents[i].id,
+          agentName: agents[i].name,
+          position: `Round 2 position from ${agents[i].name}`,
+          reasoning: `Round 2 reasoning from ${agents[i].name}`,
+          confidence: 0.8,
+          timestamp: new Date(),
+          // No stance
+        });
+      }
+
+      const round2Results = await mode.executeRound(agents, round2Context, mockToolkit);
+
+      // Verify round 2 stance enforcement (should still work correctly)
+      expect(round2Results[0].stance).toBe('YES');
+      expect(round2Results[1].stance).toBe('NO');
+    });
+  });
+
+  describe('getAgentRole hook', () => {
+    it('should return PRIMARY for index 0', () => {
+      const agent = new MockAgent({
+        id: 'agent-1',
+        name: 'Test',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      // Access protected method via any cast (for testing)
+      const role = (mode as any).getAgentRole(agent, 0, defaultContext);
+      expect(role).toBe('PRIMARY');
+    });
+
+    it('should return OPPOSITION for index 1', () => {
+      const agent = new MockAgent({
+        id: 'agent-2',
+        name: 'Test',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      const role = (mode as any).getAgentRole(agent, 1, defaultContext);
+      expect(role).toBe('OPPOSITION');
+    });
+
+    it('should return EVALUATOR for index 2 and above', () => {
+      const agent = new MockAgent({
+        id: 'agent-3',
+        name: 'Test',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('EVALUATOR');
+      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('EVALUATOR');
+      expect((mode as any).getAgentRole(agent, 10, defaultContext)).toBe('EVALUATOR');
     });
   });
 });

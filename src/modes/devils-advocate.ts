@@ -11,6 +11,7 @@ import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse, Stance } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
+import { StanceValidator } from './validators/index.js';
 import {
   buildRoleAnchor,
   buildBehavioralContract,
@@ -26,6 +27,19 @@ const logger = createLogger('DevilsAdvocateMode');
  * Separator line used in prompts
  */
 const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+
+/**
+ * Role identifiers for devils-advocate mode
+ */
+type DevilsAdvocateRole = 'PRIMARY' | 'OPPOSITION' | 'EVALUATOR';
+
+/**
+ * Extended context for devils-advocate mode with agent index tracking
+ */
+interface DevilsAdvocateContext extends DebateContext {
+  /** Current agent index within the round (0-based) */
+  _agentIndexInRound?: number;
+}
 
 /**
  * Primary (Affirmative) role configuration
@@ -146,133 +160,156 @@ const EVALUATOR_VERIFICATION: VerificationLoopConfig = {
 };
 
 /**
+ * Mapping from role to expected stance
+ */
+const ROLE_TO_STANCE: Record<DevilsAdvocateRole, Stance> = {
+  PRIMARY: 'YES',
+  OPPOSITION: 'NO',
+  EVALUATOR: 'NEUTRAL',
+};
+
+/**
+ * Mapping from role to human-readable name (for logging)
+ */
+const ROLE_DISPLAY_NAMES: Record<DevilsAdvocateRole, string> = {
+  PRIMARY: 'PRIMARY (Affirmative)',
+  OPPOSITION: 'OPPOSITION (Devil\'s Advocate)',
+  EVALUATOR: 'EVALUATOR',
+};
+
+/**
  * Devil's Advocate mode strategy
  *
  * Characteristics:
- * - First agent: Normal position on the topic
- * - Second agent: Forced to take opposing stance (devil's advocate)
- * - Remaining agents: Evaluate and judge both perspectives
+ * - First agent: Normal position on the topic (PRIMARY)
+ * - Second agent: Forced to take opposing stance (OPPOSITION)
+ * - Remaining agents: Evaluate and judge both perspectives (EVALUATOR)
  * - Sequential execution to maintain role clarity
  *
- * Note: Uses custom executeRound with role-based prompts and stance validation
+ * Uses hooks:
+ * - getAgentRole: Assigns PRIMARY/OPPOSITION/EVALUATOR based on agent index
+ * - transformContext: Injects agent index into context for prompt building
+ * - validateResponse: Enforces expected stance for each role
  */
 export class DevilsAdvocateMode extends BaseModeStrategy {
   readonly name = 'devils-advocate';
+  override readonly executionPattern = 'sequential' as const;
+
+  /**
+   * Tracks current agent index during sequential execution.
+   * Used by validateResponse to determine the correct stance.
+   */
+  private currentAgentIndex = 0;
 
   /**
    * Execute a devil's advocate round
    *
-   * Agents respond sequentially with different roles:
-   * - Agent 0: Normal position
-   * - Agent 1: Devil's advocate (must oppose)
-   * - Agents 2+: Evaluators
+   * Uses the base executeSequential with hooks for role assignment,
+   * context transformation, and stance validation.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
+    // Reset agent index tracker for this round
+    this.currentAgentIndex = 0;
 
-    const responses: AgentResponse[] = [];
-
-    // Execute agents sequentially to maintain role clarity
-    for (let i = 0; i < agents.length; i++) {
-      const agent = agents[i];
-      if (!agent) continue;
-
-      // Build context with responses from current round and mode-specific prompt
-      // Pass explicit agent index to ensure correct role assignment
-      const currentContext: DebateContext = {
-        ...context,
-        previousResponses: [
-          ...context.previousResponses,
-          ...responses,
-        ],
-        // Add mode-specific prompt based on agent role (index i in current round)
-        modePrompt: this.buildAgentPromptForIndex(context, i),
-      };
-
-      agent.setToolkit(toolkit);
-      const response = await agent.generateResponse(currentContext);
-
-      // Validate and enforce stance for devils-advocate mode
-      const validatedResponse = this.validateAndEnforceStance(response, i);
-      responses.push(validatedResponse);
-    }
-
-    return responses;
+    return this.executeSequential(agents, context, toolkit);
   }
 
   /**
-   * Get the expected stance for a given agent index in devils-advocate mode
+   * Get the role for an agent based on their index.
+   * Hook implementation for BaseModeStrategy.
+   *
+   * Role assignment:
+   * - Index 0: PRIMARY (Affirmative)
+   * - Index 1: OPPOSITION (Devil's Advocate)
+   * - Index 2+: EVALUATOR
    */
-  private getExpectedStance(agentIndex: number): Stance {
-    if (agentIndex === 0) return 'YES';
-    if (agentIndex === 1) return 'NO';
-    return 'NEUTRAL';
-  }
-
-  /**
-   * Get the role name for a given agent index
-   */
-  private getRoleName(agentIndex: number): string {
-    if (agentIndex === 0) return 'PRIMARY (Affirmative)';
-    if (agentIndex === 1) return 'OPPOSITION (Devil\'s Advocate)';
+  protected override getAgentRole(
+    _agent: BaseAgent,
+    index: number,
+    _context: DebateContext
+  ): DevilsAdvocateRole {
+    if (index === 0) return 'PRIMARY';
+    if (index === 1) return 'OPPOSITION';
     return 'EVALUATOR';
   }
 
   /**
-   * Validate stance and enforce expected value if missing or incorrect
-   * Logs warnings when stance doesn't match the expected role
+   * Transform context to inject the current agent index.
+   * Hook implementation for BaseModeStrategy.
+   *
+   * This ensures that buildAgentPrompt can determine the correct role
+   * based on the agent's position in the current round, not the total
+   * number of previous responses (which includes prior rounds).
    */
-  private validateAndEnforceStance(response: AgentResponse, agentIndex: number): AgentResponse {
-    const expectedStance = this.getExpectedStance(agentIndex);
-    const actualStance = response.stance;
-    const roleName = this.getRoleName(agentIndex);
+  protected override transformContext(context: DebateContext, _agent: BaseAgent): DevilsAdvocateContext {
+    const transformedContext: DevilsAdvocateContext = {
+      ...context,
+      _agentIndexInRound: this.currentAgentIndex,
+      // Rebuild modePrompt with the correct agent index
+      modePrompt: this.buildAgentPromptForIndex(context, this.currentAgentIndex),
+    };
+    return transformedContext;
+  }
 
-    if (!actualStance) {
-      // Stance missing - enforce expected stance
+  /**
+   * Validate response and enforce expected stance.
+   * Hook implementation for BaseModeStrategy.
+   *
+   * Uses StanceValidator to enforce the expected stance based on agent index.
+   */
+  protected override validateResponse(response: AgentResponse, context: DebateContext): AgentResponse {
+    // Get the role for the current agent
+    const role = this.getRoleForIndex(this.currentAgentIndex);
+    const expectedStance = ROLE_TO_STANCE[role];
+    const roleName = ROLE_DISPLAY_NAMES[role];
+
+    // Check and log stance validation
+    if (!response.stance || response.stance !== expectedStance) {
       logger.warn(
         {
           agentId: response.agentId,
           agentName: response.agentName,
           role: roleName,
           expectedStance,
+          actualStance: response.stance ?? '(missing)',
         },
-        'Agent did not provide stance, enforcing expected stance for role'
+        response.stance
+          ? 'Agent stance does not match assigned role, enforcing expected stance'
+          : 'Agent did not provide stance, enforcing expected stance for role'
       );
-      return { ...response, stance: expectedStance };
-    }
-
-    if (actualStance !== expectedStance) {
-      // Stance mismatch - log warning and enforce expected stance
-      logger.warn(
+    } else {
+      logger.debug(
         {
           agentId: response.agentId,
           agentName: response.agentName,
           role: roleName,
-          expectedStance,
-          actualStance,
+          stance: response.stance,
         },
-        'Agent stance does not match assigned role, enforcing expected stance'
+        'Agent stance matches assigned role'
       );
-      return { ...response, stance: expectedStance };
     }
 
-    // Stance is correct
-    logger.debug(
-      {
-        agentId: response.agentId,
-        agentName: response.agentName,
-        role: roleName,
-        stance: actualStance,
-      },
-      'Agent stance matches assigned role'
-    );
-    return response;
+    // Use StanceValidator to enforce stance
+    const validator = new StanceValidator(expectedStance);
+    const validatedResponse = validator.validate(response, context);
+
+    // Increment agent index for next validation
+    this.currentAgentIndex++;
+
+    return validatedResponse;
+  }
+
+  /**
+   * Get the role for a given index.
+   */
+  private getRoleForIndex(index: number): DevilsAdvocateRole {
+    if (index === 0) return 'PRIMARY';
+    if (index === 1) return 'OPPOSITION';
+    return 'EVALUATOR';
   }
 
   /**
@@ -283,21 +320,22 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    * - Second agent: Take opposing stance (devil's advocate)
    * - Remaining agents: Evaluate both perspectives
    *
-   * Note: This method uses previousResponses.length to infer agent index.
-   * For accurate role assignment during sequential execution, use
-   * buildAgentPromptForIndex() with explicit index instead.
+   * Note: When called from the base executeSequential, the context will
+   * have been transformed by transformContext to include _agentIndexInRound.
+   * Fallback to previousResponses.length for backward compatibility.
    */
   buildAgentPrompt(context: DebateContext): string {
-    // Use previousResponses length as agent index (works when called with accumulated responses)
-    const agentIndex = context.previousResponses.length;
+    // Use _agentIndexInRound if available (set by transformContext),
+    // otherwise fallback to previousResponses.length
+    const daContext = context as DevilsAdvocateContext;
+    const agentIndex = daContext._agentIndexInRound ?? context.previousResponses.length;
     return this.buildAgentPromptForIndex(context, agentIndex);
   }
 
   /**
    * Build devil's advocate-specific prompt with explicit agent index
    *
-   * This method is used internally by executeRound to ensure correct
-   * role assignment when agents execute sequentially.
+   * This method is used internally to build prompts for specific roles.
    */
   private buildAgentPromptForIndex(context: DebateContext, agentIndex: number): string {
     const isFirstRound = context.currentRound === 1;
