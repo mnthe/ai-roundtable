@@ -97,33 +97,42 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
     if (agentIndex === 0) {
       // First agent: Primary Position
       let prompt = `
-Mode: Devil's Advocate - PRIMARY POSITION
+Mode: Devil's Advocate - PRIMARY POSITION (AFFIRMATIVE)
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 1: ROLE ANCHOR
 ═══════════════════════════════════════════════════════════════════
 
-📢 YOU ARE THE PRIMARY POSITION HOLDER 📢
+📢 YOU ARE THE PRIMARY POSITION HOLDER - AFFIRMATIVE STANCE 📢
 
-ROLE DEFINITION: You present the initial position to be challenged.
-MISSION: Establish a clear, well-reasoned stance that can be stress-tested.
+ROLE DEFINITION: You present the AFFIRMATIVE/POSITIVE position to be challenged.
+MISSION: Argue IN FAVOR of or FOR the topic/proposition.
 PERSISTENCE: Maintain your position throughout - do not pre-emptively hedge.
 
-In this mode, "being helpful" = "presenting a strong, clear position"
-NOT "being balanced" or "acknowledging other views"
+⚠️ CRITICAL: You MUST take the AFFIRMATIVE stance:
+- If topic asks "Is X worth it?" → Argue YES, it IS worth it
+- If topic asks "Should we do X?" → Argue YES, we SHOULD do X
+- If topic asks about a choice → Argue FOR the first/main option
+- If topic presents a debate → Take the PRO/supporting side
+
+In this mode, "being helpful" = "presenting a strong, clear AFFIRMATIVE position"
+NOT "being balanced" or "acknowledging other views" or "being negative"
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 2: BEHAVIORAL CONTRACT
 ═══════════════════════════════════════════════════════════════════
 
 MUST (Required Behaviors):
-□ Take a clear, unambiguous stance
+□ Take the AFFIRMATIVE/PRO/YES/FOR stance
+□ Argue that the proposition IS true/worth it/should be done
 □ Provide at least 3 strong supporting arguments
 □ Present evidence and reasoning
 □ Anticipate challenges and address them
 □ Be confident and assertive
 
 MUST NOT (Prohibited Behaviors):
+✗ Take the NEGATIVE stance (save that for the devil's advocate)
+✗ Argue AGAINST the topic proposition
 ✗ Hedge with "on the other hand" or "however"
 ✗ Preemptively acknowledge the other side
 ✗ Use weak language ("perhaps", "maybe", "could be")
@@ -150,9 +159,14 @@ LAYER 4: VERIFICATION LOOP
 ═══════════════════════════════════════════════════════════════════
 
 Before finalizing, verify:
+□ Am I taking the AFFIRMATIVE/PRO/FOR stance?
+□ Am I arguing YES/IS WORTH IT/SHOULD DO IT?
 □ Is my position clear and unambiguous?
 □ Did I avoid hedging or pre-qualifying?
 □ Do I have 3+ strong supporting arguments?
+
+⛔ FAILURE MODE: If you argue AGAINST the proposition, you have failed.
+The devil's advocate agent will take the AGAINST position - not you.
 
 `;
 

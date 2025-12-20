@@ -161,6 +161,14 @@ describe('DevilsAdvocateMode', () => {
       expect(prompt).toContain('What about work-life balance?');
     });
 
+    it('should instruct primary position to take AFFIRMATIVE stance', () => {
+      const firstPrompt = mode.buildAgentPrompt(defaultContext);
+      expect(firstPrompt.toUpperCase()).toContain('AFFIRMATIVE');
+      expect(firstPrompt).toContain('Argue IN FAVOR');
+      // Should explicitly tell agent to take YES/FOR position
+      expect(firstPrompt).toContain('If topic asks "Is X worth it?" → Argue YES');
+    });
+
     it('should provide different prompts for different roles', () => {
       // First agent (no previous responses)
       const firstPrompt = mode.buildAgentPrompt(defaultContext);
