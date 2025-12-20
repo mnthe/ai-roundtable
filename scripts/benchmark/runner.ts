@@ -307,14 +307,26 @@ export class BenchmarkRunner {
         score: r.consensusSnapshot!.score,
       }));
 
+    const agreementLevel = finalConsensus?.agreementLevel ?? 0;
+
     return {
-      finalLevel: finalConsensus?.consensusLevel ?? 'low',
-      finalScore: finalConsensus?.agreementLevel ?? 0,
+      finalLevel: this.classifyConsensusLevel(agreementLevel),
+      finalScore: agreementLevel,
       progression,
       agreements: finalConsensus?.commonGround ?? [],
       disagreements: finalConsensus?.disagreementPoints ?? [],
       summary: finalConsensus?.summary,
     };
+  }
+
+  /**
+   * Classify consensus level based on agreement score
+   * Matches the logic in src/mcp/handlers/utils.ts
+   */
+  private classifyConsensusLevel(score: number): 'high' | 'medium' | 'low' {
+    if (score >= 0.7) return 'high';
+    if (score >= 0.4) return 'medium';
+    return 'low';
   }
 
   /**
