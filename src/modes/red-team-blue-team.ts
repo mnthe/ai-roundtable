@@ -6,7 +6,7 @@
  * while blue team takes a constructive/defensive perspective (proposing solutions).
  */
 
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
 
@@ -24,8 +24,10 @@ type Team = 'red' | 'blue';
  * - Blue Team: Constructive solutions, defense strategies, mitigation
  * - Teams execute in parallel, then cross-evaluate
  * - Focus on adversarial but productive tension
+ *
+ * Note: Uses custom executeRound with team-based execution and interleaving
  */
-export class RedTeamBlueTeamMode implements DebateModeStrategy {
+export class RedTeamBlueTeamMode extends BaseModeStrategy {
   readonly name = 'red-team-blue-team';
 
   /**

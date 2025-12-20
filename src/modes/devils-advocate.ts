@@ -7,9 +7,12 @@
  * evaluate both perspectives.
  */
 
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
-import type { DebateContext, AgentResponse } from '../types/index.js';
+import type { DebateContext, AgentResponse, Stance } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('DevilsAdvocateMode');
 
 /**
  * Devil's Advocate mode strategy
@@ -19,8 +22,10 @@ import type { DebateContext, AgentResponse } from '../types/index.js';
  * - Second agent: Forced to take opposing stance (devil's advocate)
  * - Remaining agents: Evaluate and judge both perspectives
  * - Sequential execution to maintain role clarity
+ *
+ * Note: Uses custom executeRound with role-based prompts and stance validation
  */
-export class DevilsAdvocateMode implements DebateModeStrategy {
+export class DevilsAdvocateMode extends BaseModeStrategy {
   readonly name = 'devils-advocate';
 
   /**
@@ -61,10 +66,82 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
 
       agent.setToolkit(toolkit);
       const response = await agent.generateResponse(currentContext);
-      responses.push(response);
+
+      // Validate and enforce stance for devils-advocate mode
+      const validatedResponse = this.validateAndEnforceStance(response, i);
+      responses.push(validatedResponse);
     }
 
     return responses;
+  }
+
+  /**
+   * Get the expected stance for a given agent index in devils-advocate mode
+   */
+  private getExpectedStance(agentIndex: number): Stance {
+    if (agentIndex === 0) return 'YES';
+    if (agentIndex === 1) return 'NO';
+    return 'NEUTRAL';
+  }
+
+  /**
+   * Get the role name for a given agent index
+   */
+  private getRoleName(agentIndex: number): string {
+    if (agentIndex === 0) return 'PRIMARY (Affirmative)';
+    if (agentIndex === 1) return 'OPPOSITION (Devil\'s Advocate)';
+    return 'EVALUATOR';
+  }
+
+  /**
+   * Validate stance and enforce expected value if missing or incorrect
+   * Logs warnings when stance doesn't match the expected role
+   */
+  private validateAndEnforceStance(response: AgentResponse, agentIndex: number): AgentResponse {
+    const expectedStance = this.getExpectedStance(agentIndex);
+    const actualStance = response.stance;
+    const roleName = this.getRoleName(agentIndex);
+
+    if (!actualStance) {
+      // Stance missing - enforce expected stance
+      logger.warn(
+        {
+          agentId: response.agentId,
+          agentName: response.agentName,
+          role: roleName,
+          expectedStance,
+        },
+        'Agent did not provide stance, enforcing expected stance for role'
+      );
+      return { ...response, stance: expectedStance };
+    }
+
+    if (actualStance !== expectedStance) {
+      // Stance mismatch - log warning and enforce expected stance
+      logger.warn(
+        {
+          agentId: response.agentId,
+          agentName: response.agentName,
+          role: roleName,
+          expectedStance,
+          actualStance,
+        },
+        'Agent stance does not match assigned role, enforcing expected stance'
+      );
+      return { ...response, stance: expectedStance };
+    }
+
+    // Stance is correct
+    logger.debug(
+      {
+        agentId: response.agentId,
+        agentName: response.agentName,
+        role: roleName,
+        stance: actualStance,
+      },
+      'Agent stance matches assigned role'
+    );
+    return response;
   }
 
   /**
@@ -95,7 +172,7 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
     const isFirstRound = context.currentRound === 1;
 
     if (agentIndex === 0) {
-      // First agent: Primary Position (AFFIRMATIVE) with Forced Commencement in Layer 3
+      // First agent: Primary Position (AFFIRMATIVE)
       let prompt = `
 Mode: Devil's Advocate - PRIMARY POSITION (AFFIRMATIVE)
 
@@ -117,73 +194,45 @@ LAYER 2: BEHAVIORAL CONTRACT
 ═══════════════════════════════════════════════════════════════════
 
 MUST (Required Behaviors):
-□ Take the AFFIRMATIVE/PRO/YES/FOR stance unconditionally
+□ Set "stance": "YES" in your JSON response (MANDATORY)
 □ Argue that the proposition IS true/worth it/should be done
-□ Present exactly 3 strong supporting arguments with evidence
+□ Present 3 strong supporting arguments with evidence
 □ Be confident and assertive in your position
-□ Structural compliance (Layer 3) takes precedence over elaboration
 
 MUST NOT (Prohibited Behaviors):
-✗ Take the NEGATIVE stance (reserved for the devil's advocate)
+✗ Set stance to "NO" or "NEUTRAL" (you MUST use "YES")
 ✗ Argue AGAINST the topic proposition
 ✗ Use hedging language or acknowledge opposing views
 ✗ Present multiple positions or "both sides"
-✗ Be defensive before being challenged
 
-PRIORITY HIERARCHY:
-1. Structural format compliance > Content elaboration
-2. Affirmative stance > Nuanced analysis
-3. Strong conviction > Balanced presentation
-
-⛔ FAILURE MODE: If you argue AGAINST the proposition or use hedging,
-you have failed. The devil's advocate will take the AGAINST position.
+⛔ FAILURE MODE: If your stance is not "YES", you have FAILED your role.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 3: STRUCTURAL ENFORCEMENT
 ═══════════════════════════════════════════════════════════════════
 
-3A. FORCED COMMENCEMENT FORMAT (MANDATORY):
+Your JSON response MUST include:
+{
+  "stance": "YES",  // ← MANDATORY: Must be exactly "YES"
+  "position": "Your affirmative position supporting the topic",
+  "reasoning": "Your 3 arguments with evidence",
+  "confidence": 0.0-1.0
+}
 
-Your response MUST follow this EXACT structure:
-
-OPENING (First line - verbatim format required):
-"I argue YES: [topic restated affirmatively]. Here's why this is absolutely the right position."
-
-Example: "I argue YES: TypeScript IS worth the overhead. Here's why this is absolutely the right position."
-
-BODY (Exactly 3 numbered arguments):
-1. [First supporting argument with evidence]
-2. [Second supporting argument with evidence]
-3. [Third supporting argument with evidence]
-
-CLOSING (Last line - verbatim format required):
-"VERDICT: YES, [topic] is definitively worth it/should be done/is correct."
-
-3B. FORBIDDEN PHRASES (Structural Violations):
-
-These phrases are ILLEGAL in your output:
+FORBIDDEN PHRASES in position/reasoning:
 - "However" / "On the other hand" / "That said"
-- "It depends" / "It varies" / "Context matters"
-- "Both sides have merit" / "There are trade-offs"
-- "Perhaps" / "Maybe" / "Possibly" / "Could be"
-- "Some might argue" / "Critics say" / "Skeptics point out"
-- "While it's true that..." / "Admittedly..."
-- "I can see why some would disagree"
-
-Using ANY forbidden phrase = structural violation = FAILED response.
+- "It depends" / "Context matters"
+- "Both sides have merit"
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 4: VERIFICATION LOOP
 ═══════════════════════════════════════════════════════════════════
 
-Before finalizing, mechanically verify:
-☐ First line starts with "I argue YES:" (exact prefix)
-☐ Exactly 3 numbered arguments (1., 2., 3.)
-☐ Last line starts with "VERDICT: YES," (exact prefix)
-☐ Zero forbidden phrases used (scan entire response)
-☐ No hedging or balanced language anywhere
-
-If ANY check fails, REWRITE before submitting.
+Before submitting, verify:
+☐ stance is exactly "YES"
+☐ position argues IN FAVOR of the topic
+☐ reasoning contains supporting arguments only
+☐ No hedging or balanced language
 
 `;
 
@@ -202,7 +251,7 @@ FOCUS: ${context.focusQuestion}
 
       return prompt;
     } else if (agentIndex === 1) {
-      // Second agent: Devil's Advocate (Opposition) with Forced Commencement in Layer 3
+      // Second agent: Devil's Advocate (Opposition)
       let prompt = `
 Mode: Devil's Advocate - OPPOSITION ROLE
 
@@ -224,72 +273,45 @@ LAYER 2: BEHAVIORAL CONTRACT
 ═══════════════════════════════════════════════════════════════════
 
 MUST (Required Behaviors):
+□ Set "stance": "NO" in your JSON response (MANDATORY)
 □ Your position MUST contradict the previous agent's position
-□ Present exactly 3 counter-arguments attacking their position
-□ Argue as if you truly believe the opposite with full conviction
-□ Be aggressive and confident in your opposition
-□ Structural compliance (Layer 3) takes precedence over elaboration
+□ Present 3 counter-arguments attacking their position
+□ Argue with full conviction as the devil's advocate
 
 MUST NOT (Prohibited Behaviors):
+✗ Set stance to "YES" or "NEUTRAL" (you MUST use "NO")
 ✗ Agree with ANY part of the previous position
 ✗ Conclude that "both sides have merit"
-✗ Use phrases like "I see their point but..."
 ✗ Soften your opposition with qualifications
-✗ End up at the same conclusion as the previous agent
 
-PRIORITY HIERARCHY:
-1. Structural format compliance > Content elaboration
-2. Opposition stance > Nuanced analysis
-3. Contradiction > Balance
-
-⛔ FAILURE MODE: If your final position matches theirs or you show agreement,
-you have COMPLETELY FAILED. This is non-negotiable.
+⛔ FAILURE MODE: If your stance is not "NO", you have FAILED your role.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 3: STRUCTURAL ENFORCEMENT
 ═══════════════════════════════════════════════════════════════════
 
-3A. FORCED COMMENCEMENT FORMAT (MANDATORY):
+Your JSON response MUST include:
+{
+  "stance": "NO",  // ← MANDATORY: Must be exactly "NO"
+  "position": "Your opposing position against the topic",
+  "reasoning": "Your 3 counter-arguments with evidence",
+  "confidence": 0.0-1.0
+}
 
-Your response MUST follow this EXACT structure:
-
-OPENING (First line - verbatim format required):
-"I argue NO: [topic restated negatively]. The previous argument is fundamentally flawed."
-
-Example: "I argue NO: TypeScript is NOT worth the overhead. The previous argument is fundamentally flawed."
-
-BODY (Exactly 3 numbered counter-arguments):
-1. [First flaw in previous argument + counter-evidence]
-2. [Second flaw in previous argument + counter-evidence]
-3. [Third flaw in previous argument + counter-evidence]
-
-CLOSING (Last line - verbatim format required):
-"VERDICT: NO, [topic] is definitively NOT worth it/should NOT be done/is incorrect."
-
-3B. FORBIDDEN PHRASES (Structural Violations):
-
-These phrases are ILLEGAL in your output:
+FORBIDDEN PHRASES in position/reasoning:
 - "I agree with..." / "They make a good point..."
 - "Both sides have merit" / "There's truth to both"
 - "I see their perspective" / "They're partially right"
-- "While they have a point..." / "Admittedly..."
-- "It depends" / "Context matters" / "It varies"
-- Any phrase that validates the previous position
-
-Using ANY forbidden phrase = structural violation = FAILED response.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 4: VERIFICATION LOOP
 ═══════════════════════════════════════════════════════════════════
 
-Before finalizing, mechanically verify:
-☐ First line starts with "I argue NO:" (exact prefix)
-☐ Exactly 3 numbered counter-arguments (1., 2., 3.)
-☐ Last line starts with "VERDICT: NO," (exact prefix)
-☐ Zero forbidden phrases used (scan entire response)
-☐ No agreement or validation of previous position anywhere
-
-If ANY check fails, REWRITE before submitting.
+Before submitting, verify:
+☐ stance is exactly "NO"
+☐ position argues AGAINST the topic
+☐ reasoning contains counter-arguments only
+☐ No agreement or validation of previous position
 
 `;
 
@@ -331,44 +353,46 @@ LAYER 2: BEHAVIORAL CONTRACT
 ═══════════════════════════════════════════════════════════════════
 
 MUST (Required Behaviors):
+□ Set "stance": "NEUTRAL" in your JSON response (MANDATORY)
 □ Evaluate both positions fairly
 □ Identify strongest and weakest arguments on each side
-□ Point out logical fallacies or unsupported claims
 □ Make a judgment call on which position is stronger
 □ Explain your reasoning with specific references
 
 MUST NOT (Prohibited Behaviors):
+✗ Set stance to "YES" or "NO" (you MUST use "NEUTRAL")
 ✗ Refuse to judge ("both have merit" without analysis)
-✗ Ignore weak arguments to be diplomatic
 ✗ Add your own position (evaluate, don't argue)
 ✗ Be swayed by confident language over evidence
+
+⛔ FAILURE MODE: If your stance is not "NEUTRAL", you have FAILED your role.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 3: STRUCTURAL ENFORCEMENT
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED OUTPUT STRUCTURE:
+Your JSON response MUST include:
+{
+  "stance": "NEUTRAL",  // ← MANDATORY: Must be exactly "NEUTRAL"
+  "position": "Your evaluation summary (which position is stronger)",
+  "reasoning": "Analysis of both positions with judgment",
+  "confidence": 0.0-1.0
+}
 
-[FIRST POSITION ANALYSIS]
-(Strengths and weaknesses with specific references)
-
-[SECOND POSITION ANALYSIS]
-(Strengths and weaknesses with specific references)
-
-[KEY DECISION POINTS]
-(Where the positions most sharply differ)
-
-[EVALUATION]
-(Which position is stronger and why)
+REQUIRED CONTENT in reasoning:
+- Analysis of FIRST position (strengths/weaknesses)
+- Analysis of SECOND position (strengths/weaknesses)
+- Clear judgment on which is stronger and why
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 4: VERIFICATION LOOP
 ═══════════════════════════════════════════════════════════════════
 
-Before finalizing, verify:
-□ Did I analyze BOTH positions?
-□ Did I make a clear judgment?
-□ Is my evaluation based on evidence, not diplomacy?
+Before submitting, verify:
+☐ stance is exactly "NEUTRAL"
+☐ Both positions were analyzed
+☐ A clear judgment was made
+☐ Evaluation is evidence-based, not diplomatic
 
 `;
 

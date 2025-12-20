@@ -6,7 +6,7 @@
  * dialogue and collaborative inquiry.
  */
 
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
 
@@ -19,7 +19,7 @@ import type { DebateContext, AgentResponse } from '../types/index.js';
  * - Explore ideas through dialogue
  * - Seek deeper understanding rather than winning
  */
-export class SocraticMode implements DebateModeStrategy {
+export class SocraticMode extends BaseModeStrategy {
   readonly name = 'socratic';
 
   /**
@@ -33,34 +33,7 @@ export class SocraticMode implements DebateModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
-
-    const responses: AgentResponse[] = [];
-
-    // Execute agents sequentially for dialogic questioning
-    for (const agent of agents) {
-      // Build context with current round responses and mode-specific prompt
-      const currentContext: DebateContext = {
-        ...context,
-        previousResponses: [
-          ...context.previousResponses,
-          ...responses,
-        ],
-        // Add mode-specific prompt
-        modePrompt: this.buildAgentPrompt({
-          ...context,
-          previousResponses: [...context.previousResponses, ...responses],
-        }),
-      };
-
-      agent.setToolkit(toolkit);
-      const response = await agent.generateResponse(currentContext);
-      responses.push(response);
-    }
-
-    return responses;
+    return this.executeSequential(agents, context, toolkit);
   }
 
   /**

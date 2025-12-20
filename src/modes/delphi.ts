@@ -6,7 +6,7 @@
  * summaries to guide towards consensus.
  */
 
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
 
@@ -30,7 +30,7 @@ interface DelphiStatistics {
  * - Parallel execution for independent opinions
  * - Convergence towards consensus through iteration
  */
-export class DelphiMode implements DebateModeStrategy {
+export class DelphiMode extends BaseModeStrategy {
   readonly name = 'delphi';
 
   /**
@@ -44,26 +44,13 @@ export class DelphiMode implements DebateModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
-
     // Anonymize previous responses for Delphi method
     const anonymizedContext: DebateContext = {
       ...context,
       previousResponses: this.anonymizeResponses(context.previousResponses),
-      // Add mode-specific prompt
-      modePrompt: this.buildAgentPrompt(context),
     };
 
-    // Execute all agents in parallel for independent opinions
-    const responsePromises = agents.map((agent) => {
-      agent.setToolkit(toolkit);
-      return agent.generateResponse(anonymizedContext);
-    });
-
-    const responses = await Promise.all(responsePromises);
-    return responses;
+    return this.executeParallel(agents, anonymizedContext, toolkit);
   }
 
   /**

@@ -6,7 +6,7 @@
  * engaging with other panelists' opinions.
  */
 
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
 
@@ -19,7 +19,7 @@ import type { DebateContext, AgentResponse } from '../types/index.js';
  * - Less direct engagement between panelists
  * - Emphasis on domain expertise and citations
  */
-export class ExpertPanelMode implements DebateModeStrategy {
+export class ExpertPanelMode extends BaseModeStrategy {
   readonly name = 'expert-panel';
 
   /**
@@ -33,24 +33,7 @@ export class ExpertPanelMode implements DebateModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
-
-    // Build context with mode-specific prompt
-    const contextWithModePrompt: DebateContext = {
-      ...context,
-      modePrompt: this.buildAgentPrompt(context),
-    };
-
-    // Execute all experts in parallel for independent opinions
-    const responsePromises = agents.map((agent) => {
-      agent.setToolkit(toolkit);
-      return agent.generateResponse(contextWithModePrompt);
-    });
-
-    const responses = await Promise.all(responsePromises);
-    return responses;
+    return this.executeParallel(agents, context, toolkit);
   }
 
   /**

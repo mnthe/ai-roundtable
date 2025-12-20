@@ -6,7 +6,7 @@
  * seeing only previous rounds' responses.
  */
 
-import type { DebateModeStrategy } from './base.js';
+import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
 
@@ -19,7 +19,7 @@ import type { DebateContext, AgentResponse } from '../types/index.js';
  * - Build upon others' ideas from previous rounds
  * - Encourage constructive dialogue
  */
-export class CollaborativeMode implements DebateModeStrategy {
+export class CollaborativeMode extends BaseModeStrategy {
   readonly name = 'collaborative';
 
   /**
@@ -33,28 +33,7 @@ export class CollaborativeMode implements DebateModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
-
-    // Build context with mode-specific prompt
-    const contextWithModePrompt: DebateContext = {
-      ...context,
-      modePrompt: this.buildAgentPrompt(context),
-    };
-
-    // Execute all agents in parallel
-    // In collaborative mode, agents see the same context (previous rounds only)
-    const responsePromises = agents.map((agent) => {
-      // Ensure each agent has the toolkit
-      agent.setToolkit(toolkit);
-      return agent.generateResponse(contextWithModePrompt);
-    });
-
-    // Wait for all agents to respond
-    const responses = await Promise.all(responsePromises);
-
-    return responses;
+    return this.executeParallel(agents, context, toolkit);
   }
 
   /**
