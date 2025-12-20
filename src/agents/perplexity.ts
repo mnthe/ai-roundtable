@@ -12,7 +12,11 @@ import type {
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
-import { buildOpenAITools, convertSDKError } from './utils/index.js';
+import {
+  buildOpenAITools,
+  convertSDKError,
+  executeSimpleOpenAICompletion,
+} from './utils/index.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation, ImageResult } from '../types/index.js';
 
 const logger = createLogger('PerplexityAgent');
@@ -452,77 +456,42 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
-   * Generate synthesis by calling Perplexity API directly with synthesis-specific prompts
-   * This bypasses the standard debate prompt building to use synthesis format
+   * Perform synthesis by calling Perplexity API directly with synthesis-specific prompts
+   * Uses the shared executeSimpleOpenAICompletion utility.
    */
-  protected override async generateSynthesisInternal(
+  protected override async performSynthesis(
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
-    logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
-
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userMessage },
-            ],
-            temperature: this.temperature,
-          }),
-        { maxRetries: 3 }
-      );
-
-      logger.info({ agentId: this.id, agentName: this.name }, 'Synthesis generation completed');
-      return response.choices[0]?.message?.content ?? '';
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'perplexity');
-      logger.error(
-        { err: convertedError, agentId: this.id, agentName: this.name },
-        'Failed to generate synthesis'
-      );
-      throw convertedError;
-    }
+    return executeSimpleOpenAICompletion({
+      client: this.client,
+      model: this.model,
+      maxTokens: this.maxTokens,
+      temperature: this.temperature,
+      systemPrompt,
+      userMessage,
+      agentId: this.id,
+      convertError: (error) => this.convertError(error),
+      debugMessage: 'Performing synthesis',
+    });
   }
 
   /**
    * Generate a raw text completion without parsing into structured format
-   * Used by AIConsensusAnalyzer to get raw JSON responses
+   * Uses the shared executeSimpleOpenAICompletion utility.
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    logger.debug({ agentId: this.id }, 'Generating raw completion');
-
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            messages: [
-              {
-                role: 'system',
-                content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-              },
-              { role: 'user', content: prompt },
-            ],
-            temperature: this.temperature,
-            // Disable web search for raw completion (consensus analysis doesn't need it)
-          }),
-        { maxRetries: 3 }
-      );
-
-      return response.choices[0]?.message?.content ?? '';
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'perplexity');
-      logger.error(
-        { err: convertedError, agentId: this.id },
-        'Failed to generate raw completion'
-      );
-      throw convertedError;
-    }
+    return executeSimpleOpenAICompletion({
+      client: this.client,
+      model: this.model,
+      maxTokens: this.maxTokens,
+      temperature: this.temperature,
+      systemPrompt: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      userMessage: prompt,
+      agentId: this.id,
+      convertError: (error) => this.convertError(error),
+      debugMessage: 'Generating raw completion',
+    });
   }
 
   /**

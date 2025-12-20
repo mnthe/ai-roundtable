@@ -144,40 +144,28 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
-   * Generate synthesis by calling Gemini API directly with synthesis-specific prompts
+   * Perform synthesis by calling Gemini API directly with synthesis-specific prompts
    * This bypasses the standard debate prompt building to use synthesis format
    */
-  protected override async generateSynthesisInternal(
+  protected override async performSynthesis(
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
-    logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
+    const response = await withRetry(
+      () =>
+        this.client.models.generateContent({
+          model: this.model,
+          contents: userMessage,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: this.temperature,
+            maxOutputTokens: this.maxTokens,
+          },
+        }),
+      { maxRetries: 3 }
+    );
 
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.models.generateContent({
-            model: this.model,
-            contents: userMessage,
-            config: {
-              systemInstruction: systemPrompt,
-              temperature: this.temperature,
-              maxOutputTokens: this.maxTokens,
-            },
-          }),
-        { maxRetries: 3 }
-      );
-
-      logger.info({ agentId: this.id, agentName: this.name }, 'Synthesis generation completed');
-      return response.text ?? '';
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'google');
-      logger.error(
-        { err: convertedError, agentId: this.id, agentName: this.name },
-        'Failed to generate synthesis'
-      );
-      throw convertedError;
-    }
+    return response.text ?? '';
   }
 
   /**

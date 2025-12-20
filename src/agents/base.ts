@@ -301,10 +301,43 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Internal method for generating synthesis - can be overridden by subclasses
-   * Default implementation falls back to generateResponse
+   * Internal method for generating synthesis
+   *
+   * This is a template method that provides common logging and error handling.
+   * Subclasses should implement performSynthesis() for provider-specific API calls.
+   *
+   * @param systemPrompt - System prompt for synthesis
+   * @param userMessage - User message containing the synthesis prompt
+   * @returns Raw synthesis response text
    */
   protected async generateSynthesisInternal(systemPrompt: string, userMessage: string): Promise<string> {
+    logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
+
+    try {
+      const result = await this.performSynthesis(systemPrompt, userMessage);
+      logger.info({ agentId: this.id, agentName: this.name }, 'Synthesis generation completed');
+      return result;
+    } catch (error) {
+      const convertedError = this.convertError(error);
+      logger.error(
+        { err: convertedError, agentId: this.id, agentName: this.name },
+        'Failed to generate synthesis'
+      );
+      throw convertedError;
+    }
+  }
+
+  /**
+   * Perform provider-specific synthesis API call
+   *
+   * Subclasses should override this method to make direct API calls.
+   * Default implementation falls back to generateResponse.
+   *
+   * @param systemPrompt - System prompt for synthesis
+   * @param userMessage - User message containing the synthesis prompt
+   * @returns Raw synthesis response text
+   */
+  protected async performSynthesis(systemPrompt: string, userMessage: string): Promise<string> {
     // Default fallback: Use generateResponse with a context that includes synthesis instructions
     // This is not ideal but provides basic functionality
     const context: DebateContext = {

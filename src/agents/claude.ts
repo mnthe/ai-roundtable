@@ -145,44 +145,30 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Generate synthesis by calling Claude API directly with synthesis-specific prompts
+   * Perform synthesis by calling Claude API directly with synthesis-specific prompts
    * This bypasses the standard debate prompt building to use synthesis format
    */
-  protected override async generateSynthesisInternal(
+  protected override async performSynthesis(
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
-    logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
+    const response = await withRetry(
+      () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userMessage }],
+          temperature: this.temperature,
+        }),
+      { maxRetries: 3 }
+    );
 
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: userMessage }],
-            temperature: this.temperature,
-          }),
-        { maxRetries: 3 }
-      );
-
-      // Extract text from response
-      const textBlocks = response.content.filter(
-        (block): block is TextBlock => block.type === 'text'
-      );
-      const rawText = textBlocks.map((block) => block.text).join('\n');
-
-      logger.info({ agentId: this.id, agentName: this.name }, 'Synthesis generation completed');
-      return rawText;
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'anthropic');
-      logger.error(
-        { err: convertedError, agentId: this.id, agentName: this.name },
-        'Failed to generate synthesis'
-      );
-      throw convertedError;
-    }
+    // Extract text from response
+    const textBlocks = response.content.filter(
+      (block): block is TextBlock => block.type === 'text'
+    );
+    return textBlocks.map((block) => block.text).join('\n');
   }
 
   /**
