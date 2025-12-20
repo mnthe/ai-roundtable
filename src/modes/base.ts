@@ -182,6 +182,129 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
   }
 
   /**
+   * Execute all agents except last in parallel, then last agent sequentially
+   *
+   * "Last-only" pattern optimizes sequential modes where:
+   * - Most agents can respond simultaneously (see only previous rounds)
+   * - Last agent needs to see all current round responses
+   *
+   * Best for: Devils-advocate (evaluator sees all), expert-panel with synthesis
+   * Expected ~60% latency reduction compared to full sequential execution.
+   *
+   * Handles individual agent errors gracefully - continues with other agents.
+   * Calls optional hooks if defined:
+   * - getAgentRole: To get role identifier for logging
+   * - transformContext: Before passing context to each agent
+   * - validateResponse: After receiving response from each agent
+   *
+   * @param agents - Array of agents to execute
+   * @param context - Current debate context
+   * @param toolkit - Toolkit providing tools to agents
+   * @returns Array of responses from all agents (excluding failed ones)
+   */
+  protected async executeLastOnly(
+    agents: BaseAgent[],
+    context: DebateContext,
+    toolkit: AgentToolkit
+  ): Promise<AgentResponse[]> {
+    // Fallback to sequential for 0-1 agents
+    if (agents.length <= 1) {
+      return this.executeSequential(agents, context, toolkit);
+    }
+
+    const lastAgent = agents[agents.length - 1];
+    const otherAgents = agents.slice(0, -1);
+
+    // Build base context with mode-specific prompt
+    const baseContext: DebateContext = {
+      ...context,
+      modePrompt: this.buildAgentPrompt(context),
+    };
+
+    // Execute all agents except last in parallel
+    // They see only previous round responses (not current round)
+    const parallelPromises = otherAgents.map((agent, index) => {
+      agent.setToolkit(toolkit);
+
+      // Get agent role if hook is defined (for logging)
+      const role = this.getAgentRole?.(agent, index, context);
+      if (role) {
+        logger.debug({ agentId: agent.id, role, index }, 'Agent role assigned (parallel)');
+      }
+
+      // Apply transformContext hook if defined
+      const agentContext = this.transformContext
+        ? this.transformContext(baseContext, agent)
+        : baseContext;
+
+      return agent.generateResponse(agentContext);
+    });
+
+    // Use allSettled to handle individual failures gracefully
+    const parallelResults = await Promise.allSettled(parallelPromises);
+
+    const parallelResponses: AgentResponse[] = [];
+    for (let i = 0; i < parallelResults.length; i++) {
+      const result = parallelResults[i];
+      const agent = otherAgents[i];
+      if (!result || !agent) continue;
+
+      if (result.status === 'fulfilled') {
+        // Apply validateResponse hook if defined
+        const response = this.validateResponse
+          ? this.validateResponse(result.value, baseContext)
+          : result.value;
+        parallelResponses.push(response);
+      } else {
+        // Log error but continue with other agents
+        logger.error({ err: result.reason, agentId: agent.id }, 'Error from agent (parallel phase)');
+      }
+    }
+
+    // Now execute last agent with access to all parallel responses
+    if (!lastAgent) {
+      return parallelResponses;
+    }
+
+    try {
+      const lastIndex = agents.length - 1;
+      const role = this.getAgentRole?.(lastAgent, lastIndex, context);
+      if (role) {
+        logger.debug({ agentId: lastAgent.id, role, index: lastIndex }, 'Agent role assigned (last)');
+      }
+
+      // Last agent sees all parallel responses from current round
+      const lastContext: DebateContext = {
+        ...context,
+        previousResponses: [...context.previousResponses, ...parallelResponses],
+        modePrompt: this.buildAgentPrompt({
+          ...context,
+          previousResponses: [...context.previousResponses, ...parallelResponses],
+        }),
+      };
+
+      // Apply transformContext hook if defined
+      const agentContext = this.transformContext
+        ? this.transformContext(lastContext, lastAgent)
+        : lastContext;
+
+      lastAgent.setToolkit(toolkit);
+      let response = await lastAgent.generateResponse(agentContext);
+
+      // Apply validateResponse hook if defined
+      if (this.validateResponse) {
+        response = this.validateResponse(response, lastContext);
+      }
+
+      return [...parallelResponses, response];
+    } catch (error) {
+      // Log error but return parallel responses
+      logger.error({ err: error, agentId: lastAgent.id }, 'Error from last agent');
+      return parallelResponses;
+    }
+  }
+
+  /**
    * Execute agents sequentially
    *
    * Agents respond one by one, each seeing accumulated responses from the current round.

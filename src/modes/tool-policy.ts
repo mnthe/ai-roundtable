@@ -7,11 +7,15 @@
  */
 
 import type { DebateMode } from '../types/index.js';
+import type { ParallelizationLevel } from '../config/feature-flags.js';
 
 /**
  * Execution pattern for debate modes
  */
 export type ExecutionPattern = 'parallel' | 'sequential';
+
+// Re-export ParallelizationLevel for convenience
+export type { ParallelizationLevel } from '../config/feature-flags.js';
 
 /**
  * Tool usage policy defining limits and guidance for agents
@@ -52,6 +56,33 @@ export const MODE_EXECUTION_PATTERN: Record<DebateMode, ExecutionPattern> = {
   socratic: 'sequential',
   'devils-advocate': 'sequential',
   'red-team-blue-team': 'parallel',
+};
+
+/**
+ * Parallelization optimization for sequential modes
+ *
+ * Specifies which parallelization strategy applies to each sequential mode
+ * when the sequentialParallelization feature flag is enabled:
+ *
+ * - 'none': Keep fully sequential (each agent sees all previous responses)
+ * - 'last-only': All except last run in parallel, last sees all
+ * - 'full': All agents run in parallel (effectively converts to parallel mode)
+ *
+ * Design rationale:
+ * - devils-advocate: 'last-only' - Evaluator (last) needs to see PRIMARY and OPPOSITION
+ * - socratic: 'none' - Each question depends on previous answers
+ * - adversarial: 'none' - Counter-arguments need to see what they're countering
+ */
+export const MODE_PARALLELIZATION: Record<DebateMode, ParallelizationLevel> = {
+  // Parallel modes - no optimization needed (already parallel)
+  collaborative: 'full',
+  'expert-panel': 'full',
+  delphi: 'full',
+  'red-team-blue-team': 'full',
+  // Sequential modes - specify optimization potential
+  adversarial: 'none', // Keep sequential: counter-arguments need context
+  socratic: 'none', // Keep sequential: questions depend on previous answers
+  'devils-advocate': 'last-only', // Optimize: evaluator needs both, but PRIMARY/OPPOSITION can parallel
 };
 
 /**
@@ -129,4 +160,24 @@ export function isParallelMode(mode: DebateMode): boolean {
  */
 export function getToolGuidanceForMode(mode: DebateMode): string {
   return isSequentialMode(mode) ? SEQUENTIAL_MODE_TOOL_GUIDANCE : '';
+}
+
+/**
+ * Get the parallelization level for a specific debate mode
+ *
+ * @param mode - The debate mode
+ * @returns The parallelization level (none, last-only, or full)
+ */
+export function getParallelizationLevel(mode: DebateMode): ParallelizationLevel {
+  return MODE_PARALLELIZATION[mode];
+}
+
+/**
+ * Check if a mode supports last-only parallelization optimization
+ *
+ * @param mode - The debate mode
+ * @returns True if the mode can use last-only parallelization
+ */
+export function supportsLastOnlyParallelization(mode: DebateMode): boolean {
+  return MODE_PARALLELIZATION[mode] === 'last-only';
 }

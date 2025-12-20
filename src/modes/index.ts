@@ -7,7 +7,7 @@ export { CollaborativeMode } from './collaborative.js';
 export { AdversarialMode } from './adversarial.js';
 export { SocraticMode } from './socratic.js';
 export { ExpertPanelMode } from './expert-panel.js';
-export { DevilsAdvocateMode } from './devils-advocate.js';
+export { DevilsAdvocateMode, type DevilsAdvocateModeOptions } from './devils-advocate.js';
 export { DelphiMode } from './delphi.js';
 export { RedTeamBlueTeamMode } from './red-team-blue-team.js';
 export {
@@ -56,11 +56,15 @@ export {
   isSequentialMode,
   isParallelMode,
   getToolGuidanceForMode,
+  getParallelizationLevel,
+  supportsLastOnlyParallelization,
   TOOL_USAGE_POLICIES,
   MODE_EXECUTION_PATTERN,
+  MODE_PARALLELIZATION,
   SEQUENTIAL_MODE_TOOL_GUIDANCE,
   type ExecutionPattern,
   type ToolUsagePolicy,
+  type ParallelizationLevel,
 } from './tool-policy.js';
 
 // Context processors
