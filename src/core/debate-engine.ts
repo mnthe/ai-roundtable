@@ -11,6 +11,7 @@ import type {
 } from '../types/index.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateModeStrategy } from '../modes/base.js';
+import { getGlobalModeRegistry } from '../modes/registry.js';
 import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -59,10 +60,17 @@ export class DebateEngine {
    * @returns Round results with responses and consensus
    */
   async executeRound(agents: BaseAgent[], context: DebateContext): Promise<RoundResult> {
-    // Get the appropriate mode strategy
-    const strategy = this.modeStrategies.get(context.mode);
+    // Get the appropriate mode strategy (local first, then global registry)
+    let strategy = this.modeStrategies.get(context.mode);
+    if (!strategy) {
+      // Try global mode registry
+      const globalRegistry = getGlobalModeRegistry();
+      strategy = globalRegistry.getMode(context.mode);
+    }
+
     if (!strategy) {
       // Fall back to simple round-robin if no strategy found
+      logger.warn({ mode: context.mode }, 'No mode strategy found, using simple round-robin');
       const responses = await this.executeSimpleRound(agents, context);
       const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
       return {

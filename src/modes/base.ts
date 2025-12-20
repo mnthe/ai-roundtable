@@ -4,6 +4,9 @@
 
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('BaseModeStrategy');
 
 /**
  * Strategy interface for different debate modes
@@ -70,10 +73,12 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
    * All agents respond simultaneously, seeing only previous rounds' responses.
    * Best for: Collaborative, Expert Panel, Delphi modes
    *
+   * Handles individual agent errors gracefully - continues with other agents.
+   *
    * @param agents - Array of agents to execute
    * @param context - Current debate context
    * @param toolkit - Toolkit providing tools to agents
-   * @returns Array of responses from all agents
+   * @returns Array of responses from all agents (excluding failed ones)
    */
   protected async executeParallel(
     agents: BaseAgent[],
@@ -90,13 +95,30 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
       modePrompt: this.buildAgentPrompt(context),
     };
 
-    // Execute all agents in parallel
+    // Execute all agents in parallel with error handling
     const responsePromises = agents.map((agent) => {
       agent.setToolkit(toolkit);
       return agent.generateResponse(contextWithModePrompt);
     });
 
-    return Promise.all(responsePromises);
+    // Use allSettled to handle individual failures gracefully
+    const results = await Promise.allSettled(responsePromises);
+
+    const responses: AgentResponse[] = [];
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const agent = agents[i];
+      if (!result || !agent) continue;
+
+      if (result.status === 'fulfilled') {
+        responses.push(result.value);
+      } else {
+        // Log error but continue with other agents
+        logger.error({ err: result.reason, agentId: agent.id }, 'Error from agent');
+      }
+    }
+
+    return responses;
   }
 
   /**
@@ -105,10 +127,12 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
    * Agents respond one by one, each seeing accumulated responses from the current round.
    * Best for: Adversarial, Socratic modes
    *
+   * Handles individual agent errors gracefully - continues with other agents.
+   *
    * @param agents - Array of agents to execute
    * @param context - Current debate context
    * @param toolkit - Toolkit providing tools to agents
-   * @returns Array of responses from all agents
+   * @returns Array of responses from all agents (excluding failed ones)
    */
   protected async executeSequential(
     agents: BaseAgent[],
@@ -122,19 +146,24 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
     const responses: AgentResponse[] = [];
 
     for (const agent of agents) {
-      // Build context with accumulated responses from current round
-      const currentContext: DebateContext = {
-        ...context,
-        previousResponses: [...context.previousResponses, ...responses],
-        modePrompt: this.buildAgentPrompt({
+      try {
+        // Build context with accumulated responses from current round
+        const currentContext: DebateContext = {
           ...context,
           previousResponses: [...context.previousResponses, ...responses],
-        }),
-      };
+          modePrompt: this.buildAgentPrompt({
+            ...context,
+            previousResponses: [...context.previousResponses, ...responses],
+          }),
+        };
 
-      agent.setToolkit(toolkit);
-      const response = await agent.generateResponse(currentContext);
-      responses.push(response);
+        agent.setToolkit(toolkit);
+        const response = await agent.generateResponse(currentContext);
+        responses.push(response);
+      } catch (error) {
+        // Log error but continue with other agents
+        logger.error({ err: error, agentId: agent.id }, 'Error from agent');
+      }
     }
 
     return responses;

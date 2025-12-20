@@ -12,6 +12,15 @@ export type AIProvider = 'anthropic' | 'openai' | 'google' | 'perplexity';
 // Agent Types
 // ============================================
 
+/**
+ * Stance represents the agent's logical position in structured debate modes.
+ * Used primarily in devils-advocate mode to enforce role assignment.
+ * - YES: Affirmative/supporting stance
+ * - NO: Negative/opposing stance
+ * - NEUTRAL: Evaluator/observer stance (for evaluators in devils-advocate, expert-panel, etc.)
+ */
+export type Stance = 'YES' | 'NO' | 'NEUTRAL';
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -25,6 +34,8 @@ export interface AgentConfig {
 export interface AgentResponse {
   agentId: string;
   agentName: string;
+  /** Logical stance in structured debate modes (optional, required in devils-advocate) */
+  stance?: Stance;
   position: string;
   reasoning: string;
   confidence: number;
@@ -277,6 +288,8 @@ export interface DecisionLayer {
 export interface AgentResponseSummary {
   agentId: string;
   agentName: string;
+  /** Logical stance in structured debate modes (optional) */
+  stance?: Stance;
   /** Full position statement */
   position: string;
   /** 2-3 key reasoning points extracted from full reasoning */

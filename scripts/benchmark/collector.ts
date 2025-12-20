@@ -131,6 +131,7 @@ export class DataCollector {
     const filtered: Record<string, unknown> = {
       agentId: response.agentId,
       agentName: response.agentName,
+      stance: response.stance, // Role stance (YES/NO/NEUTRAL) for devils-advocate mode
       position: response.position,
       reasoning: this.outputOptions.include_raw_responses ? response.reasoning : undefined,
       confidence: response.confidence,

@@ -161,12 +161,11 @@ describe('DevilsAdvocateMode', () => {
       expect(prompt).toContain('What about work-life balance?');
     });
 
-    it('should instruct primary position to take AFFIRMATIVE stance with forced commencement', () => {
+    it('should instruct primary position to take AFFIRMATIVE stance with stance field', () => {
       const firstPrompt = mode.buildAgentPrompt(defaultContext);
       expect(firstPrompt.toUpperCase()).toContain('AFFIRMATIVE');
-      // Should use forced commencement technique
-      expect(firstPrompt).toContain('I argue YES:');
-      expect(firstPrompt).toContain('VERDICT: YES');
+      // Should require stance: "YES" in JSON response
+      expect(firstPrompt).toContain('"stance": "YES"');
       // Should explicitly forbid hedging language
       expect(firstPrompt).toContain('FORBIDDEN PHRASES');
       expect(firstPrompt).toContain('However');
