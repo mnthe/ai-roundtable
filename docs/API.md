@@ -11,6 +11,8 @@ Complete API documentation for AI Roundtable.
 - [Core](#core)
 - [Storage](#storage)
 - [MCP Server](#mcp-server)
+- [Error Handling](#error-handling)
+- [Error Response Format](#error-response-format)
 
 ---
 
@@ -936,3 +938,283 @@ interface ToolResult<T> {
 ```
 
 Agents handle errors gracefully and continue operation where possible.
+
+---
+
+## Error Response Format
+
+AI Roundtable uses a hierarchical error system with structured error responses.
+
+### Error Structure
+
+All errors extend `RoundtableError` and provide consistent JSON serialization:
+
+```typescript
+interface ErrorResponse {
+  name: string;           // Error class name
+  message: string;        // Human-readable error message
+  code: string;           // Machine-readable error code
+  provider?: string;      // AI provider that caused the error (if applicable)
+  retryable: boolean;     // Whether the operation can be retried
+  stack?: string;         // Stack trace (debug only)
+  cause?: string;         // Original error message (if wrapped)
+}
+```
+
+### Error Hierarchy
+
+```
+RoundtableError (base)
+├── APIRateLimitError     (retryable: true)
+├── APIAuthError          (retryable: false)
+├── APINetworkError       (retryable: true)
+├── APITimeoutError       (retryable: true)
+├── AgentError            (retryable: false)
+└── SessionError          (retryable: false)
+```
+
+### Error Types Reference
+
+#### APIRateLimitError
+
+API provider rate limit exceeded.
+
+| Property   | Value                      |
+| ---------- | -------------------------- |
+| Code       | `API_RATE_LIMIT`           |
+| Retryable  | `true`                     |
+| Default Message | `API rate limit exceeded` |
+
+**When it occurs:**
+- Too many requests sent to AI provider within time window
+- Token quota exceeded
+- Concurrent request limit reached
+
+**Client handling:**
+1. Implement exponential backoff (recommended: 1s, 2s, 4s, 8s...)
+2. Check provider's `Retry-After` header if available
+3. Consider reducing concurrent agent count
+4. Cache responses where applicable
+
+**Example response:**
+```json
+{
+  "name": "APIRateLimitError",
+  "message": "API rate limit exceeded for anthropic",
+  "code": "API_RATE_LIMIT",
+  "provider": "anthropic",
+  "retryable": true
+}
+```
+
+---
+
+#### APIAuthError
+
+API authentication or authorization failure.
+
+| Property   | Value                       |
+| ---------- | --------------------------- |
+| Code       | `API_AUTH_FAILED`           |
+| Retryable  | `false`                     |
+| Default Message | `API authentication failed` |
+
+**When it occurs:**
+- Invalid or expired API key
+- API key lacks required permissions
+- Account suspended or deactivated
+
+**Client handling:**
+1. Verify API key is correctly set in environment variables
+2. Check API key permissions in provider dashboard
+3. Regenerate API key if compromised
+4. Do NOT retry - manual intervention required
+
+**Example response:**
+```json
+{
+  "name": "APIAuthError",
+  "message": "Invalid API key for openai",
+  "code": "API_AUTH_FAILED",
+  "provider": "openai",
+  "retryable": false
+}
+```
+
+---
+
+#### APINetworkError
+
+Network connectivity issue with AI provider.
+
+| Property   | Value                      |
+| ---------- | -------------------------- |
+| Code       | `API_NETWORK_ERROR`        |
+| Retryable  | `true`                     |
+| Default Message | `Network error occurred` |
+
+**When it occurs:**
+- DNS resolution failure
+- Connection refused or reset
+- SSL/TLS handshake failure
+- Network timeout during connection establishment
+
+**Client handling:**
+1. Check network connectivity
+2. Verify provider's service status page
+3. Retry with exponential backoff
+4. Consider fallback to alternative provider
+
+**Example response:**
+```json
+{
+  "name": "APINetworkError",
+  "message": "Failed to connect to api.anthropic.com",
+  "code": "API_NETWORK_ERROR",
+  "provider": "anthropic",
+  "retryable": true
+}
+```
+
+---
+
+#### APITimeoutError
+
+API request exceeded time limit.
+
+| Property   | Value                       |
+| ---------- | --------------------------- |
+| Code       | `API_TIMEOUT`               |
+| Retryable  | `true`                      |
+| Default Message | `API request timed out` |
+
+**When it occurs:**
+- Request processing exceeded timeout threshold
+- Provider under heavy load
+- Complex request requiring extended processing
+- Large response generation
+
+**Client handling:**
+1. Retry with same parameters
+2. Consider increasing `maxTokens` if response was truncated
+3. Simplify request (shorter context, fewer agents)
+4. Retry during off-peak hours
+
+**Example response:**
+```json
+{
+  "name": "APITimeoutError",
+  "message": "Request to google timed out after 30000ms",
+  "code": "API_TIMEOUT",
+  "provider": "google",
+  "retryable": true
+}
+```
+
+---
+
+#### AgentError
+
+Error during agent execution or response generation.
+
+| Property   | Value            |
+| ---------- | ---------------- |
+| Code       | `AGENT_ERROR`    |
+| Retryable  | `false`          |
+| Default Message | (custom)     |
+
+**When it occurs:**
+- Agent failed to parse response from provider
+- Invalid tool call attempted
+- Response validation failed
+- Agent-specific processing error
+
+**Client handling:**
+1. Check agent configuration (model, temperature, maxTokens)
+2. Verify toolkit is properly configured
+3. Review previous responses for context issues
+4. Try different agent or provider
+
+**Example response:**
+```json
+{
+  "name": "AgentError",
+  "message": "Failed to parse response from claude-debate-1",
+  "code": "AGENT_ERROR",
+  "provider": "anthropic",
+  "retryable": false,
+  "cause": "Invalid JSON in response"
+}
+```
+
+---
+
+#### SessionError
+
+Error related to session management.
+
+| Property   | Value             |
+| ---------- | ----------------- |
+| Code       | `SESSION_ERROR`   |
+| Retryable  | `false`           |
+| Default Message | (custom)      |
+
+**When it occurs:**
+- Session not found (invalid sessionId)
+- Session in incompatible state (e.g., already completed)
+- Session data corruption
+- Storage operation failed
+
+**Client handling:**
+1. Verify sessionId is valid (use `list_sessions` to confirm)
+2. Check session status before operations
+3. Create new session if current one is corrupted
+4. Check storage permissions and disk space
+
+**Example response:**
+```json
+{
+  "name": "SessionError",
+  "message": "Session 'abc-123' not found",
+  "code": "SESSION_ERROR",
+  "retryable": false
+}
+```
+
+---
+
+### Retry Strategy Recommendations
+
+For retryable errors, implement exponential backoff:
+
+```typescript
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!error.retryable || attempt === maxRetries) {
+        throw error;
+      }
+      const delay = baseDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error('Retry limit exceeded');
+}
+```
+
+### Error Code Summary
+
+| Error Code          | Retryable | Typical Cause                  |
+| ------------------- | --------- | ------------------------------ |
+| `API_RATE_LIMIT`    | Yes       | Too many requests              |
+| `API_AUTH_FAILED`   | No        | Invalid/expired API key        |
+| `API_NETWORK_ERROR` | Yes       | Network connectivity issues    |
+| `API_TIMEOUT`       | Yes       | Request processing too slow    |
+| `AGENT_ERROR`       | No        | Agent execution failure        |
+| `SESSION_ERROR`     | No        | Invalid session state/ID       |
