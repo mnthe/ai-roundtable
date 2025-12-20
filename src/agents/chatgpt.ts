@@ -182,7 +182,7 @@ export class ChatGPTAgent extends BaseAgent {
 
       return result;
     } catch (error) {
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
       const convertedError = convertSDKError(error, 'openai');
       logger.error(
         {
@@ -191,7 +191,7 @@ export class ChatGPTAgent extends BaseAgent {
           agentId: this.id,
           agentName: this.name,
           round: context.currentRound,
-          duration,
+          durationMs,
         },
         'Failed to generate agent response'
       );

@@ -38,7 +38,7 @@ export interface GeminiAgentOptions {
  * - Multi-turn conversations
  */
 export class GeminiAgent extends BaseAgent {
-  private ai: GoogleGenAI;
+  private client: GoogleGenAI;
 
   constructor(config: AgentConfig, options?: GeminiAgentOptions) {
     super(config);
@@ -46,9 +46,9 @@ export class GeminiAgent extends BaseAgent {
     const apiKey = options?.apiKey ?? process.env.GOOGLE_API_KEY ?? '';
 
     if (options?.client) {
-      this.ai = options.client;
+      this.client = options.client;
     } else {
-      this.ai = new GoogleGenAI({ apiKey });
+      this.client = new GoogleGenAI({ apiKey });
     }
   }
 
@@ -82,7 +82,7 @@ export class GeminiAgent extends BaseAgent {
       const history: Content[] = [];
 
       // Create chat session with system instruction in config
-      const chat: Chat = this.ai.chats.create({
+      const chat: Chat = this.client.chats.create({
         model: this.model,
         config: {
           systemInstruction: systemPrompt,
@@ -178,7 +178,7 @@ export class GeminiAgent extends BaseAgent {
 
       return result;
     } catch (error) {
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
       const convertedError = convertSDKError(error, 'google');
       logger.error(
         {
@@ -187,7 +187,7 @@ export class GeminiAgent extends BaseAgent {
           agentId: this.id,
           agentName: this.name,
           round: context.currentRound,
-          duration,
+          durationMs,
         },
         'Failed to generate agent response'
       );
@@ -206,7 +206,7 @@ export class GeminiAgent extends BaseAgent {
     try {
       const response = await withRetry(
         () =>
-          this.ai.models.generateContent({
+          this.client.models.generateContent({
             model: this.model,
             contents: userMessage,
             config: {
@@ -234,7 +234,7 @@ export class GeminiAgent extends BaseAgent {
     try {
       const response = await withRetry(
         () =>
-          this.ai.models.generateContent({
+          this.client.models.generateContent({
             model: this.model,
             contents: prompt,
             config: {
@@ -260,7 +260,7 @@ export class GeminiAgent extends BaseAgent {
     try {
       const response = await withRetry(
         () =>
-          this.ai.models.generateContent({
+          this.client.models.generateContent({
             model: this.model,
             contents: 'test',
             config: {

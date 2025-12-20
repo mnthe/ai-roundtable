@@ -311,7 +311,7 @@ export class BenchmarkRunner {
       finalLevel: finalConsensus?.consensusLevel ?? 'low',
       finalScore: finalConsensus?.agreementLevel ?? 0,
       progression,
-      agreements: finalConsensus?.commonPoints ?? [],
+      agreements: finalConsensus?.commonGround ?? [],
       disagreements: finalConsensus?.disagreementPoints ?? [],
       summary: finalConsensus?.summary,
     };

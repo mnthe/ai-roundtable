@@ -176,14 +176,14 @@ export class ClaudeAgent extends BaseAgent {
         toolCalls,
       });
 
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
       logger.info(
         {
           sessionId: context.sessionId,
           agentId: this.id,
           agentName: this.name,
           round: context.currentRound,
-          duration,
+          durationMs,
           confidence: parsed.confidence,
           toolCallCount: toolCalls.length,
           citationCount: citations.length,
@@ -193,7 +193,7 @@ export class ClaudeAgent extends BaseAgent {
 
       return result;
     } catch (error) {
-      const duration = Date.now() - startTime;
+      const durationMs = Date.now() - startTime;
       const convertedError = convertSDKError(error, 'anthropic');
       logger.error(
         {
@@ -202,7 +202,7 @@ export class ClaudeAgent extends BaseAgent {
           agentId: this.id,
           agentName: this.name,
           round: context.currentRound,
-          duration,
+          durationMs,
         },
         'Failed to generate agent response'
       );
