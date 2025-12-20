@@ -3,14 +3,13 @@
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { type ZodType } from 'zod';
 
 /**
  * Tool: start_roundtable
  *
  * Start a new AI debate roundtable
  */
-export const startRoundtableTool: Tool = {
+const startRoundtableTool: Tool = {
   name: 'start_roundtable',
   description:
     'Start a new AI debate roundtable on a given topic. Agents will discuss the topic across multiple rounds, each providing their perspectives, reasoning, and citations.',
@@ -59,7 +58,7 @@ export const startRoundtableTool: Tool = {
  *
  * Continue an existing debate with additional rounds
  */
-export const continueRoundtableTool: Tool = {
+const continueRoundtableTool: Tool = {
   name: 'continue_roundtable',
   description:
     'Continue an existing debate roundtable with additional rounds. You can optionally provide a new focus question to guide the discussion.',
@@ -91,7 +90,7 @@ export const continueRoundtableTool: Tool = {
  *
  * Get consensus analysis for a debate
  */
-export const getConsensusTool: Tool = {
+const getConsensusTool: Tool = {
   name: 'get_consensus',
   description:
     'Analyze the consensus level in a debate session. Returns agreement level, common points of agreement, disagreement points, and a summary. By default, analyzes only the latest round to provide current consensus state.',
@@ -118,7 +117,7 @@ export const getConsensusTool: Tool = {
  *
  * List available AI agents
  */
-export const getAgentsTool: Tool = {
+const getAgentsTool: Tool = {
   name: 'get_agents',
   description:
     'List all available AI agents that can participate in debates. Returns agent ID, name, provider (e.g., anthropic, openai), and model information.',
@@ -133,7 +132,7 @@ export const getAgentsTool: Tool = {
  *
  * List all debate sessions with optional filters
  */
-export const listSessionsTool: Tool = {
+const listSessionsTool: Tool = {
   name: 'list_sessions',
   description:
     'List debate sessions with optional filters. Search by topic keyword, filter by mode/status, or date range.',
@@ -184,7 +183,7 @@ export const listSessionsTool: Tool = {
  *
  * Get detailed reasoning and confidence evolution for a specific agent in a session
  */
-export const getThoughtsTool: Tool = {
+const getThoughtsTool: Tool = {
   name: 'get_thoughts',
   description:
     'Retrieve the detailed reasoning process and confidence evolution for a specific agent across all rounds in a debate session. Returns all responses including position, reasoning, confidence levels, and citations.',
@@ -209,7 +208,7 @@ export const getThoughtsTool: Tool = {
  *
  * Export a debate session in various formats
  */
-export const exportSessionTool: Tool = {
+const exportSessionTool: Tool = {
   name: 'export_session',
   description:
     'Export a debate session in markdown or JSON format. Markdown format includes title, participants, round-by-round responses, and consensus analysis. JSON format provides the full structured data.',
@@ -236,7 +235,7 @@ export const exportSessionTool: Tool = {
  *
  * Control the execution state of a debate session
  */
-export const controlSessionTool: Tool = {
+const controlSessionTool: Tool = {
   name: 'control_session',
   description:
     'Control a debate session execution state. Actions: pause (temporarily halt), resume (continue paused session), stop (permanently end session with completed status).',
@@ -263,7 +262,7 @@ export const controlSessionTool: Tool = {
  *
  * Get detailed responses for a specific round
  */
-export const getRoundDetailsTool: Tool = {
+const getRoundDetailsTool: Tool = {
   name: 'get_round_details',
   description:
     'Retrieve all agent responses and consensus analysis for a specific round in a debate session. Returns full position statements, reasoning, citations, and tool calls.',
@@ -289,7 +288,7 @@ export const getRoundDetailsTool: Tool = {
  *
  * Get detailed response from a specific agent
  */
-export const getResponseDetailTool: Tool = {
+const getResponseDetailTool: Tool = {
   name: 'get_response_detail',
   description:
     'Retrieve detailed response from a specific agent in a debate session. If roundNumber is provided, returns the response for that round only. Otherwise, returns all responses from the agent across all rounds.',
@@ -319,7 +318,7 @@ export const getResponseDetailTool: Tool = {
  *
  * Get citations from the debate
  */
-export const getCitationsTool: Tool = {
+const getCitationsTool: Tool = {
   name: 'get_citations',
   description:
     'Retrieve all citations used in a debate session. Can be filtered by round number and/or agent ID. Returns citation title, URL, and optional snippet.',
@@ -349,7 +348,7 @@ export const getCitationsTool: Tool = {
  *
  * AI-powered synthesis of the entire debate
  */
-export const synthesizeDebateTool: Tool = {
+const synthesizeDebateTool: Tool = {
   name: 'synthesize_debate',
   description:
     'Analyze and summarize the entire debate using AI. Use this after the debate is completed.',
@@ -388,24 +387,6 @@ export const tools: Tool[] = [
 ];
 
 /**
- * Tool handler function types
- */
-export interface ToolHandlers {
-  start_roundtable: (args: unknown) => Promise<ToolResponse>;
-  continue_roundtable: (args: unknown) => Promise<ToolResponse>;
-  get_consensus: (args: unknown) => Promise<ToolResponse>;
-  get_agents: (args: unknown) => Promise<ToolResponse>;
-  list_sessions: (args: unknown) => Promise<ToolResponse>;
-  get_thoughts: (args: unknown) => Promise<ToolResponse>;
-  export_session: (args: unknown) => Promise<ToolResponse>;
-  control_session: (args: unknown) => Promise<ToolResponse>;
-  get_round_details: (args: unknown) => Promise<ToolResponse>;
-  get_response_detail: (args: unknown) => Promise<ToolResponse>;
-  get_citations: (args: unknown) => Promise<ToolResponse>;
-  synthesize_debate: (args: unknown) => Promise<ToolResponse>;
-}
-
-/**
  * Tool response type (matches MCP CallToolResult)
  */
 export interface ToolResponse {
@@ -414,13 +395,6 @@ export interface ToolResponse {
     text: string;
   }>;
   _meta?: Record<string, unknown>;
-}
-
-/**
- * Validate and parse tool arguments using Zod schema
- */
-export function validateToolArgs<T>(schema: ZodType<T>, args: unknown): T {
-  return schema.parse(args);
 }
 
 /**

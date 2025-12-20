@@ -10,12 +10,7 @@ import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
 import type { AgentConfig, AgentResponse } from '../../../src/types/index.js';
-import {
-  tools,
-  createSuccessResponse,
-  createErrorResponse,
-  synthesizeDebateTool,
-} from '../../../src/mcp/tools.js';
+import { tools, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
 import { SynthesizeDebateInputSchema } from '../../../src/types/schemas.js';
 
 describe('Synthesize Debate Tool', () => {
@@ -63,12 +58,13 @@ describe('Synthesize Debate Tool', () => {
     });
 
     it('should have proper schema definition', () => {
+      const synthesizeDebateTool = tools.find((t) => t.name === 'synthesize_debate');
       expect(synthesizeDebateTool).toBeDefined();
-      expect(synthesizeDebateTool.name).toBe('synthesize_debate');
-      expect(synthesizeDebateTool.inputSchema).toHaveProperty('properties');
-      expect(synthesizeDebateTool.inputSchema.properties).toHaveProperty('sessionId');
-      expect(synthesizeDebateTool.inputSchema.properties).toHaveProperty('synthesizer');
-      expect(synthesizeDebateTool.inputSchema.required).toContain('sessionId');
+      expect(synthesizeDebateTool!.name).toBe('synthesize_debate');
+      expect(synthesizeDebateTool!.inputSchema).toHaveProperty('properties');
+      expect(synthesizeDebateTool!.inputSchema.properties).toHaveProperty('sessionId');
+      expect(synthesizeDebateTool!.inputSchema.properties).toHaveProperty('synthesizer');
+      expect(synthesizeDebateTool!.inputSchema.required).toContain('sessionId');
     });
   });
 
