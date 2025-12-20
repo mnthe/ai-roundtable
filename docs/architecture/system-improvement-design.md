@@ -12,15 +12,15 @@ This document defines the architectural improvements for AI Roundtable to achiev
 
 ### Current State Summary
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| 4-Layer Prompt Structure | ✅ Implemented | Role Anchor, Behavioral Contract, Structural Enforcement, Verification Loop |
-| 4-Layer MCP Response | ✅ Implemented | Decision, AgentResponses, Evidence, Metadata layers |
-| Mode Strategy Pattern | ✅ Implemented | 7 modes with varying implementation patterns |
-| Tool Validation (Zod) | ✅ Implemented | Input validation for agent tools |
-| Response Content Validation | ❌ Missing | No validation of AI response content |
-| Context Optimization | ❌ Missing | Full context passed every round |
-| Exit Criteria | ❌ Missing | Only round-based termination |
+| Component                   | Status        | Notes                                                                       |
+| --------------------------- | ------------- | --------------------------------------------------------------------------- |
+| 4-Layer Prompt Structure    | ✅ Implemented | Role Anchor, Behavioral Contract, Structural Enforcement, Verification Loop |
+| 4-Layer MCP Response        | ✅ Implemented | Decision, AgentResponses, Evidence, Metadata layers                         |
+| Mode Strategy Pattern       | ✅ Implemented | 7 modes with varying implementation patterns                                |
+| Tool Validation (Zod)       | ✅ Implemented | Input validation for agent tools                                            |
+| Response Content Validation | ❌ Missing     | No validation of AI response content                                        |
+| Context Optimization        | ❌ Missing     | Full context passed every round                                             |
+| Exit Criteria               | ❌ Missing     | Only round-based termination                                                |
 
 ---
 
@@ -35,15 +35,15 @@ Custom modes (devils-advocate, delphi, red-team-blue-team) reimplement execution
 
 **Current Implementation Patterns:**
 
-| Mode | Pattern | Custom Logic |
-|------|---------|--------------|
-| collaborative | Standard | - |
-| adversarial | Standard | - |
-| socratic | Standard | - |
-| expert-panel | Standard | - |
-| devils-advocate | Custom | Role-based prompts, stance validation |
-| delphi | Custom | Anonymization, statistics injection |
-| red-team-blue-team | Custom | Team-based execution |
+| Mode               | Pattern  | Custom Logic                          |
+| ------------------ | -------- | ------------------------------------- |
+| collaborative      | Standard | -                                     |
+| adversarial        | Standard | -                                     |
+| socratic           | Standard | -                                     |
+| expert-panel       | Standard | -                                     |
+| devils-advocate    | Custom   | Role-based prompts, stance validation |
+| delphi             | Custom   | Anonymization, statistics injection   |
+| red-team-blue-team | Custom   | Team-based execution                  |
 
 ### Solution: Hook System
 
@@ -161,41 +161,123 @@ class StatisticsProcessor implements ContextProcessor {
 
 ### Refactoring Plan
 
-| Mode | Changes Required |
-|------|------------------|
-| devils-advocate | Use `getAgentRole()` + `validateResponse()` hooks |
-| delphi | Use `transformContext()` with AnonymizationProcessor + StatisticsProcessor |
-| red-team-blue-team | Use `getAgentRole()` for team assignment |
+| Mode               | Changes Required                                                           |
+| ------------------ | -------------------------------------------------------------------------- |
+| devils-advocate    | Use `getAgentRole()` + `validateResponse()` hooks                          |
+| delphi             | Use `transformContext()` with AnonymizationProcessor + StatisticsProcessor |
+| red-team-blue-team | Use `getAgentRole()` for team assignment                                   |
 
 ---
 
 ## 2. Adopted Features
 
-### 2.1 Verification Questions Enhancement
+### 2.1 Prompt Enforcement Enhancement
 
-**Current State:** Layer 4 (Verification Loop) exists but varies by mode.
+**Current Issues:**
 
-**Improvement:** Standardize verification checklist across modes.
+| Issue                | Description                                                | Impact                                                      |
+| -------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| Stance not provided  | Devils-advocate agents don't include YES/NO/NEUTRAL stance | System force-assigns stance, losing agent's actual judgment |
+| Tool usage imbalance | Claude: 3-6 calls, ChatGPT: 0-3, Gemini: 0-2 per round     | Inconsistent evidence quality across agents                 |
+
+#### 2.1.1 Layer 2: Behavioral Contract Enhancement
+
+Add tool usage requirements to all modes:
 
 ```typescript
-interface VerificationConfig {
-  // Common checks for all modes
-  commonChecks: string[];
-  // Mode-specific additional checks
-  modeSpecificChecks: string[];
+const ENHANCED_BEHAVIORAL_CONTRACT = {
+  mustBehaviors: [
+    // Existing...
+    'Use search_web or fact_check tool for ANY factual claim',
+    'Cite sources from tool results in your response',
+    'Verify statistics and recent events with tools before stating',
+  ],
+  mustNotBehaviors: [
+    // Existing...
+    'Make factual claims without tool-based verification',
+    'State statistics or data without source citation',
+  ],
+};
+```
+
+#### 2.1.2 Layer 3: Structural Enforcement Enhancement
+
+For devils-advocate mode, make stance a required field:
+
+```typescript
+// Devils-advocate specific output format
+const DEVILS_ADVOCATE_OUTPUT_FORMAT = `
+Your response MUST be valid JSON with these REQUIRED fields:
+
+{
+  "stance": "YES" | "NO" | "NEUTRAL",  // ⚠️ REQUIRED - Your assigned position
+  "position": "Your position statement",
+  "reasoning": "Your detailed reasoning",
+  "confidence": 0.0-1.0
 }
 
+⚠️ CRITICAL: Responses without explicit "stance" field will be REJECTED.
+`;
+```
+
+#### 2.1.3 Layer 4: Verification Questions Enhancement
+
+**Common checks (all modes):**
+
+```typescript
 const COMMON_VERIFICATION_CHECKS = [
   'Is every claim supported by evidence or clearly marked as inference?',
   'Have I addressed the topic directly?',
   'Is my confidence level justified by the evidence?',
   'Have I considered alternative viewpoints?',
+  // NEW: Tool usage checks
+  'Did I use tools (search_web, fact_check) to verify factual claims?',
+  'Did I cite sources from tool results?',
 ];
 ```
 
+**Mode-specific checks:**
+
+```typescript
+const MODE_SPECIFIC_CHECKS: Record<DebateMode, string[]> = {
+  'devils-advocate': [
+    'Did I explicitly include my stance (YES/NO/NEUTRAL) in the response?',
+    'Does my reasoning support my assigned stance?',
+  ],
+  'expert-panel': [
+    'Did I analyze from my assigned perspective?',
+  ],
+  // Other modes...
+};
+```
+
+#### 2.1.4 Tool Usage Guidelines
+
+```typescript
+interface ToolUsageGuideline {
+  /** Triggers that REQUIRE tool usage */
+  requiredTriggers: string[];
+
+  /** Minimum recommended calls per round */
+  minRecommendedCalls: number;
+}
+
+const TOOL_USAGE_GUIDELINE: ToolUsageGuideline = {
+  requiredTriggers: [
+    'Factual claims (statistics, dates, events)',
+    'References to external sources',
+    'Claims about current/recent events',
+    'Comparison with industry standards',
+  ],
+  minRecommendedCalls: 1,  // At least 1 tool call per round
+};
+```
+
 **Implementation:**
-- Add `commonChecks` to `buildVerificationLoop()` in prompt-builder
-- Each mode adds `modeSpecificChecks` on top
+- Update `buildBehavioralContract()` in prompt-builder with tool usage rules
+- Update `buildStructuralEnforcement()` for devils-advocate stance requirement
+- Standardize `buildVerificationLoop()` with common + mode-specific checks
+- Add tool usage guideline to system prompt preamble
 
 ### 2.2 Groupthink Detection
 
@@ -381,42 +463,485 @@ While you may acknowledge other perspectives, your primary analysis MUST be thro
 - Assign perspectives via `getAgentRole()` hook
 - Include perspective in `AgentResponseSummary` for clarity
 
+### 2.5 Sequential Mode Performance
+
+**Problem:** Sequential modes (adversarial, socratic, devils-advocate) are significantly slower than parallel modes.
+
+| Mode                     | Execution Time | Comparison |
+| ------------------------ | -------------- | ---------- |
+| Collaborative (parallel) | ~80s           | Baseline   |
+| Adversarial (sequential) | ~241s          | 3x slower  |
+
+**Root Causes:**
+1. Sequential execution is by design (Agent N must see Agent 1~N-1 responses)
+2. Excessive tool calls (Claude: up to 6 per response)
+3. Redundant searches when info already exists in context
+
+#### 2.5.1 Mode-Aware Tool Usage Policy
+
+```typescript
+interface ToolUsagePolicy {
+  minCalls: number;
+  maxCalls: number;
+  guidance: string;
+}
+
+type ExecutionPattern = 'parallel' | 'sequential';
+
+const TOOL_USAGE_POLICIES: Record<ExecutionPattern, ToolUsagePolicy> = {
+  parallel: {
+    minCalls: 1,
+    maxCalls: 6,
+    guidance: 'Use tools freely to gather comprehensive evidence.',
+  },
+  sequential: {
+    minCalls: 1,
+    maxCalls: 2,
+    guidance: 'Leverage previous responses; limit to 1-2 essential tool calls.',
+  },
+};
+
+// Map modes to execution patterns
+const MODE_EXECUTION_PATTERN: Record<DebateMode, ExecutionPattern> = {
+  'collaborative': 'parallel',
+  'expert-panel': 'parallel',
+  'delphi': 'parallel',
+  'adversarial': 'sequential',
+  'socratic': 'sequential',
+  'devils-advocate': 'sequential',
+  'red-team-blue-team': 'parallel',  // Teams run in parallel
+};
+```
+
+#### 2.5.2 Sequential Mode Prompt Addition
+
+Add to Layer 2 (Behavioral Contract) for sequential modes:
+
+```typescript
+const SEQUENTIAL_MODE_TOOL_GUIDANCE = `
+## Tool Usage in Sequential Discussion
+
+Previous participants have already gathered evidence and research.
+Before making a tool call, check if the information already exists in their responses.
+
+MUST:
+- Review previous responses for existing evidence before searching
+- Limit tool calls to 1-2 essential searches only
+- Focus on NEW information not already covered
+
+MUST NOT:
+- Repeat searches that previous agents have done
+- Use more than 2 tool calls per response
+- Search for information already present in context
+`;
+```
+
+#### 2.5.3 Additional Optimizations (P2)
+
+| Optimization                            | Expected Impact | Complexity |
+| --------------------------------------- | --------------- | ---------- |
+| Lightweight model option for sequential | 40-60% faster   | Medium     |
+| Reduced max_tokens for sequential       | 10-20% faster   | Low        |
+| Tool result caching across agents       | 20-30% faster   | Medium     |
+
+```typescript
+interface SequentialModeConfig {
+  /** Use lighter/faster model for sequential modes */
+  useLightModel?: boolean;
+
+  /** Reduced max tokens for faster responses */
+  maxTokens?: number;  // Default: 2048 instead of 4096
+
+  /** Cache tool results for reuse by subsequent agents */
+  cacheToolResults?: boolean;
+}
+```
+
+**Implementation:**
+- Add `executionPattern` property to `BaseModeStrategy`
+- Inject tool policy based on execution pattern in `buildBehavioralContract()`
+- Add sequential-specific guidance to prompt builder
+
+#### 2.5.4 Sequential Parallelization Strategy
+
+Based on AI Roundtable evaluation, apply mode-specific parallelization:
+
+| Mode | Parallelization | Rationale |
+|------|----------------|-----------|
+| devils-advocate | ✅ Full | Roles are independent; evaluator synthesizes at end |
+| socratic | ⚠️ Conditional | Question-answer chains need some sequentiality |
+| adversarial | ❌ Minimal | Direct rebuttal requires seeing opponent's argument |
+
+**Implementation:**
+
+```typescript
+type ParallelizationLevel = 'none' | 'last-only' | 'full';
+
+const MODE_PARALLELIZATION: Record<DebateMode, ParallelizationLevel> = {
+  'collaborative': 'full',
+  'expert-panel': 'full',
+  'delphi': 'full',
+  'devils-advocate': 'last-only',  // Evaluator sees all
+  'socratic': 'none',              // Keep sequential
+  'adversarial': 'none',           // Keep sequential
+  'red-team-blue-team': 'full',    // Teams parallel
+};
+```
+
+**Last-Only Execution:**
+
+```typescript
+async executeLastOnly(agents, context, toolkit) {
+  if (agents.length <= 1) {
+    return this.executeSequential(agents, context, toolkit);
+  }
+
+  const lastAgent = agents[agents.length - 1];
+  const otherAgents = agents.slice(0, -1);
+
+  // Others run in parallel (see only previous round)
+  const parallelResponses = await Promise.all(
+    otherAgents.map(agent => agent.generateResponse(context))
+  );
+
+  // Last agent sees all current round responses
+  const lastResponse = await lastAgent.generateResponse({
+    ...context,
+    previousResponses: [...context.previousResponses, ...parallelResponses],
+  });
+
+  return [...parallelResponses, lastResponse];
+}
+```
+
+**Expected Impact:** ~60% latency reduction for devils-advocate mode.
+
 ---
 
-## 3. Implementation Roadmap
+## 3. Feature Flags & Benchmarking
+
+### 3.1 Feature Flag System
+
+Enable gradual rollout and A/B testing of new features.
+
+```typescript
+interface FeatureFlags {
+  /** Sequential mode parallelization */
+  sequentialParallelization: {
+    enabled: boolean;
+    level: ParallelizationLevel;
+    modes?: DebateMode[];  // Override per mode
+  };
+
+  /** Tool usage enforcement */
+  toolEnforcement: {
+    enabled: boolean;
+    level: 'strict' | 'normal' | 'relaxed';
+    minCalls?: number;
+    maxCalls?: number;
+  };
+
+  /** Groupthink detection */
+  groupthinkDetection: {
+    enabled: boolean;
+    threshold?: number;  // Agreement level to trigger warning
+  };
+
+  /** Exit criteria */
+  exitCriteria: {
+    enabled: boolean;
+    consensusThreshold?: number;
+    convergenceRounds?: number;
+  };
+
+  /** Prompt enforcement level */
+  promptEnforcement: {
+    level: 'strict' | 'normal' | 'relaxed';
+    requireStance?: boolean;      // For devils-advocate
+    requireToolUsage?: boolean;   // For all modes
+  };
+}
+
+const DEFAULT_FLAGS: FeatureFlags = {
+  sequentialParallelization: { enabled: false, level: 'none' },
+  toolEnforcement: { enabled: true, level: 'normal' },
+  groupthinkDetection: { enabled: true, threshold: 0.9 },
+  exitCriteria: { enabled: false },
+  promptEnforcement: { level: 'normal' },
+};
+```
+
+### 3.1.1 Configuration Sources
+
+Flags can be set from multiple sources with clear precedence:
+
+```typescript
+type FlagSource = 'session' | 'env' | 'default';
+
+interface FlagResolution {
+  value: unknown;
+  source: FlagSource;
+}
+```
+
+**Resolution Order (highest to lowest):**
+
+| Priority | Source | Use Case |
+|----------|--------|----------|
+| 1 | Session-level | Per-debate override via MCP tool params |
+| 2 | Environment | MCP server config (.env, mcp.json) |
+| 3 | Default | Hardcoded fallback |
+
+### 3.1.2 Environment Variable Configuration
+
+```bash
+# .env or MCP server environment
+
+# Sequential parallelization
+ROUNDTABLE_PARALLEL_ENABLED=true
+ROUNDTABLE_PARALLEL_LEVEL=last-only  # none | last-only | full
+
+# Tool enforcement
+ROUNDTABLE_TOOL_ENFORCEMENT=normal   # strict | normal | relaxed
+ROUNDTABLE_TOOL_MIN_CALLS=1
+ROUNDTABLE_TOOL_MAX_CALLS=6
+
+# Groupthink detection
+ROUNDTABLE_GROUPTHINK_ENABLED=true
+ROUNDTABLE_GROUPTHINK_THRESHOLD=0.9
+
+# Exit criteria
+ROUNDTABLE_EXIT_ENABLED=false
+ROUNDTABLE_EXIT_CONSENSUS=0.9
+ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS=2
+
+# Prompt enforcement
+ROUNDTABLE_PROMPT_LEVEL=normal       # strict | normal | relaxed
+```
+
+**Parsing:**
+
+```typescript
+function loadFlagsFromEnv(): Partial<FeatureFlags> {
+  return {
+    sequentialParallelization: {
+      enabled: process.env.ROUNDTABLE_PARALLEL_ENABLED === 'true',
+      level: (process.env.ROUNDTABLE_PARALLEL_LEVEL as ParallelizationLevel) ?? 'none',
+    },
+    toolEnforcement: {
+      enabled: true,
+      level: (process.env.ROUNDTABLE_TOOL_ENFORCEMENT as 'strict' | 'normal' | 'relaxed') ?? 'normal',
+      minCalls: parseInt(process.env.ROUNDTABLE_TOOL_MIN_CALLS ?? '1'),
+      maxCalls: parseInt(process.env.ROUNDTABLE_TOOL_MAX_CALLS ?? '6'),
+    },
+    // ... other flags
+  };
+}
+```
+
+### 3.1.3 Session-Level Override (MCP Tool Params)
+
+```typescript
+// start_roundtable tool input extension
+interface StartRoundtableInput {
+  topic: string;
+  mode?: DebateMode;
+  agents?: string[];
+  rounds?: number;
+
+  // NEW: Feature flag overrides
+  flags?: Partial<FeatureFlags>;
+}
+
+// Example MCP call
+{
+  "tool": "start_roundtable",
+  "params": {
+    "topic": "AI safety debate",
+    "mode": "adversarial",
+    "flags": {
+      "sequentialParallelization": { "enabled": true, "level": "last-only" },
+      "toolEnforcement": { "level": "strict" }
+    }
+  }
+}
+```
+
+### 3.1.4 Flag Resolution Implementation
+
+```typescript
+class FeatureFlagResolver {
+  private envFlags: Partial<FeatureFlags>;
+  private defaultFlags: FeatureFlags = DEFAULT_FLAGS;
+
+  constructor() {
+    this.envFlags = loadFlagsFromEnv();
+  }
+
+  resolve(sessionOverride?: Partial<FeatureFlags>): FeatureFlags {
+    return deepMerge(
+      this.defaultFlags,      // Lowest priority
+      this.envFlags,          // Middle priority
+      sessionOverride ?? {}   // Highest priority
+    );
+  }
+
+  // For debugging/logging
+  resolveWithSource(sessionOverride?: Partial<FeatureFlags>): Record<string, FlagResolution> {
+    // Returns each flag value with its source
+  }
+}
+```
+
+---
+
+### 3.2 Benchmark Framework
+
+Measure impact of feature flags on quality and performance.
+
+#### 3.2.1 Metrics
+
+```typescript
+interface BenchmarkMetrics {
+  // Performance
+  latency: {
+    totalMs: number;
+    perRoundMs: number[];
+    perAgentMs: Record<string, number>;
+  };
+
+  // Quality - Interaction
+  interaction: {
+    crossReferenceCount: number;    // How often agents reference each other
+    rebuttalDepth: number;          // Levels of argument-counterargument
+    questionResponsePairs: number;  // For socratic mode
+  };
+
+  // Quality - Content
+  content: {
+    avgConfidence: number;
+    confidenceVariance: number;
+    toolCallsPerAgent: Record<string, number>;
+    citationCount: number;
+  };
+
+  // Quality - Consensus
+  consensus: {
+    agreementLevel: number;
+    convergenceRound: number | null;  // When positions stabilized
+    groupthinkWarning: boolean;
+  };
+}
+```
+
+#### 3.2.2 Benchmark Scenarios
+
+```typescript
+interface BenchmarkScenario {
+  name: string;
+  topic: string;
+  mode: DebateMode;
+  agents: string[];
+  rounds: number;
+  flags: Partial<FeatureFlags>;
+}
+
+const BENCHMARK_SCENARIOS: BenchmarkScenario[] = [
+  // Baseline (no optimization)
+  {
+    name: 'adversarial-baseline',
+    topic: 'Standard benchmark topic',
+    mode: 'adversarial',
+    agents: ['claude', 'chatgpt', 'gemini'],
+    rounds: 2,
+    flags: { sequentialParallelization: { enabled: false, level: 'none' } },
+  },
+  // With parallelization
+  {
+    name: 'adversarial-parallel',
+    topic: 'Standard benchmark topic',
+    mode: 'adversarial',
+    agents: ['claude', 'chatgpt', 'gemini'],
+    rounds: 2,
+    flags: { sequentialParallelization: { enabled: true, level: 'last-only' } },
+  },
+  // ... more scenarios
+];
+```
+
+#### 3.2.3 Comparison Report
+
+```typescript
+interface BenchmarkComparison {
+  baseline: BenchmarkMetrics;
+  variant: BenchmarkMetrics;
+
+  delta: {
+    latencyReduction: number;      // Percentage
+    interactionChange: number;     // Percentage (negative = degradation)
+    qualityScore: number;          // Composite score
+  };
+
+  recommendation: 'adopt' | 'reject' | 'conditional';
+  conditions?: string[];  // e.g., "Only for devils-advocate mode"
+}
+```
+
+### 3.3 Rollout Strategy
+
+| Phase | Scope | Flags Enabled | Duration |
+|-------|-------|---------------|----------|
+| 1 | Internal testing | All (opt-in) | 1 week |
+| 2 | devils-advocate only | sequentialParallelization | 2 weeks |
+| 3 | Expand to socratic | + toolEnforcement | 2 weeks |
+| 4 | Full rollout | All features | - |
+
+**Rollback Trigger:**
+- Latency improvement < 30% OR
+- Interaction quality drop > 20% OR
+- User-reported quality issues
+
+---
+
+## 4. Implementation Roadmap
 
 ### P0 - Immediate (Foundation)
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Hook System | Add `transformContext`, `validateResponse`, `getAgentRole` to BaseModeStrategy | Medium |
-| Response Validators | Create validator interface and built-in validators | Low |
-| Refactor devils-advocate | Use hooks instead of custom execution | Medium |
+| Item                     | Description                                                                    | Effort |
+| ------------------------ | ------------------------------------------------------------------------------ | ------ |
+| Feature Flag System      | Implement FeatureFlags interface and resolution                                | Medium |
+| Hook System              | Add `transformContext`, `validateResponse`, `getAgentRole` to BaseModeStrategy | Medium |
+| Response Validators      | Create validator interface and built-in validators                             | Low    |
+| Refactor devils-advocate | Use hooks instead of custom execution                                          | Medium |
 
 ### P1 - Short-term (Core Features)
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Context Processors | Create processor interface, implement Anonymization/Statistics | Low |
-| Refactor delphi | Use context processors | Low |
-| Exit Criteria | Implement criteria checking in DebateEngine | Medium |
-| Groupthink Detection | Add to ConsensusAnalyzer | Low |
+| Item                   | Description                                                    | Effort |
+| ---------------------- | -------------------------------------------------------------- | ------ |
+| Benchmark Framework    | Implement metrics collection and comparison                    | Medium |
+| Context Processors     | Create processor interface, implement Anonymization/Statistics | Low    |
+| Refactor delphi        | Use context processors                                         | Low    |
+| Exit Criteria          | Implement criteria checking in DebateEngine                    | Medium |
+| Groupthink Detection   | Add to ConsensusAnalyzer                                       | Low    |
+| Sequential Tool Policy | Mode-aware tool usage limits (1-2 calls for sequential)        | Low    |
 
 ### P2 - Medium-term (Quality)
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Verification Questions | Standardize Layer 4 checks across modes | Low |
-| Refactor red-team-blue-team | Use hooks for team assignment | Medium |
-| Perspective Anchors | Add perspective assignment to expert-panel mode | Low |
+| Item                        | Description                                                   | Effort |
+| --------------------------- | ------------------------------------------------------------- | ------ |
+| Prompt Enforcement          | Layer 2-4 enhancement (tool usage, stance, verification)      | Medium |
+| Sequential Parallelization  | Implement last-only execution for devils-advocate             | Medium |
+| Refactor red-team-blue-team | Use hooks for team assignment                                 | Medium |
+| Perspective Anchors         | Add perspective assignment to expert-panel mode               | Low    |
+| Sequential Performance      | Light model option, reduced max_tokens, tool result caching   | Medium |
 
 ---
 
-## 4. Deferred Features (Reference Only)
+## 5. Deferred Features (Reference Only)
 
 These features were considered but not planned for implementation.
 
-### 4.1 Epistemic Labeling
+### 5.1 Epistemic Labeling
 
 **Concept:** Tag claims as `[FACT]`, `[INFER]`, `[ASSUME]`
 
@@ -427,7 +952,7 @@ These features were considered but not planned for implementation.
 
 **Reconsider When:** Need for automated fact-checking pipeline
 
-### 4.2 Numeric Citation
+### 5.2 Numeric Citation
 
 **Concept:** Reference sources as `[1]`, `[2]` inline
 
@@ -437,7 +962,7 @@ These features were considered but not planned for implementation.
 
 **Reconsider When:** Need for inline citation rendering in export
 
-### 4.3 Safety Evaluator
+### 5.3 Safety Evaluator
 
 **Concept:** 3-tier safety filtering (warn, review, reject)
 
@@ -447,7 +972,7 @@ These features were considered but not planned for implementation.
 
 **Reconsider When:** Need for custom safety policies beyond provider defaults
 
-### 4.4 Progressive Summarization
+### 5.4 Progressive Summarization
 
 **Concept:** Compress older rounds to save context window
 
@@ -458,7 +983,7 @@ These features were considered but not planned for implementation.
 
 **Reconsider When:** Supporting 10+ round debates
 
-### 4.5 DebateState & Claim ID
+### 5.5 DebateState & Claim ID
 
 **Concept:** Assign IDs to claims, track rebuttals and revisions across rounds
 
@@ -471,7 +996,7 @@ These features were considered but not planned for implementation.
 
 ---
 
-## 5. Deleted Documents
+## 6. Deleted Documents
 
 The following documents are superseded by this design:
 
