@@ -15,3 +15,12 @@ export type { AIConsensusAnalyzerConfig, AIAnalysisDiagnostics } from './ai-cons
 
 export { KeyPointsExtractor } from './key-points-extractor.js';
 export type { KeyPointsExtractorConfig, KeyPointsResult } from './key-points-extractor.js';
+
+export { detectGroupthink } from './groupthink-detector.js';
+
+export {
+  checkExitCriteria,
+  checkPositionConvergence,
+  createDefaultExitCriteria,
+  validateExitCriteria,
+} from './exit-criteria.js';
