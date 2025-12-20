@@ -10,6 +10,9 @@ import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
 import { LIGHT_MODELS } from '../agents/setup.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('KeyPointsExtractor');
 
 /**
  * Configuration for KeyPointsExtractor
@@ -111,9 +114,9 @@ export class KeyPointsExtractor {
           const keyPoints = await this.extractWithAI(agent, response);
           return { agentId: response.agentId, keyPoints };
         } catch (error) {
-          console.warn(
-            `[KeyPointsExtractor] AI extraction failed for ${response.agentId}:`,
-            error
+          logger.warn(
+            { err: error, agentId: response.agentId },
+            'AI extraction failed'
           );
           // Fallback for this specific response
           if (this.fallbackToRuleBased) {
@@ -277,7 +280,7 @@ export class KeyPointsExtractor {
 
       throw new Error('keyPoints not found in parsed response');
     } catch (error) {
-      console.warn('[KeyPointsExtractor] Failed to parse AI response:', error);
+      logger.warn({ err: error }, 'Failed to parse AI response');
       // Fallback: extract from ORIGINAL reasoning, not AI response
       if (this.fallbackToRuleBased) {
         return this.extractWithRules(originalReasoning);

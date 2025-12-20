@@ -11,6 +11,9 @@ import { ChatGPTAgent } from './chatgpt.js';
 import { GeminiAgent } from './gemini.js';
 import { PerplexityAgent } from './perplexity.js';
 import type { AIProvider, AgentConfig } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('AgentSetup');
 
 /**
  * API key configuration for each provider
@@ -200,7 +203,7 @@ export function createDefaultAgents(registry: AgentRegistry): AgentConfig[] {
       agents.push(config);
     } catch (error) {
       // Agent might already exist, skip
-      console.warn(`Could not create default agent for ${provider}:`, error);
+      logger.warn({ err: error, provider }, 'Could not create default agent');
     }
   }
 
@@ -229,8 +232,9 @@ export async function runHealthChecks(
       // Update registry status based on health check
       if (!result.healthy) {
         registry.deactivateAgent(info.id, result.error);
-        console.warn(
-          `[ai-roundtable] Agent "${info.name}" (${info.provider}) health check failed: ${result.error}`
+        logger.warn(
+          { agentId: info.id, agentName: info.name, provider: info.provider, error: result.error },
+          'Agent health check failed'
         );
       }
 

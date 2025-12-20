@@ -94,7 +94,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
 
     // Log warnings if any
     for (const warning of setupResult.warnings) {
-      console.warn(`[ai-roundtable] ${warning}`);
+      logger.warn({ warning }, 'Setup warning');
     }
 
     // Initialize AI consensus analyzer with available agents

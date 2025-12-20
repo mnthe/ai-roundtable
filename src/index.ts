@@ -9,6 +9,9 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './mcp/server.js';
+import { createLogger } from './utils/logger.js';
+
+const logger = createLogger('Main');
 
 // Re-export types for external use
 export * from './types/index.js';
@@ -28,4 +31,7 @@ async function main() {
   await server.connect(transport);
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  logger.fatal({ err: error }, 'Failed to start server');
+  process.exit(1);
+});

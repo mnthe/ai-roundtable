@@ -12,6 +12,9 @@ import type {
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateModeStrategy } from '../modes/base.js';
 import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
+import { createLogger } from '../utils/logger.js';
+
+const logger = createLogger('DebateEngine');
 
 export interface DebateEngineOptions {
   toolkit?: AgentToolkit;
@@ -137,7 +140,7 @@ export class DebateEngine {
         responses.push(response);
       } catch (error) {
         // Log error but continue with other agents
-        console.error(`Error from agent ${agent.id}:`, error);
+        logger.error({ err: error, agentId: agent.id }, 'Error from agent');
       }
     }
 
@@ -161,7 +164,7 @@ export class DebateEngine {
         return await this.aiConsensusAnalyzer.analyzeConsensus(responses, topic);
       } catch (error) {
         // Fall back to rule-based on error
-        console.warn('[DebateEngine] AI consensus analysis failed, falling back to rule-based:', error);
+        logger.warn({ err: error }, 'AI consensus analysis failed, falling back to rule-based');
       }
     }
 

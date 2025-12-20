@@ -51,10 +51,7 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
       // Pass explicit agent index to ensure correct role assignment
       const currentContext: DebateContext = {
         ...context,
-        previousResponses: [
-          ...context.previousResponses,
-          ...responses,
-        ],
+        previousResponses: [...context.previousResponses, ...responses],
         // Add mode-specific prompt based on agent role (index i in current round)
         modePrompt: this.buildAgentPromptForIndex(context, i),
       };

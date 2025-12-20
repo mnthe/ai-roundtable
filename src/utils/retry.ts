@@ -3,6 +3,9 @@
  */
 
 import { RoundtableError } from '../errors/index.js';
+import { createLogger } from './logger.js';
+
+const logger = createLogger('Retry');
 
 export interface RetryOptions {
   /**
@@ -148,13 +151,16 @@ export async function withRetry<T>(
         opts.backoffFactor
       );
 
-      // Log retry attempt (optional - can be enabled via debug flag)
-      if (process.env.DEBUG === 'true') {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.warn(
-          `Retry attempt ${attempt + 1}/${opts.maxRetries} after ${Math.round(delay)}ms delay. Error: ${errorMessage}`
-        );
-      }
+      // Log retry attempt at debug level
+      logger.debug(
+        {
+          attempt: attempt + 1,
+          maxRetries: opts.maxRetries,
+          delayMs: Math.round(delay),
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Retry attempt'
+      );
 
       // Wait before retrying
       await sleep(delay);
