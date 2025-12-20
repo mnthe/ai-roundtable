@@ -77,7 +77,7 @@ export function detectApiKeys(): ApiKeyConfig {
   return {
     anthropic: process.env.ANTHROPIC_API_KEY,
     openai: process.env.OPENAI_API_KEY,
-    google: process.env.GOOGLE_AI_API_KEY,
+    google: process.env.GOOGLE_API_KEY,
     perplexity: process.env.PERPLEXITY_API_KEY,
   };
 }
@@ -100,7 +100,7 @@ export function checkProviderAvailability(apiKeys: ApiKeyConfig): ProviderAvaila
     {
       provider: 'google',
       available: !!apiKeys.google,
-      reason: apiKeys.google ? undefined : 'GOOGLE_AI_API_KEY not set',
+      reason: apiKeys.google ? undefined : 'GOOGLE_API_KEY not set',
     },
     {
       provider: 'perplexity',
@@ -153,7 +153,7 @@ export function setupProviders(registry: AgentRegistry, apiKeys?: ApiKeyConfig):
       DEFAULT_MODELS.google
     );
   } else {
-    warnings.push('Gemini agent not available: GOOGLE_AI_API_KEY not set');
+    warnings.push('Gemini agent not available: GOOGLE_API_KEY not set');
   }
 
   // Register Perplexity
@@ -270,7 +270,7 @@ export async function setupAgents(
   if (agents.length === 0) {
     result.warnings.push(
       'No agents available. Please set at least one API key: ' +
-        'ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_AI_API_KEY, or PERPLEXITY_API_KEY'
+        'ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, or PERPLEXITY_API_KEY'
     );
     return result;
   }

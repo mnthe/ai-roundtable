@@ -29,7 +29,7 @@ describe('Setup Module', () => {
     it('should detect all API keys from environment', () => {
       process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
       process.env.OPENAI_API_KEY = 'test-openai-key';
-      process.env.GOOGLE_AI_API_KEY = 'test-google-key';
+      process.env.GOOGLE_API_KEY = 'test-google-key';
       process.env.PERPLEXITY_API_KEY = 'test-perplexity-key';
 
       const keys = detectApiKeys();
@@ -43,7 +43,7 @@ describe('Setup Module', () => {
     it('should return undefined for missing keys', () => {
       delete process.env.ANTHROPIC_API_KEY;
       delete process.env.OPENAI_API_KEY;
-      delete process.env.GOOGLE_AI_API_KEY;
+      delete process.env.GOOGLE_API_KEY;
       delete process.env.PERPLEXITY_API_KEY;
 
       const keys = detectApiKeys();
@@ -57,7 +57,7 @@ describe('Setup Module', () => {
     it('should detect partial API keys', () => {
       delete process.env.ANTHROPIC_API_KEY;
       process.env.OPENAI_API_KEY = 'test-openai-key';
-      delete process.env.GOOGLE_AI_API_KEY;
+      delete process.env.GOOGLE_API_KEY;
       delete process.env.PERPLEXITY_API_KEY;
 
       const keys = detectApiKeys();
@@ -136,7 +136,7 @@ describe('Setup Module', () => {
       expect(registry.hasProvider('google')).toBe(false);
       expect(registry.hasProvider('perplexity')).toBe(false);
       expect(result.warnings).toContain('ChatGPT agent not available: OPENAI_API_KEY not set');
-      expect(result.warnings).toContain('Gemini agent not available: GOOGLE_AI_API_KEY not set');
+      expect(result.warnings).toContain('Gemini agent not available: GOOGLE_API_KEY not set');
       expect(result.warnings).toContain('Perplexity agent not available: PERPLEXITY_API_KEY not set');
     });
 

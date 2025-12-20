@@ -40,7 +40,7 @@ Create a `.env` file with your API keys:
 # Required: At least one API key
 ANTHROPIC_API_KEY=sk-ant-...     # For Claude agents
 OPENAI_API_KEY=sk-...            # For ChatGPT agents
-GOOGLE_AI_API_KEY=...            # For Gemini agents
+GOOGLE_API_KEY=...               # For Gemini agents
 PERPLEXITY_API_KEY=pplx-...      # For Perplexity agents
 
 # Optional
@@ -64,7 +64,7 @@ Add to your Claude Desktop configuration:
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
         "OPENAI_API_KEY": "sk-...",
-        "GOOGLE_AI_API_KEY": "...",
+        "GOOGLE_API_KEY": "...",
         "PERPLEXITY_API_KEY": "pplx-..."
       }
     }
@@ -469,7 +469,7 @@ During debates, agents have access to these tools:
 | -------------------- | ---------------------------- | ------------------------------------ |
 | `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
 | `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
-| `GOOGLE_AI_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
+| `GOOGLE_API_KEY`  | Google AI API key for Gemini | For Gemini agents                    |
 | `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
 | `DATABASE_PATH`      | SQLite database path         | No (default: `./data/roundtable.db`) |
 | `LOG_LEVEL`          | Logging verbosity            | No (default: `info`)                 |
