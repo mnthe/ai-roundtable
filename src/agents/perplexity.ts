@@ -13,7 +13,6 @@ import type {
 import { BaseAgent, type AgentToolkit } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
-import { convertSDKError } from './utils/error-converter.js';
 import type {
   AgentConfig,
   AgentResponse,
@@ -552,26 +551,18 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
-   * Health check: Test Perplexity API connection with minimal request
+   * Perform minimal API call to verify connectivity
    */
-  override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_tokens: 10,
-            messages: [{ role: 'user', content: 'test' }],
-          }),
-        { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
-      );
-      return { healthy: true };
-    } catch (error) {
-      return {
-        healthy: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+  protected override async performHealthCheck(): Promise<void> {
+    await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'test' }],
+        }),
+      { maxRetries: 3, retryableErrors: RETRYABLE_ERRORS }
+    );
   }
 
   /**

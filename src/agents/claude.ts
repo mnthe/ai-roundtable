@@ -265,27 +265,18 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Health check: Test Claude API connection with minimal request
+   * Perform minimal API call to verify connectivity
    */
-  override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      await withRetry(
-        () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: 10,
-            messages: [{ role: 'user', content: 'test' }],
-          }),
-        { maxRetries: 3 }
-      );
-      return { healthy: true };
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'anthropic');
-      return {
-        healthy: false,
-        error: convertedError.message,
-      };
-    }
+  protected override async performHealthCheck(): Promise<void> {
+    await withRetry(
+      () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'test' }],
+        }),
+      { maxRetries: 3 }
+    );
   }
 
   /**

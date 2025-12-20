@@ -254,37 +254,28 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
-   * Health check: Test Gemini API connection with minimal request
+   * Perform minimal API call to verify connectivity
    */
-  override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.models.generateContent({
-            model: this.model,
-            contents: 'test',
-            config: {
-              maxOutputTokens: 10,
-              // Disable thinking for health check to get standard text response
-              // Gemini 3 models have thinking enabled by default which changes response structure
-              thinkingConfig: {
-                thinkingBudget: 0,
-              },
+  protected override async performHealthCheck(): Promise<void> {
+    const response = await withRetry(
+      () =>
+        this.client.models.generateContent({
+          model: this.model,
+          contents: 'test',
+          config: {
+            maxOutputTokens: 10,
+            // Disable thinking for health check to get standard text response
+            // Gemini 3 models have thinking enabled by default which changes response structure
+            thinkingConfig: {
+              thinkingBudget: 0,
             },
-          }),
-        { maxRetries: 3 }
-      );
-      // Check if we got a valid response
-      if (response.text !== undefined) {
-        return { healthy: true };
-      }
-      return { healthy: false, error: 'No response text' };
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'google');
-      return {
-        healthy: false,
-        error: convertedError.message,
-      };
+          },
+        }),
+      { maxRetries: 3 }
+    );
+    // Check if we got a valid response
+    if (response.text === undefined) {
+      throw new Error('No response text');
     }
   }
 

@@ -260,27 +260,18 @@ export class ChatGPTAgent extends BaseAgent {
   }
 
   /**
-   * Health check: Test OpenAI API connection with minimal request
+   * Perform minimal API call to verify connectivity
    */
-  override async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_completion_tokens: 10,
-            messages: [{ role: 'user', content: 'test' }],
-          }),
-        { maxRetries: 3 }
-      );
-      return { healthy: true };
-    } catch (error) {
-      const convertedError = convertSDKError(error, 'openai');
-      return {
-        healthy: false,
-        error: convertedError.message,
-      };
-    }
+  protected override async performHealthCheck(): Promise<void> {
+    await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_completion_tokens: 10,
+          messages: [{ role: 'user', content: 'test' }],
+        }),
+      { maxRetries: 3 }
+    );
   }
 
   /**
