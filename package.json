@@ -67,6 +67,7 @@
     "commander": "^14.0.2",
     "jsonrepair": "^3.13.1",
     "openai": "^6.15.0",
+    "partial-json": "^0.1.7",
     "pino": "^10.1.0",
     "sql.js": "^1.13.0",
     "yaml": "^2.8.2",
