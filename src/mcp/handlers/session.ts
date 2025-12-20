@@ -68,7 +68,7 @@ export async function handleStartRoundtable(
     await sessionManager.updateSessionRound(session.id, session.currentRound);
     for (const result of roundResults) {
       for (const response of result.responses) {
-        await sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response, result.roundNumber);
       }
     }
 
@@ -133,7 +133,7 @@ export async function handleContinueRoundtable(
     await sessionManager.updateSessionRound(session.id, session.currentRound);
     for (const result of roundResults) {
       for (const response of result.responses) {
-        await sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response, result.roundNumber);
       }
     }
 

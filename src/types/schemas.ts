@@ -191,6 +191,7 @@ export const StoredSessionRowSchema = z.object({
 export const StoredResponseRowSchema = z.object({
   id: z.string(),
   session_id: z.string(),
+  round_number: z.number(),
   agent_id: z.string(),
   agent_name: z.string(),
   position: z.string(),

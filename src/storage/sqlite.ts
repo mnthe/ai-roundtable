@@ -58,6 +58,7 @@ export interface StoredSession {
 export interface StoredResponse {
   id: string;
   session_id: string;
+  round_number: number;
   agent_id: string;
   agent_name: string;
   position: string;
@@ -135,6 +136,7 @@ export class SQLiteStorage implements Storage {
       CREATE TABLE IF NOT EXISTS responses (
         id TEXT PRIMARY KEY,
         session_id TEXT NOT NULL,
+        round_number INTEGER NOT NULL DEFAULT 1,
         agent_id TEXT NOT NULL,
         agent_name TEXT NOT NULL,
         position TEXT NOT NULL,
@@ -149,6 +151,7 @@ export class SQLiteStorage implements Storage {
 
     db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON responses(timestamp)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_round ON responses(session_id, round_number)`);
   }
 
   /**
@@ -372,13 +375,14 @@ export class SQLiteStorage implements Storage {
   /**
    * Add a response to a session
    */
-  async addResponse(sessionId: string, response: AgentResponse): Promise<void> {
+  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
 
     logger.debug(
       {
         sessionId,
+        roundNumber,
         agentId: response.agentId,
         agentName: response.agentName,
         confidence: response.confidence,
@@ -391,11 +395,12 @@ export class SQLiteStorage implements Storage {
     const id = `${sessionId}-${response.agentId}-${response.timestamp.getTime()}-${randomSuffix}`;
 
     db.run(
-      `INSERT INTO responses (id, session_id, agent_id, agent_name, position, reasoning, confidence, citations, tool_calls, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO responses (id, session_id, round_number, agent_id, agent_name, position, reasoning, confidence, citations, tool_calls, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         sessionId,
+        roundNumber,
         response.agentId,
         response.agentName,
         response.position,
@@ -407,7 +412,7 @@ export class SQLiteStorage implements Storage {
       ]
     );
 
-    logger.debug({ sessionId, responseId: id }, 'Response added successfully');
+    logger.debug({ sessionId, roundNumber, responseId: id }, 'Response added successfully');
   }
 
   /**
@@ -446,17 +451,34 @@ export class SQLiteStorage implements Storage {
    * Get responses for a specific round
    */
   async getResponsesForRound(sessionId: string, round: number): Promise<AgentResponse[]> {
-    const session = await this.getSession(sessionId);
-    if (!session) {
-      return [];
+    await this.ensureInitialized();
+    const db = this.getDb();
+
+    const results: AgentResponse[] = [];
+    const stmt = db.prepare(
+      'SELECT * FROM responses WHERE session_id = ? AND round_number = ? ORDER BY timestamp ASC'
+    );
+    stmt.bind([sessionId, round]);
+
+    while (stmt.step()) {
+      const rawRow = stmt.getAsObject();
+      try {
+        const row = StoredResponseRowSchema.parse(rawRow) as StoredResponse;
+        results.push(this.mapStoredResponseToAgentResponse(row));
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { sessionId, round, rawRow, error: error.issues },
+            'Skipping invalid response row in getResponsesForRound'
+          );
+          continue;
+        }
+        throw error;
+      }
     }
+    stmt.free();
 
-    const allResponses = await this.getResponses(sessionId);
-    const responsesPerRound = session.agentIds.length;
-    const startIndex = (round - 1) * responsesPerRound;
-    const endIndex = startIndex + responsesPerRound;
-
-    return allResponses.slice(startIndex, endIndex);
+    return results;
   }
 
   /**

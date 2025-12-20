@@ -176,25 +176,33 @@ describe('Real Agent Integration Tests', () => {
       const availableProviders = getAvailableProviders();
       console.log(`Running multi-agent test with providers: ${availableProviders.join(', ')}`);
 
-      // Register available agents
+      // Register providers first, then create agents
       if (isProviderAvailable('anthropic')) {
-        const claude = new ClaudeAgent({
+        agentRegistry.registerProvider(
+          'anthropic',
+          (cfg) => new ClaudeAgent({ ...cfg, apiKey: config.anthropicApiKey! }),
+          'claude-sonnet-4-5'
+        );
+        agentRegistry.createAgent({
           id: 'claude-debate',
           name: 'Claude',
+          provider: 'anthropic',
           model: 'claude-sonnet-4-5',
-          apiKey: config.anthropicApiKey!,
         });
-        agentRegistry.register(claude);
       }
 
       if (isProviderAvailable('openai')) {
-        const chatgpt = new ChatGPTAgent({
+        agentRegistry.registerProvider(
+          'openai',
+          (cfg) => new ChatGPTAgent({ ...cfg, apiKey: config.openaiApiKey! }),
+          'gpt-5.2'
+        );
+        agentRegistry.createAgent({
           id: 'chatgpt-debate',
           name: 'ChatGPT',
+          provider: 'openai',
           model: 'gpt-5.2',
-          apiKey: config.openaiApiKey!,
         });
-        agentRegistry.register(chatgpt);
       }
 
       // Create debate context
@@ -231,7 +239,7 @@ describe('Real Agent Integration Tests', () => {
       const consensus = consensusAnalyzer.analyzeConsensus(responses);
 
       expect(consensus.agreementLevel).toBeDefined();
-      expect(consensus.keyPoints).toBeDefined();
+      expect(consensus.commonGround).toBeDefined();
     }, 180000); // 3 minutes for multi-agent test
   });
 

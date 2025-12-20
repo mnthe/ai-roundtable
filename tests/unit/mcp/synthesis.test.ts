@@ -167,7 +167,7 @@ describe('Synthesize Debate Tool', () => {
       // Save responses
       for (const result of results) {
         for (const response of result.responses) {
-          await sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response, result.roundNumber);
         }
       }
 
@@ -200,7 +200,7 @@ describe('Synthesize Debate Tool', () => {
 
       for (const result of results) {
         for (const response of result.responses) {
-          await sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response, result.roundNumber);
         }
       }
 

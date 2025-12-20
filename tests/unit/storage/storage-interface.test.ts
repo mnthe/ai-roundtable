@@ -52,11 +52,11 @@ class MockStorage implements Storage {
     }));
   }
 
-  async addResponse(sessionId: string, response: AgentResponse): Promise<void> {
+  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
     const responses = this.responses.get(sessionId);
     if (!responses) throw new Error(`Session ${sessionId} not found`);
 
-    responses.push(response);
+    responses.push({ ...response, roundNumber });
   }
 
   async getResponses(sessionId: string): Promise<AgentResponse[]> {
@@ -65,9 +65,8 @@ class MockStorage implements Storage {
 
   async getResponsesForRound(sessionId: string, round: number): Promise<AgentResponse[]> {
     const responses = this.responses.get(sessionId) ?? [];
-    // In a real implementation, responses would have round information
-    // For this mock, we return all responses
-    return responses;
+    // Filter by round number (stored when addResponse is called)
+    return responses.filter((r: any) => r.roundNumber === round);
   }
 
   close(): void {
@@ -205,7 +204,7 @@ describe('Storage Interface', () => {
         timestamp: new Date(),
       };
 
-      await sessionManager.addResponse(session.id, response);
+      await sessionManager.addResponse(session.id, response, 1);
 
       const responses = await sessionManager.getResponses(session.id);
       expect(responses).toHaveLength(1);
@@ -254,7 +253,7 @@ describe('Storage Interface', () => {
       };
 
       await expect(
-        sessionManager.addResponse('non-existent', response)
+        sessionManager.addResponse('non-existent', response, 1)
       ).rejects.toThrow('Session non-existent not found');
     });
   });

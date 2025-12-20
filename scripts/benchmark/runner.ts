@@ -231,7 +231,7 @@ export class BenchmarkRunner {
     await this.sessionManager.updateSessionRound(session.id, session.currentRound);
     for (const result of roundResults) {
       for (const response of result.responses) {
-        await this.sessionManager.addResponse(session.id, response);
+        await this.sessionManager.addResponse(session.id, response, result.roundNumber);
       }
 
       // Collect round data

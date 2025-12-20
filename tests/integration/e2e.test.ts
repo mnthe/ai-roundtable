@@ -100,7 +100,7 @@ describe('AI Roundtable E2E Integration', () => {
       for (const agent of agents) {
         const response = await agent.generateResponse(firstRoundContext);
         responses.push(response);
-        await sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response, 1);
       }
 
       expect(responses).toHaveLength(2);
@@ -123,7 +123,7 @@ describe('AI Roundtable E2E Integration', () => {
       for (const agent of agents) {
         const response = await agent.generateResponse(secondRoundContext);
         round2Responses.push(response);
-        await sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response, 2);
       }
 
       expect(round2Responses).toHaveLength(2);
@@ -165,7 +165,7 @@ describe('AI Roundtable E2E Integration', () => {
 
         for (const agent of agents) {
           const response = await agent.generateResponse(context);
-          await sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response, round);
         }
         await sessionManager.updateSessionRound(session.id, round);
       }
@@ -260,7 +260,7 @@ describe('AI Roundtable E2E Integration', () => {
 
       for (const agent of agents) {
         const response = await agent.generateResponse(context);
-        await sessionManager.addResponse(session.id, response);
+        await sessionManager.addResponse(session.id, response, 1);
       }
 
       const responses = await sessionManager.getResponses(session.id);

@@ -191,7 +191,7 @@ describe('SessionManager', () => {
         timestamp: new Date(),
       };
 
-      await manager.addResponse(session.id, response);
+      await manager.addResponse(session.id, response, 1);
 
       const retrieved = await manager.getSession(session.id);
       expect(retrieved?.responses).toHaveLength(1);
@@ -226,8 +226,8 @@ describe('SessionManager', () => {
         timestamp: new Date(),
       };
 
-      await manager.addResponse(session.id, response1);
-      await manager.addResponse(session.id, response2);
+      await manager.addResponse(session.id, response1, 1);
+      await manager.addResponse(session.id, response2, 1);
 
       const retrieved = await manager.getSession(session.id);
       expect(retrieved?.responses).toHaveLength(2);
@@ -277,8 +277,8 @@ describe('SessionManager', () => {
         timestamp: new Date(),
       };
 
-      await manager.addResponse(session.id, response1);
-      await manager.addResponse(session.id, response2);
+      await manager.addResponse(session.id, response1, 1);
+      await manager.addResponse(session.id, response2, 1);
 
       const responses = await manager.getResponses(session.id);
       expect(responses).toHaveLength(2);
@@ -354,10 +354,10 @@ describe('SessionManager', () => {
         timestamp: new Date(),
       };
 
-      await manager.addResponse(session.id, round1Response1);
-      await manager.addResponse(session.id, round1Response2);
-      await manager.addResponse(session.id, round2Response1);
-      await manager.addResponse(session.id, round2Response2);
+      await manager.addResponse(session.id, round1Response1, 1);
+      await manager.addResponse(session.id, round1Response2, 1);
+      await manager.addResponse(session.id, round2Response1, 2);
+      await manager.addResponse(session.id, round2Response2, 2);
 
       const round1Responses = await manager.getResponsesForRound(session.id, 1);
       expect(round1Responses).toHaveLength(2);
@@ -422,7 +422,7 @@ describe('SessionManager', () => {
         timestamp: new Date(),
       };
 
-      await manager.addResponse(session.id, response);
+      await manager.addResponse(session.id, response, 1);
       expect((await manager.getResponses(session.id)).length).toBe(1);
 
       await manager.deleteSession(session.id);

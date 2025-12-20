@@ -1017,7 +1017,7 @@ describe('MCP Tools', () => {
       // Save all responses to storage
       for (const result of results) {
         for (const response of result.responses) {
-          await sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response, result.roundNumber);
         }
       }
 
@@ -1072,7 +1072,7 @@ describe('MCP Tools', () => {
       // Save responses to storage
       for (const result of results) {
         for (const response of result.responses) {
-          await sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response, result.roundNumber);
         }
       }
 
@@ -1103,7 +1103,7 @@ describe('MCP Tools', () => {
       // Save responses to storage
       for (const result of results) {
         for (const response of result.responses) {
-          await sessionManager.addResponse(session.id, response);
+          await sessionManager.addResponse(session.id, response, result.roundNumber);
         }
       }
 

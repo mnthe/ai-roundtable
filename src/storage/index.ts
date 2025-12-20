@@ -27,8 +27,10 @@ export interface Storage {
   /** List sessions with optional filters */
   listSessions(filters?: SessionFilter): Promise<Session[]>;
 
-  /** Add a response to a session */
-  addResponse(sessionId: string, response: AgentResponse): Promise<void>;
+  /** Add a response to a session
+   * @param roundNumber - The round number this response belongs to (required for accurate round queries)
+   */
+  addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void>;
 
   /** Get all responses for a session */
   getResponses(sessionId: string): Promise<AgentResponse[]>;

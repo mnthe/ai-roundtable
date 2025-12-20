@@ -186,7 +186,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response, 1);
 
       const responses = await storage.getResponses('session-1');
       expect(responses).toHaveLength(1);
@@ -212,7 +212,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response, 1);
 
       const responses = await storage.getResponses('session-1');
       expect(responses[0]?.citations).toHaveLength(1);
@@ -237,7 +237,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response, 1);
 
       const responses = await storage.getResponses('session-1');
       expect(responses[0]?.toolCalls).toHaveLength(1);
@@ -263,8 +263,8 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', response1);
-      await storage.addResponse('session-1', response2);
+      await storage.addResponse('session-1', response1, 1);
+      await storage.addResponse('session-1', response2, 1);
 
       const responses = await storage.getResponses('session-1');
       expect(responses).toHaveLength(2);
@@ -312,10 +312,10 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', round1Response1);
-      await storage.addResponse('session-1', round1Response2);
-      await storage.addResponse('session-1', round2Response1);
-      await storage.addResponse('session-1', round2Response2);
+      await storage.addResponse('session-1', round1Response1, 1);
+      await storage.addResponse('session-1', round1Response2, 1);
+      await storage.addResponse('session-1', round2Response1, 2);
+      await storage.addResponse('session-1', round2Response2, 2);
 
       const round1Responses = await storage.getResponsesForRound('session-1', 1);
       expect(round1Responses).toHaveLength(2);
@@ -365,7 +365,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response, 1);
 
       const retrieved = await storage.getSession('session-1');
       expect(retrieved?.responses).toHaveLength(1);
@@ -397,7 +397,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response, 1);
       expect((await storage.getResponses('session-1')).length).toBe(1);
 
       await storage.deleteSession('session-1');
@@ -458,7 +458,7 @@ describe('SQLiteStorage', () => {
         timestamp,
       };
 
-      await storage.addResponse('session-1', response);
+      await storage.addResponse('session-1', response, 1);
 
       const responses = await storage.getResponses('session-1');
       expect(responses[0]?.timestamp).toBeInstanceOf(Date);
@@ -551,7 +551,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-for-response', response);
+      await storage.addResponse('session-for-response', response, 1);
       const responses = await storage.getResponses('session-for-response');
 
       expect(responses).toHaveLength(1);
@@ -597,8 +597,8 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-with-responses', response1);
-      await storage.addResponse('session-with-responses', response2);
+      await storage.addResponse('session-with-responses', response1, 1);
+      await storage.addResponse('session-with-responses', response2, 1);
 
       const responses = await storage.getResponses('session-with-responses');
       expect(responses).toHaveLength(2);
@@ -633,7 +633,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-citations', response);
+      await storage.addResponse('session-citations', response, 1);
       const responses = await storage.getResponses('session-citations');
 
       expect(responses[0]?.citations).toHaveLength(2);
@@ -675,7 +675,7 @@ describe('SQLiteStorage', () => {
         timestamp: new Date(),
       };
 
-      await storage.addResponse('session-tools', response);
+      await storage.addResponse('session-tools', response, 1);
       const responses = await storage.getResponses('session-tools');
 
       expect(responses[0]?.toolCalls).toHaveLength(1);
