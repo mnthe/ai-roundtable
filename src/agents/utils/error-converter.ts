@@ -131,7 +131,7 @@ function isTimeoutMessage(message: string): boolean {
  * - InternalServerError: Server-side errors (5xx)
  * - APIError: Generic API errors
  */
-const anthropicPatterns: ErrorPattern[] = [
+const ANTHROPIC_PATTERNS: ErrorPattern[] = [
   {
     matches: (error) => getErrorName(error) === 'RateLimitError' || getErrorCode(error) === 429,
     convert: (error, provider) =>
@@ -183,7 +183,7 @@ const anthropicPatterns: ErrorPattern[] = [
  * - InternalServerError: Server-side errors (5xx)
  * - APIError: Generic API errors
  */
-const openaiPatterns: ErrorPattern[] = [
+const OPENAI_PATTERNS: ErrorPattern[] = [
   {
     matches: (error) => getErrorName(error) === 'RateLimitError' || getErrorCode(error) === 429,
     convert: (error, provider) =>
@@ -231,7 +231,7 @@ const openaiPatterns: ErrorPattern[] = [
  * - GoogleGenerativeAIFetchError: Network/fetch errors
  * - GoogleGenerativeAIResponseError: Server-side errors (includes status codes)
  */
-const googlePatterns: ErrorPattern[] = [
+const GOOGLE_PATTERNS: ErrorPattern[] = [
   {
     matches: (error) => getErrorCode(error) === 429 || isRateLimitMessage(getErrorMessage(error)),
     convert: (error, provider) =>
@@ -274,11 +274,11 @@ const googlePatterns: ErrorPattern[] = [
 /**
  * Provider-specific error patterns
  */
-const providerPatterns: Record<AIProvider, ErrorPattern[]> = {
-  anthropic: anthropicPatterns,
-  openai: openaiPatterns,
-  google: googlePatterns,
-  perplexity: openaiPatterns, // Perplexity uses OpenAI-compatible SDK
+const PROVIDER_PATTERNS: Record<AIProvider, ErrorPattern[]> = {
+  anthropic: ANTHROPIC_PATTERNS,
+  openai: OPENAI_PATTERNS,
+  google: GOOGLE_PATTERNS,
+  perplexity: OPENAI_PATTERNS, // Perplexity uses OpenAI-compatible SDK
 };
 
 /**
@@ -313,7 +313,7 @@ export function convertSDKError(error: unknown, provider: AIProvider): Error {
     return error;
   }
 
-  const patterns = providerPatterns[provider];
+  const patterns = PROVIDER_PATTERNS[provider];
   const message = getErrorMessage(error);
 
   // Try provider-specific patterns first
