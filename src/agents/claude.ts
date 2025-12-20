@@ -19,23 +19,6 @@ import type {
 const logger = createLogger('ClaudeAgent');
 
 /**
- * Retryable error patterns for API calls
- */
-const RETRYABLE_ERRORS = [
-  'rate_limit',
-  'overloaded',
-  'timeout',
-  'ECONNRESET',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'socket hang up',
-  '529',
-  '503',
-  '502',
-];
-
-
-/**
  * Configuration options for Claude Agent
  */
 export interface ClaudeAgentOptions {
