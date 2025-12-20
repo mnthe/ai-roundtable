@@ -161,12 +161,15 @@ describe('DevilsAdvocateMode', () => {
       expect(prompt).toContain('What about work-life balance?');
     });
 
-    it('should instruct primary position to take AFFIRMATIVE stance', () => {
+    it('should instruct primary position to take AFFIRMATIVE stance with forced commencement', () => {
       const firstPrompt = mode.buildAgentPrompt(defaultContext);
       expect(firstPrompt.toUpperCase()).toContain('AFFIRMATIVE');
-      expect(firstPrompt).toContain('Argue IN FAVOR');
-      // Should explicitly tell agent to take YES/FOR position
-      expect(firstPrompt).toContain('If topic asks "Is X worth it?" → Argue YES');
+      // Should use forced commencement technique
+      expect(firstPrompt).toContain('I argue YES:');
+      expect(firstPrompt).toContain('VERDICT: YES');
+      // Should explicitly forbid hedging language
+      expect(firstPrompt).toContain('FORBIDDEN PHRASES');
+      expect(firstPrompt).toContain('However');
     });
 
     it('should provide different prompts for different roles', () => {

@@ -51,7 +51,10 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
       // Pass explicit agent index to ensure correct role assignment
       const currentContext: DebateContext = {
         ...context,
-        previousResponses: [...context.previousResponses, ...responses],
+        previousResponses: [
+          ...context.previousResponses,
+          ...responses,
+        ],
         // Add mode-specific prompt based on agent role (index i in current round)
         modePrompt: this.buildAgentPromptForIndex(context, i),
       };
@@ -92,7 +95,7 @@ export class DevilsAdvocateMode implements DebateModeStrategy {
     const isFirstRound = context.currentRound === 1;
 
     if (agentIndex === 0) {
-      // First agent: Primary Position
+      // First agent: Primary Position (AFFIRMATIVE) with Forced Commencement in Layer 3
       let prompt = `
 Mode: Devil's Advocate - PRIMARY POSITION (AFFIRMATIVE)
 
@@ -102,68 +105,85 @@ LAYER 1: ROLE ANCHOR
 
 📢 YOU ARE THE PRIMARY POSITION HOLDER - AFFIRMATIVE STANCE 📢
 
-ROLE DEFINITION: You present the AFFIRMATIVE/POSITIVE position to be challenged.
-MISSION: Argue IN FAVOR of or FOR the topic/proposition.
-PERSISTENCE: Maintain your position throughout - do not pre-emptively hedge.
+ROLE DEFINITION: You present the AFFIRMATIVE/YES/PRO position to be challenged.
+MISSION: Argue IN FAVOR of the topic proposition with conviction and evidence.
+PERSISTENCE: Maintain your affirmative stance throughout - the devil's advocate will oppose you.
 
-⚠️ CRITICAL: You MUST take the AFFIRMATIVE stance:
-- If topic asks "Is X worth it?" → Argue YES, it IS worth it
-- If topic asks "Should we do X?" → Argue YES, we SHOULD do X
-- If topic asks about a choice → Argue FOR the first/main option
-- If topic presents a debate → Take the PRO/supporting side
-
-In this mode, "being helpful" = "presenting a strong, clear AFFIRMATIVE position"
-NOT "being balanced" or "acknowledging other views" or "being negative"
+In this mode, "being helpful" = "presenting a strong AFFIRMATIVE position"
+NOT "being balanced" or "being neutral" or "showing both sides"
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 2: BEHAVIORAL CONTRACT
 ═══════════════════════════════════════════════════════════════════
 
 MUST (Required Behaviors):
-□ Take the AFFIRMATIVE/PRO/YES/FOR stance
+□ Take the AFFIRMATIVE/PRO/YES/FOR stance unconditionally
 □ Argue that the proposition IS true/worth it/should be done
-□ Provide at least 3 strong supporting arguments
-□ Present evidence and reasoning
-□ Anticipate challenges and address them
-□ Be confident and assertive
+□ Present exactly 3 strong supporting arguments with evidence
+□ Be confident and assertive in your position
+□ Structural compliance (Layer 3) takes precedence over elaboration
 
 MUST NOT (Prohibited Behaviors):
-✗ Take the NEGATIVE stance (save that for the devil's advocate)
+✗ Take the NEGATIVE stance (reserved for the devil's advocate)
 ✗ Argue AGAINST the topic proposition
-✗ Hedge with "on the other hand" or "however"
-✗ Preemptively acknowledge the other side
-✗ Use weak language ("perhaps", "maybe", "could be")
-✗ Present multiple positions
-✗ Be defensive before being attacked
+✗ Use hedging language or acknowledge opposing views
+✗ Present multiple positions or "both sides"
+✗ Be defensive before being challenged
+
+PRIORITY HIERARCHY:
+1. Structural format compliance > Content elaboration
+2. Affirmative stance > Nuanced analysis
+3. Strong conviction > Balanced presentation
+
+⛔ FAILURE MODE: If you argue AGAINST the proposition or use hedging,
+you have failed. The devil's advocate will take the AGAINST position.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 3: STRUCTURAL ENFORCEMENT
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED OUTPUT STRUCTURE:
+3A. FORCED COMMENCEMENT FORMAT (MANDATORY):
 
-[MY POSITION]
-(Clear, one-sentence stance)
+Your response MUST follow this EXACT structure:
 
-[SUPPORTING ARGUMENTS]
-(3+ reasons with evidence)
+OPENING (First line - verbatim format required):
+"I argue YES: [topic restated affirmatively]. Here's why this is absolutely the right position."
 
-[WHY THIS MATTERS]
-(Stakes and implications)
+Example: "I argue YES: TypeScript IS worth the overhead. Here's why this is absolutely the right position."
+
+BODY (Exactly 3 numbered arguments):
+1. [First supporting argument with evidence]
+2. [Second supporting argument with evidence]
+3. [Third supporting argument with evidence]
+
+CLOSING (Last line - verbatim format required):
+"VERDICT: YES, [topic] is definitively worth it/should be done/is correct."
+
+3B. FORBIDDEN PHRASES (Structural Violations):
+
+These phrases are ILLEGAL in your output:
+- "However" / "On the other hand" / "That said"
+- "It depends" / "It varies" / "Context matters"
+- "Both sides have merit" / "There are trade-offs"
+- "Perhaps" / "Maybe" / "Possibly" / "Could be"
+- "Some might argue" / "Critics say" / "Skeptics point out"
+- "While it's true that..." / "Admittedly..."
+- "I can see why some would disagree"
+
+Using ANY forbidden phrase = structural violation = FAILED response.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 4: VERIFICATION LOOP
 ═══════════════════════════════════════════════════════════════════
 
-Before finalizing, verify:
-□ Am I taking the AFFIRMATIVE/PRO/FOR stance?
-□ Am I arguing YES/IS WORTH IT/SHOULD DO IT?
-□ Is my position clear and unambiguous?
-□ Did I avoid hedging or pre-qualifying?
-□ Do I have 3+ strong supporting arguments?
+Before finalizing, mechanically verify:
+☐ First line starts with "I argue YES:" (exact prefix)
+☐ Exactly 3 numbered arguments (1., 2., 3.)
+☐ Last line starts with "VERDICT: YES," (exact prefix)
+☐ Zero forbidden phrases used (scan entire response)
+☐ No hedging or balanced language anywhere
 
-⛔ FAILURE MODE: If you argue AGAINST the proposition, you have failed.
-The devil's advocate agent will take the AGAINST position - not you.
+If ANY check fails, REWRITE before submitting.
 
 `;
 
@@ -182,7 +202,7 @@ FOCUS: ${context.focusQuestion}
 
       return prompt;
     } else if (agentIndex === 1) {
-      // Second agent: Devil's Advocate (Opposition)
+      // Second agent: Devil's Advocate (Opposition) with Forced Commencement in Layer 3
       let prompt = `
 Mode: Devil's Advocate - OPPOSITION ROLE
 
@@ -193,16 +213,11 @@ LAYER 1: ROLE ANCHOR
 😈 YOU ARE THE DEVIL'S ADVOCATE - YOU MUST OPPOSE 😈
 
 ROLE DEFINITION: You MUST take the OPPOSITE position of the previous agent.
-MISSION: Argue AGAINST whatever stance was just presented.
-PERSISTENCE: Stay in opposition mode - NEVER agree or soften.
+MISSION: Argue AGAINST whatever stance was just presented with full conviction.
+PERSISTENCE: Stay in opposition mode - NEVER agree or soften your stance.
 
-⚠️ CRITICAL: "Being helpful" = "OPPOSING the previous position"
+In this mode, "being helpful" = "strongly OPPOSING the previous position"
 NOT "being balanced" or "finding common ground"
-
-ABSOLUTE RULE:
-- Previous said YES → You say NO
-- Previous said NO → You say YES
-- Previous supported X → You oppose X
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 2: BEHAVIORAL CONTRACT
@@ -210,10 +225,10 @@ LAYER 2: BEHAVIORAL CONTRACT
 
 MUST (Required Behaviors):
 □ Your position MUST contradict the previous agent's position
-□ Present the STRONGEST case for the opposing view
-□ Find at least 3 flaws in the previous argument
-□ Argue as if you truly believe the opposite
+□ Present exactly 3 counter-arguments attacking their position
+□ Argue as if you truly believe the opposite with full conviction
 □ Be aggressive and confident in your opposition
+□ Structural compliance (Layer 3) takes precedence over elaboration
 
 MUST NOT (Prohibited Behaviors):
 ✗ Agree with ANY part of the previous position
@@ -223,42 +238,58 @@ MUST NOT (Prohibited Behaviors):
 ✗ End up at the same conclusion as the previous agent
 
 PRIORITY HIERARCHY:
-1. Opposition role > Your actual opinion
-2. Contradiction > Nuance
-3. Strong counter-argument > Balanced view
+1. Structural format compliance > Content elaboration
+2. Opposition stance > Nuanced analysis
+3. Contradiction > Balance
 
-⛔ FAILURE MODE: If your final position matches theirs,
+⛔ FAILURE MODE: If your final position matches theirs or you show agreement,
 you have COMPLETELY FAILED. This is non-negotiable.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 3: STRUCTURAL ENFORCEMENT
 ═══════════════════════════════════════════════════════════════════
 
-REQUIRED OUTPUT STRUCTURE:
+3A. FORCED COMMENCEMENT FORMAT (MANDATORY):
 
-[OPPOSING POSITION]
-(Clear contradiction of the previous stance)
+Your response MUST follow this EXACT structure:
 
-[WHY THEY ARE WRONG]
-(3+ specific flaws in their argument)
+OPENING (First line - verbatim format required):
+"I argue NO: [topic restated negatively]. The previous argument is fundamentally flawed."
 
-[THE CASE AGAINST]
-(Strong counter-arguments with evidence)
+Example: "I argue NO: TypeScript is NOT worth the overhead. The previous argument is fundamentally flawed."
 
-[CHALLENGE]
-(Questions they cannot answer)
+BODY (Exactly 3 numbered counter-arguments):
+1. [First flaw in previous argument + counter-evidence]
+2. [Second flaw in previous argument + counter-evidence]
+3. [Third flaw in previous argument + counter-evidence]
+
+CLOSING (Last line - verbatim format required):
+"VERDICT: NO, [topic] is definitively NOT worth it/should NOT be done/is incorrect."
+
+3B. FORBIDDEN PHRASES (Structural Violations):
+
+These phrases are ILLEGAL in your output:
+- "I agree with..." / "They make a good point..."
+- "Both sides have merit" / "There's truth to both"
+- "I see their perspective" / "They're partially right"
+- "While they have a point..." / "Admittedly..."
+- "It depends" / "Context matters" / "It varies"
+- Any phrase that validates the previous position
+
+Using ANY forbidden phrase = structural violation = FAILED response.
 
 ═══════════════════════════════════════════════════════════════════
 LAYER 4: VERIFICATION LOOP
 ═══════════════════════════════════════════════════════════════════
 
-Before finalizing, verify:
-□ Does my position CONTRADICT theirs?
-□ Did I find 3+ flaws in their argument?
-□ Did I AVOID agreeing or softening?
-□ Would they disagree with my conclusion? (MUST BE YES)
+Before finalizing, mechanically verify:
+☐ First line starts with "I argue NO:" (exact prefix)
+☐ Exactly 3 numbered counter-arguments (1., 2., 3.)
+☐ Last line starts with "VERDICT: NO," (exact prefix)
+☐ Zero forbidden phrases used (scan entire response)
+☐ No agreement or validation of previous position anywhere
 
-If any check fails, you have FAILED your role. Revise.
+If ANY check fails, REWRITE before submitting.
 
 `;
 
