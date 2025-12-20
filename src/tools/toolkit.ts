@@ -14,6 +14,13 @@ import type {
   SearchOptions,
   ToolResult,
 } from '../types/index.js';
+import {
+  validateToolInput,
+  type SubmitResponseInput,
+  type SearchWebInput,
+  type FactCheckInput,
+  type PerplexitySearchInput as PerplexitySearchInputSchema,
+} from './schemas.js';
 
 // Re-export types from types.ts for backwards compatibility
 export type { AgentTool, AgentToolkit, ToolDefinition, ToolExecutor } from './types.js';
@@ -235,6 +242,9 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Execute a tool by name
+   *
+   * Input is validated against the tool's Zod schema before execution.
+   * Returns an error result if validation fails.
    */
   async executeTool(name: string, input: unknown): Promise<unknown> {
     const definition = this.tools.get(name);
@@ -245,8 +255,17 @@ export class DefaultAgentToolkit implements AgentToolkit {
       };
     }
 
+    // Validate input against schema
+    const validation = validateToolInput(name, input);
+    if (validation.success === false) {
+      return {
+        success: false,
+        error: validation.error,
+      };
+    }
+
     try {
-      const result = await definition.executor(input);
+      const result = await definition.executor(validation.data);
       return result;
     } catch (error) {
       return {
@@ -297,55 +316,31 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Execute submit_response tool (validation only)
+   *
+   * Note: Input is pre-validated by Zod schema in executeTool()
    */
   private async executeSubmitResponse(input: unknown): Promise<ToolResult<{
     position: string;
     reasoning: string;
     confidence: number;
   }>> {
-    const data = input as {
-      position?: string;
-      reasoning?: string;
-      confidence?: number;
-    };
-
-    if (!data.position || typeof data.position !== 'string') {
-      return {
-        success: false,
-        error: 'Position is required and must be a string',
-      };
-    }
-
-    if (!data.reasoning || typeof data.reasoning !== 'string') {
-      return {
-        success: false,
-        error: 'Reasoning is required and must be a string',
-      };
-    }
-
-    const rawConfidence = data.confidence ?? 0.5;
-    if (typeof rawConfidence !== 'number') {
-      return {
-        success: false,
-        error: 'Confidence must be a number between 0 and 1',
-      };
-    }
-
-    // Clamp confidence to valid range
-    const confidence = Math.min(1, Math.max(0, rawConfidence));
+    // Input is already validated by Zod schema
+    const data = input as SubmitResponseInput;
 
     return {
       success: true,
       data: {
         position: data.position,
         reasoning: data.reasoning,
-        confidence,
+        confidence: data.confidence,
       },
     };
   }
 
   /**
    * Execute search_web tool
+   *
+   * Note: Input is pre-validated by Zod schema in executeTool()
    */
   private async executeSearchWeb(input: unknown): Promise<ToolResult<{
     results: SearchResult[];
@@ -357,23 +352,12 @@ export class DefaultAgentToolkit implements AgentToolkit {
       };
     }
 
-    const data = input as {
-      query?: string;
-      max_results?: number;
-    };
-
-    if (!data.query || typeof data.query !== 'string') {
-      return {
-        success: false,
-        error: 'Query is required',
-      };
-    }
-
-    const maxResults = Math.min(10, data.max_results ?? 5);
+    // Input is already validated by Zod schema
+    const data = input as SearchWebInput;
 
     try {
       const results = await this.webSearchProvider.search(data.query, {
-        maxResults,
+        maxResults: data.max_results,
       });
 
       return {
@@ -390,6 +374,8 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Execute fact_check tool
+   *
+   * Note: Input is pre-validated by Zod schema in executeTool()
    */
   private async executeFactCheck(input: unknown): Promise<ToolResult<{
     claim: string;
@@ -401,19 +387,8 @@ export class DefaultAgentToolkit implements AgentToolkit {
       confidence: number;
     }>;
   }>> {
-    const data = input as {
-      claim?: string;
-      source_agent?: string;
-    };
-
-    if (!data.claim || typeof data.claim !== 'string') {
-      return {
-        success: false,
-        error: 'Claim is required',
-      };
-    }
-
-    const sourceAgent = data.source_agent ?? 'unknown';
+    // Input is already validated by Zod schema
+    const data = input as FactCheckInput;
 
     // Get web evidence if search provider is available
     let webEvidence: SearchResult[] = [];
@@ -446,7 +421,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
       success: true,
       data: {
         claim: data.claim,
-        sourceAgent,
+        sourceAgent: data.source_agent,
         webEvidence,
         debateEvidence,
       },
@@ -455,6 +430,8 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Execute perplexity_search tool
+   *
+   * Note: Input is pre-validated by Zod schema in executeTool()
    */
   private async executePerplexitySearch(
     input: unknown
@@ -466,35 +443,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
       };
     }
 
-    const data = input as PerplexitySearchInput;
-
-    if (!data.query || typeof data.query !== 'string') {
-      return {
-        success: false,
-        error: 'Query is required and must be a string',
-      };
-    }
-
-    // Validate recency_filter
-    const validRecencyFilters = ['hour', 'day', 'week', 'month'];
-    if (data.recency_filter && !validRecencyFilters.includes(data.recency_filter)) {
-      return {
-        success: false,
-        error: `Invalid recency_filter. Must be one of: ${validRecencyFilters.join(', ')}`,
-      };
-    }
-
-    // Validate and limit domain_filter
-    let domainFilter = data.domain_filter;
-    if (domainFilter && Array.isArray(domainFilter)) {
-      domainFilter = domainFilter.slice(0, 3); // Max 3 domains
-    }
+    // Input is already validated by Zod schema
+    const data = input as PerplexitySearchInputSchema;
 
     try {
       const result = await this.perplexitySearchProvider.search({
         query: data.query,
         recency_filter: data.recency_filter,
-        domain_filter: domainFilter,
+        domain_filter: data.domain_filter,
         return_images: data.return_images,
         return_related_questions: data.return_related_questions,
       });

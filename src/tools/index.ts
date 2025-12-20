@@ -15,3 +15,19 @@ export {
   type PerplexitySearchInput,
   type PerplexitySearchResult,
 } from './toolkit.js';
+
+// Export validation schemas and utilities
+export {
+  validateToolInput,
+  TOOL_INPUT_SCHEMAS,
+  GetContextInputSchema,
+  SubmitResponseInputSchema,
+  SearchWebInputSchema,
+  FactCheckInputSchema,
+  PerplexitySearchInputSchema,
+  type GetContextInput,
+  type SubmitResponseInput,
+  type SearchWebInput,
+  type FactCheckInput,
+  type PerplexitySearchInput as PerplexitySearchInputValidated,
+} from './schemas.js';

@@ -137,12 +137,13 @@ describe('DefaultAgentToolkit', () => {
         confidence: 0.5,
       };
 
-      const result = await toolkit.executeTool('submit_response', input);
+      const result = (await toolkit.executeTool('submit_response', input)) as {
+        success: boolean;
+        error?: string;
+      };
 
-      expect(result).toEqual({
-        success: false,
-        error: 'Position is required and must be a string',
-      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('position');
     });
 
     it('should reject missing reasoning', async () => {
@@ -151,15 +152,16 @@ describe('DefaultAgentToolkit', () => {
         confidence: 0.5,
       };
 
-      const result = await toolkit.executeTool('submit_response', input);
+      const result = (await toolkit.executeTool('submit_response', input)) as {
+        success: boolean;
+        error?: string;
+      };
 
-      expect(result).toEqual({
-        success: false,
-        error: 'Reasoning is required and must be a string',
-      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('reasoning');
     });
 
-    it('should clamp confidence to valid range', async () => {
+    it('should reject confidence out of valid range', async () => {
       const input = {
         position: 'Test',
         reasoning: 'Test',
@@ -168,11 +170,11 @@ describe('DefaultAgentToolkit', () => {
 
       const result = (await toolkit.executeTool('submit_response', input)) as {
         success: boolean;
-        data?: { confidence: number };
+        error?: string;
       };
 
-      expect(result.success).toBe(true);
-      expect(result.data?.confidence).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('confidence');
     });
 
     it('should use default confidence when not provided', async () => {
@@ -209,12 +211,13 @@ describe('DefaultAgentToolkit', () => {
       };
       const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
 
-      const result = await toolkitWithSearch.executeTool('search_web', {});
+      const result = (await toolkitWithSearch.executeTool('search_web', {})) as {
+        success: boolean;
+        error?: string;
+      };
 
-      expect(result).toEqual({
-        success: false,
-        error: 'Query is required',
-      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('query');
     });
 
     it('should search and return results', async () => {
@@ -246,20 +249,20 @@ describe('DefaultAgentToolkit', () => {
       });
     });
 
-    it('should limit max_results to 10', async () => {
+    it('should reject max_results over 10', async () => {
       const mockProvider: WebSearchProvider = {
         search: vi.fn().mockResolvedValue([]),
       };
       const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
 
-      await toolkitWithSearch.executeTool('search_web', {
+      const result = (await toolkitWithSearch.executeTool('search_web', {
         query: 'test',
         max_results: 100,
-      });
+      })) as { success: boolean; error?: string };
 
-      expect(mockProvider.search).toHaveBeenCalledWith('test', {
-        maxResults: 10,
-      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('max_results');
+      expect(mockProvider.search).not.toHaveBeenCalled();
     });
 
     it('should handle search errors', async () => {
@@ -281,12 +284,13 @@ describe('DefaultAgentToolkit', () => {
 
   describe('fact_check tool', () => {
     it('should return error for missing claim', async () => {
-      const result = await toolkit.executeTool('fact_check', {});
+      const result = (await toolkit.executeTool('fact_check', {})) as {
+        success: boolean;
+        error?: string;
+      };
 
-      expect(result).toEqual({
-        success: false,
-        error: 'Claim is required',
-      });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('claim');
     });
 
     it('should return basic result without providers', async () => {
@@ -441,7 +445,7 @@ describe('perplexity_search tool', () => {
     };
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Query is required');
+    expect(result.error).toContain('query');
   });
 
   it('should return error for invalid recency_filter', async () => {
@@ -457,7 +461,7 @@ describe('perplexity_search tool', () => {
     })) as { success: boolean; error?: string };
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Invalid recency_filter');
+    expect(result.error).toContain('recency_filter');
   });
 
   it('should execute search with all options', async () => {
@@ -497,23 +501,21 @@ describe('perplexity_search tool', () => {
     });
   });
 
-  it('should limit domain_filter to 3 domains', async () => {
+  it('should reject domain_filter with more than 3 domains', async () => {
     const mockProvider: PerplexitySearchProvider = {
       search: vi.fn().mockResolvedValue({ answer: 'test' }),
     };
     const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
     toolkit.setContext(defaultContext);
 
-    await toolkit.executeTool('perplexity_search', {
+    const result = (await toolkit.executeTool('perplexity_search', {
       query: 'test',
       domain_filter: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'],
-    });
+    })) as { success: boolean; error?: string };
 
-    expect(mockProvider.search).toHaveBeenCalledWith(
-      expect.objectContaining({
-        domain_filter: ['a.com', 'b.com', 'c.com'],
-      })
-    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('domain_filter');
+    expect(mockProvider.search).not.toHaveBeenCalled();
   });
 
   it('should handle provider errors gracefully', async () => {
@@ -549,5 +551,210 @@ describe('createDefaultToolkit', () => {
 
     const toolkit = createDefaultToolkit(mockSearchProvider, mockSessionProvider);
     expect(toolkit.getTools()).toHaveLength(5);
+  });
+});
+
+describe('Zod Schema Validation', () => {
+  let toolkit: DefaultAgentToolkit;
+
+  beforeEach(() => {
+    toolkit = new DefaultAgentToolkit();
+  });
+
+  describe('submit_response validation', () => {
+    it('should reject empty position string', async () => {
+      const result = (await toolkit.executeTool('submit_response', {
+        position: '',
+        reasoning: 'Valid reasoning',
+        confidence: 0.5,
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('position');
+    });
+
+    it('should reject empty reasoning string', async () => {
+      const result = (await toolkit.executeTool('submit_response', {
+        position: 'Valid position',
+        reasoning: '',
+        confidence: 0.5,
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('reasoning');
+    });
+
+    it('should reject negative confidence', async () => {
+      const result = (await toolkit.executeTool('submit_response', {
+        position: 'Valid position',
+        reasoning: 'Valid reasoning',
+        confidence: -0.5,
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('confidence');
+    });
+
+    it('should reject non-numeric confidence', async () => {
+      const result = (await toolkit.executeTool('submit_response', {
+        position: 'Valid position',
+        reasoning: 'Valid reasoning',
+        confidence: 'high',
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('confidence');
+    });
+  });
+
+  describe('search_web validation', () => {
+    it('should reject empty query string', async () => {
+      const mockProvider: WebSearchProvider = { search: vi.fn() };
+      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
+
+      const result = (await toolkitWithSearch.executeTool('search_web', {
+        query: '',
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('query');
+    });
+
+    it('should reject non-integer max_results', async () => {
+      const mockProvider: WebSearchProvider = { search: vi.fn() };
+      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
+
+      const result = (await toolkitWithSearch.executeTool('search_web', {
+        query: 'test',
+        max_results: 5.5,
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('max_results');
+    });
+
+    it('should reject zero max_results', async () => {
+      const mockProvider: WebSearchProvider = { search: vi.fn() };
+      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
+
+      const result = (await toolkitWithSearch.executeTool('search_web', {
+        query: 'test',
+        max_results: 0,
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('max_results');
+    });
+  });
+
+  describe('fact_check validation', () => {
+    it('should reject empty claim string', async () => {
+      const result = (await toolkit.executeTool('fact_check', {
+        claim: '',
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('claim');
+    });
+
+    it('should use default source_agent when not provided', async () => {
+      const result = (await toolkit.executeTool('fact_check', {
+        claim: 'Test claim',
+      })) as {
+        success: boolean;
+        data?: { sourceAgent: string };
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.data?.sourceAgent).toBe('unknown');
+    });
+  });
+
+  describe('perplexity_search validation', () => {
+    it('should reject empty query string', async () => {
+      const mockProvider: PerplexitySearchProvider = { search: vi.fn() };
+      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+
+      const result = (await toolkitWithPerplexity.executeTool('perplexity_search', {
+        query: '',
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('query');
+    });
+
+    it('should accept valid recency_filter values', async () => {
+      const mockProvider: PerplexitySearchProvider = {
+        search: vi.fn().mockResolvedValue({ answer: 'test' }),
+      };
+      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+
+      for (const filter of ['hour', 'day', 'week', 'month']) {
+        const result = await toolkitWithPerplexity.executeTool('perplexity_search', {
+          query: 'test',
+          recency_filter: filter,
+        });
+
+        expect((result as { success: boolean }).success).toBe(true);
+      }
+    });
+
+    it('should reject empty domain strings in domain_filter', async () => {
+      const mockProvider: PerplexitySearchProvider = { search: vi.fn() };
+      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+
+      const result = (await toolkitWithPerplexity.executeTool('perplexity_search', {
+        query: 'test',
+        domain_filter: ['valid.com', ''],
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('domain_filter');
+    });
+
+    it('should accept exactly 3 domains', async () => {
+      const mockProvider: PerplexitySearchProvider = {
+        search: vi.fn().mockResolvedValue({ answer: 'test' }),
+      };
+      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+
+      const result = await toolkitWithPerplexity.executeTool('perplexity_search', {
+        query: 'test',
+        domain_filter: ['a.com', 'b.com', 'c.com'],
+      });
+
+      expect((result as { success: boolean }).success).toBe(true);
+    });
+  });
+
+  describe('custom tools bypass validation', () => {
+    it('should not validate custom tool inputs', async () => {
+      toolkit.registerTool({
+        tool: {
+          name: 'custom_no_schema',
+          description: 'A custom tool without schema',
+          parameters: {},
+        },
+        executor: async (input) => ({
+          success: true,
+          data: { received: input },
+        }),
+      });
+
+      // Custom tools should pass any input through without validation
+      const result = (await toolkit.executeTool('custom_no_schema', {
+        anyField: 'any value',
+        nested: { data: true },
+      })) as {
+        success: boolean;
+        data?: { received: unknown };
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.data?.received).toEqual({
+        anyField: 'any value',
+        nested: { data: true },
+      });
+    });
   });
 });
