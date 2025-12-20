@@ -83,7 +83,6 @@
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-prettier": "^5.5.4",
-    "msw": "^2.12.4",
     "prettier": "^3.7.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
