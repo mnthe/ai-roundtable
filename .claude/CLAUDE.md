@@ -6,51 +6,51 @@ AI Roundtable is an MCP server that enables structured debates between multiple 
 
 ## Key Design Decisions (Update docs when changing)
 
-| Decision          | Choice                                 | Rationale                       |
-| ----------------- | -------------------------------------- | ------------------------------- |
-| Language          | TypeScript (ESM)                       | Type safety, Node.js 20+        |
-| AI Abstraction    | BaseAgent abstract class               | Tool use support, extensibility |
-| Initial Providers | Claude + ChatGPT + Gemini + Perplexity | Mature Agent SDKs               |
-| Storage           | SQLite (sql.js)                        | Local MCP server use case       |
-| Testing           | Unit (Mock) + Integration (optional)   | Fast feedback                   |
-| Mode Pattern      | Strategy Pattern with Hooks            | Easy to add new debate modes    |
+| Decision          | Choice                                 | Rationale                            |
+| ----------------- | -------------------------------------- | ------------------------------------ |
+| Language          | TypeScript (ESM)                       | Type safety, Node.js 20+             |
+| AI Abstraction    | BaseAgent abstract class               | Tool use support, extensibility      |
+| Initial Providers | Claude + ChatGPT + Gemini + Perplexity | Mature Agent SDKs                    |
+| Storage           | SQLite (sql.js)                        | Local MCP server use case            |
+| Testing           | Unit (Mock) + Integration (optional)   | Fast feedback                        |
+| Mode Pattern      | Strategy Pattern with Hooks            | Easy to add new debate modes         |
 | Prompt System     | 4-Layer Prompt Structure               | Role anchor, contracts, verification |
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       MCP Server Layer                           │
+│                       MCP Server Layer                          │
 │  server.ts → handlers/ (session, query, export, agents, utils)  │
 ├─────────────────────────────────────────────────────────────────┤
-│                        Core Layer                                │
+│                        Core Layer                               │
 │  DebateEngine ←→ SessionManager ←→ AIConsensusAnalyzer          │
-│                         ↓                                        │
-│              ExitCriteriaChecker (automatic termination)         │
-│              KeyPointsExtractor (for 4-layer responses)          │
+│                         ↓                                       │
+│              ExitCriteriaChecker (automatic termination)        │
+│              KeyPointsExtractor (for 4-layer responses)         │
 ├─────────────────────────────────────────────────────────────────┤
-│       Agents Layer              │        Modes Layer             │
-│  BaseAgent (Template Method)    │   BaseModeStrategy (Hooks)     │
+│       Agents Layer             │        Modes Layer             │
+│  BaseAgent (Template Method)   │   BaseModeStrategy (Hooks)     │
 │  ├── ClaudeAgent               │   ├── CollaborativeMode        │
 │  ├── ChatGPTAgent              │   ├── AdversarialMode          │
 │  ├── GeminiAgent               │   ├── SocraticMode             │
 │  └── PerplexityAgent           │   ├── ExpertPanelMode          │
-│                                 │   ├── DevilsAdvocateMode       │
-│  agents/utils/                  │   ├── DelphiMode               │
-│  ├── openai-completion.ts      │   └── RedTeamBlueTeamMode       │
-│  ├── error-converter.ts        │                                 │
-│  ├── tool-converters.ts        │   Mode Extensions:              │
-│  └── light-model-factory.ts    │   ├── processors/ (context)     │
-│                                 │   ├── validators/ (response)    │
-│                                 │   └── tool-policy.ts            │
+│                                │   ├── DevilsAdvocateMode       │
+│  agents/utils/                 │   ├── DelphiMode               │
+│  ├── openai-completion.ts      │   └── RedTeamBlueTeamMode      │
+│  ├── error-converter.ts        │                                │
+│  ├── tool-converters.ts        │   Mode Extensions:             │
+│  └── light-model-factory.ts    │   ├── processors/ (context)    │
+│                                │   ├── validators/ (response)   │
+│                                │   └── tool-policy.ts           │
 ├─────────────────────────────────────────────────────────────────┤
-│       Tools Layer               │       Storage Layer            │
-│  DefaultAgentToolkit            │   SQLiteStorage                │
+│       Tools Layer              │       Storage Layer            │
+│  DefaultAgentToolkit           │   SQLiteStorage                │
 │  ├── get_context               │   (sql.js WebAssembly)         │
-│  ├── submit_response           │                                 │
-│  ├── search_web                │   Tables: sessions, responses   │
-│  ├── fact_check                │                                 │
-│  └── perplexity_search         │                                 │
+│  ├── submit_response           │                                │
+│  ├── search_web                │   Tables: sessions, responses  │
+│  ├── fact_check                │                                │
+│  └── perplexity_search         │                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,13 +58,13 @@ AI Roundtable is an MCP server that enables structured debates between multiple 
 
 Detailed implementation guides are in `.claude/rules/`:
 
-| Rule | When to Use |
-|------|-------------|
-| [adding-agents.md](rules/adding-agents.md) | Adding new AI provider agents |
-| [adding-modes.md](rules/adding-modes.md) | Creating debate modes with hooks |
-| [adding-tools.md](rules/adding-tools.md) | Adding MCP or Agent tools |
-| [code-style.md](rules/code-style.md) | Code style and conventions |
-| [testing.md](rules/testing.md) | Writing and running tests |
+| Rule                                       | When to Use                      |
+| ------------------------------------------ | -------------------------------- |
+| [adding-agents.md](rules/adding-agents.md) | Adding new AI provider agents    |
+| [adding-modes.md](rules/adding-modes.md)   | Creating debate modes with hooks |
+| [adding-tools.md](rules/adding-tools.md)   | Adding MCP or Agent tools        |
+| [code-style.md](rules/code-style.md)       | Code style and conventions       |
+| [testing.md](rules/testing.md)             | Writing and running tests        |
 
 ## Documentation
 
@@ -174,12 +174,12 @@ RoundtableError           // Base error (code, retryable, provider, cause)
 
 ### Heavy Models (Debate Responses)
 
-| Provider   | Model                   |
-| ---------- | ----------------------- |
-| Anthropic  | claude-sonnet-4-5       |
-| OpenAI     | gpt-5.2                 |
-| Google     | gemini-3-flash-preview  |
-| Perplexity | sonar-pro               |
+| Provider   | Model                  |
+| ---------- | ---------------------- |
+| Anthropic  | claude-sonnet-4-5      |
+| OpenAI     | gpt-5.2                |
+| Google     | gemini-3-flash-preview |
+| Perplexity | sonar-pro              |
 
 ### Light Models (Consensus Analysis)
 
@@ -194,12 +194,12 @@ RoundtableError           // Base error (code, retryable, provider, cause)
 
 Automatic debate termination based on configurable criteria:
 
-| Condition | Default | Description |
-|-----------|---------|-------------|
-| Consensus | >= 0.9 | Agreement level threshold |
+| Condition   | Default  | Description                      |
+| ----------- | -------- | -------------------------------- |
+| Consensus   | >= 0.9   | Agreement level threshold        |
 | Convergence | 2 rounds | Positions stable across N rounds |
-| Confidence | >= 0.85 | All agents confidence threshold |
-| Max Rounds | varies | Fallback termination |
+| Confidence  | >= 0.85  | All agents confidence threshold  |
+| Max Rounds  | varies   | Fallback termination             |
 
 **Environment Variables:**
 ```bash
@@ -228,25 +228,25 @@ ROUNDTABLE_EXIT_CONFIDENCE_THRESHOLD=0.85
 
 ## Agent Tools (During Debates)
 
-| Tool                | Description                               |
-| ------------------- | ----------------------------------------- |
-| `get_context`       | Get current debate context                |
-| `submit_response`   | Submit structured response (validation)   |
-| `search_web`        | Basic web search for evidence             |
-| `fact_check`        | Verify claims with web and debate evidence|
-| `perplexity_search` | Advanced search with recency/domain filters|
+| Tool                | Description                                 |
+| ------------------- | ------------------------------------------- |
+| `get_context`       | Get current debate context                  |
+| `submit_response`   | Submit structured response (validation)     |
+| `search_web`        | Basic web search for evidence               |
+| `fact_check`        | Verify claims with web and debate evidence  |
+| `perplexity_search` | Advanced search with recency/domain filters |
 
 ## Debate Modes Quick Reference
 
-| Mode                   | Execution  | Use Case                        |
-| ---------------------- | ---------- | ------------------------------- |
-| collaborative          | Parallel   | Consensus building, brainstorming |
-| adversarial            | Sequential | Stress-testing ideas            |
-| socratic               | Sequential | Deep exploration via questions  |
-| expert-panel           | Parallel   | Independent expert assessments  |
-| devils-advocate        | Sequential | Forced opposition (YES/NO/NEUTRAL roles) |
-| delphi                 | Parallel   | Anonymized iterative consensus  |
-| red-team-blue-team     | Hybrid     | Security/risk analysis          |
+| Mode               | Execution  | Use Case                                 |
+| ------------------ | ---------- | ---------------------------------------- |
+| collaborative      | Parallel   | Consensus building, brainstorming        |
+| adversarial        | Sequential | Stress-testing ideas                     |
+| socratic           | Sequential | Deep exploration via questions           |
+| expert-panel       | Parallel   | Independent expert assessments           |
+| devils-advocate    | Sequential | Forced opposition (YES/NO/NEUTRAL roles) |
+| delphi             | Parallel   | Anonymized iterative consensus           |
+| red-team-blue-team | Hybrid     | Security/risk analysis                   |
 
 ## Dependencies
 
