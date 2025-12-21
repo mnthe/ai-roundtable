@@ -3,6 +3,7 @@
  */
 
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
+import { EXIT_CRITERIA_CONFIG } from '../config/exit-criteria.js';
 import { ConfigurationError } from '../errors/index.js';
 import type { DebateModeStrategy } from '../modes/base.js';
 import { getGlobalModeRegistry } from '../modes/registry.js';
@@ -121,9 +122,6 @@ export class DebateEngine {
     // Store the starting round to calculate correct round numbers
     const startingRound = session.currentRound;
 
-    // Check if exit criteria is enabled
-    const exitCriteriaEnabled = session.flags?.exitCriteria?.enabled ?? false;
-
     // Track responses by round for exit criteria checking
     const responsesByRound: AgentResponse[][] = [];
 
@@ -148,7 +146,6 @@ export class DebateEngine {
         totalRounds: session.totalRounds,
         previousResponses: session.responses,
         focusQuestion,
-        flags: session.flags,
       };
 
       const result = await this.executeRound(agents, context);
@@ -162,11 +159,11 @@ export class DebateEngine {
       responsesByRound.push(result.responses);
 
       // Check exit criteria if enabled (and not on the last planned round)
-      if (exitCriteriaEnabled && i < numRounds - 1) {
+      if (EXIT_CRITERIA_CONFIG.enabled && i < numRounds - 1) {
         const exitCriteria: ExitCriteria = {
           maxRounds: session.totalRounds,
-          consensusThreshold: session.flags?.exitCriteria?.consensusThreshold,
-          convergenceRounds: session.flags?.exitCriteria?.convergenceRounds,
+          consensusThreshold: EXIT_CRITERIA_CONFIG.consensusThreshold,
+          convergenceRounds: EXIT_CRITERIA_CONFIG.convergenceRounds,
         };
 
         const previousRounds = responsesByRound.slice(0, -1);

@@ -3,7 +3,6 @@
  * Handles: get_consensus, get_round_details, get_response_detail, get_citations, get_thoughts
  */
 
-import type { DebateEngine } from '../../core/debate-engine.js';
 import type { SessionManager } from '../../core/session-manager.js';
 import type { AIConsensusAnalyzer } from '../../core/ai-consensus-analyzer.js';
 import { getGlobalModeRegistry } from '../../modes/registry.js';
@@ -32,8 +31,7 @@ function needsGroupthinkDetection(mode: DebateMode): boolean {
 export async function handleGetConsensus(
   args: unknown,
   sessionManager: SessionManager,
-  aiConsensusAnalyzer: AIConsensusAnalyzer | null,
-  _debateEngine: DebateEngine
+  aiConsensusAnalyzer: AIConsensusAnalyzer | null
 ): Promise<ToolResponse> {
   try {
     // Validate input
@@ -67,7 +65,9 @@ export async function handleGetConsensus(
 
     // Analyze consensus using AI (required)
     if (!aiConsensusAnalyzer) {
-      return createErrorResponse('AI consensus analyzer not available. Ensure API keys are configured.');
+      return createErrorResponse(
+        'AI consensus analyzer not available. Ensure API keys are configured.'
+      );
     }
     const includeGroupthink = needsGroupthinkDetection(session.mode);
     const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
@@ -92,8 +92,7 @@ export async function handleGetConsensus(
 export async function handleGetRoundDetails(
   args: unknown,
   sessionManager: SessionManager,
-  aiConsensusAnalyzer: AIConsensusAnalyzer | null,
-  _debateEngine: DebateEngine
+  aiConsensusAnalyzer: AIConsensusAnalyzer | null
 ): Promise<ToolResponse> {
   try {
     // Validate input
@@ -121,7 +120,9 @@ export async function handleGetRoundDetails(
 
     // Analyze consensus using AI (required)
     if (!aiConsensusAnalyzer) {
-      return createErrorResponse('AI consensus analyzer not available. Ensure API keys are configured.');
+      return createErrorResponse(
+        'AI consensus analyzer not available. Ensure API keys are configured.'
+      );
     }
     const includeGroupthink = needsGroupthinkDetection(session.mode);
     const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {

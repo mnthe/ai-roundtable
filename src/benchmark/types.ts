@@ -1,11 +1,10 @@
 /**
  * Benchmark Framework Types
  *
- * Type definitions for measuring feature flag impact on quality and performance.
+ * Type definitions for measuring debate performance and quality.
  */
 
 import type { DebateMode, AgentResponse } from '../types/index.js';
-import type { FeatureFlags } from '../config/feature-flags.js';
 
 // ============================================
 // Metrics Types
@@ -98,8 +97,6 @@ export interface BenchmarkScenario {
   agents: string[];
   /** Number of rounds to execute */
   rounds: number;
-  /** Feature flags to apply for this scenario */
-  flags: Partial<FeatureFlags>;
 }
 
 /**

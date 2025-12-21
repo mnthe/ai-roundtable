@@ -42,7 +42,6 @@ export class SessionManager {
       currentRound: 0,
       totalRounds: config.rounds || 3,
       responses: [],
-      flags: config.flags,
       createdAt: now,
       updatedAt: now,
     };
