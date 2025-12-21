@@ -20,22 +20,8 @@ import {
   type BehavioralContractConfig,
   type VerificationLoopConfig,
 } from './utils/index.js';
-import type { SequentialParallelizationConfig } from '../config/feature-flags.js';
 
 const logger = createLogger('DevilsAdvocateMode');
-
-/**
- * Configuration options for DevilsAdvocateMode
- */
-export interface DevilsAdvocateModeOptions {
-  /**
-   * Sequential parallelization configuration.
-   * When enabled with 'last-only' level, PRIMARY and OPPOSITION agents
-   * run in parallel while the EVALUATOR(s) run sequentially after them.
-   * Expected ~60% latency reduction.
-   */
-  sequentialParallelization?: SequentialParallelizationConfig;
-}
 
 /**
  * Separator line used in prompts
@@ -221,11 +207,7 @@ const ROLE_DISPLAY_NAMES: Record<DevilsAdvocateRole, string> = {
  * - First agent: Normal position on the topic (PRIMARY)
  * - Second agent: Forced to take opposing stance (OPPOSITION)
  * - Remaining agents: Evaluate and judge both perspectives (EVALUATOR)
- * - Sequential execution to maintain role clarity (or last-only when optimized)
- *
- * Execution patterns:
- * - Default (sequential): All agents execute one by one
- * - Optimized (last-only): PRIMARY & OPPOSITION run in parallel, EVALUATOR(s) run after
+ * - Always uses sequential execution for role compliance
  *
  * Uses hooks:
  * - getAgentRole: Assigns PRIMARY/OPPOSITION/EVALUATOR based on agent index
@@ -238,44 +220,17 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
   override readonly executionPattern = 'sequential' as const;
 
   /**
-   * Feature flag configuration for sequential parallelization
-   */
-  private readonly parallelizationConfig?: SequentialParallelizationConfig;
-
-  /**
    * Tracks current agent index during sequential execution.
    * Used by validateResponse to determine the correct stance.
    */
   private currentAgentIndex = 0;
 
-  constructor(options?: DevilsAdvocateModeOptions) {
-    super();
-    this.parallelizationConfig = options?.sequentialParallelization;
-  }
-
-  /**
-   * Check if last-only parallelization is enabled
-   * Checks both constructor options and context.flags
-   */
-  private isLastOnlyEnabled(context: DebateContext): boolean {
-    // Check context.flags first (runtime override takes priority)
-    const contextFlags = context.flags?.sequentialParallelization;
-    if (contextFlags?.enabled && contextFlags.level === 'last-only') {
-      return true;
-    }
-
-    // Fall back to constructor options
-    if (!this.parallelizationConfig) return false;
-    return this.parallelizationConfig.enabled && this.parallelizationConfig.level === 'last-only';
-  }
-
   /**
    * Execute a devil's advocate round
    *
-   * Execution strategy depends on feature flag configuration:
-   * - Default: Sequential execution using base executeSequential
-   * - Optimized (last-only): PRIMARY & OPPOSITION run in parallel,
-   *   EVALUATOR(s) run sequentially after seeing both positions
+   * Always uses sequential execution to ensure role compliance.
+   * OPPOSITION agents need to see PRIMARY responses to properly understand
+   * their role assignment in the debate structure.
    *
    * Uses hooks for role assignment, context transformation, and stance validation.
    */
@@ -287,122 +242,8 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     // Reset agent index tracker for this round
     this.currentAgentIndex = 0;
 
-    // Use last-only parallelization if enabled (from context.flags or constructor options)
-    // This runs PRIMARY and OPPOSITION in parallel, then EVALUATOR(s) sequentially
-    if (this.isLastOnlyEnabled(context) && agents.length >= 3) {
-      logger.debug(
-        { agentCount: agents.length },
-        'Using last-only parallelization for devils-advocate mode (flag-enabled)'
-      );
-      return this.executeLastOnlyForDevilsAdvocate(agents, context, toolkit);
-    }
-
-    // Use flag-aware execution for default sequential pattern
+    // Always use sequential execution for devils-advocate mode
     return this.executeWithFlags(agents, context, toolkit, 'sequential');
-  }
-
-  /**
-   * Execute with last-only parallelization optimized for devils-advocate
-   *
-   * In devils-advocate, the pattern is:
-   * - PRIMARY (index 0) and OPPOSITION (index 1) can run in parallel
-   *   since they don't need to see each other's responses
-   * - EVALUATOR(s) (index 2+) need to see both PRIMARY and OPPOSITION
-   *
-   * This method uses executeLastOnly but handles the special case where
-   * we have multiple evaluators. For 3 agents (PRIMARY, OPPOSITION, EVALUATOR),
-   * this is exactly the last-only pattern. For 4+ agents, evaluators still
-   * need to run sequentially among themselves.
-   */
-  private async executeLastOnlyForDevilsAdvocate(
-    agents: BaseAgent[],
-    context: DebateContext,
-    toolkit: AgentToolkit
-  ): Promise<AgentResponse[]> {
-    // For exactly 3 agents, use the standard last-only pattern
-    // PRIMARY and OPPOSITION run in parallel, EVALUATOR sees both
-    if (agents.length === 3) {
-      return this.executeLastOnly(agents, context, toolkit);
-    }
-
-    // For 4+ agents: PRIMARY and OPPOSITION parallel, then evaluators sequential
-    // Split into: parallel agents (PRIMARY, OPPOSITION) and sequential agents (EVALUATORs)
-    const parallelAgents = agents.slice(0, 2); // PRIMARY and OPPOSITION
-    const evaluatorAgents = agents.slice(2); // All EVALUATORs
-
-    // Build base context with mode-specific prompt for parallel agents
-    const baseContext: DebateContext = {
-      ...context,
-      modePrompt: this.buildAgentPrompt(context),
-    };
-
-    // Execute PRIMARY and OPPOSITION in parallel
-    const parallelPromises = parallelAgents.map((agent, index) => {
-      agent.setToolkit(toolkit);
-
-      const role = this.getAgentRole(agent, index, context);
-      logger.debug({ agentId: agent.id, role, index }, 'Agent role assigned (parallel phase)');
-
-      const agentContext = this.transformContext(baseContext, agent);
-      return agent.generateResponse(agentContext);
-    });
-
-    const parallelResults = await Promise.allSettled(parallelPromises);
-
-    const parallelResponses: AgentResponse[] = [];
-    for (let i = 0; i < parallelResults.length; i++) {
-      const result = parallelResults[i];
-      const agent = parallelAgents[i];
-      if (!result || !agent) continue;
-
-      if (result.status === 'fulfilled') {
-        const response = this.validateResponse(result.value, baseContext);
-        parallelResponses.push(response);
-      } else {
-        logger.error(
-          { err: result.reason, agentId: agent.id },
-          'Error from agent (parallel phase)'
-        );
-      }
-    }
-
-    // Now execute EVALUATORs sequentially, each seeing accumulated responses
-    const allResponses = [...parallelResponses];
-
-    for (let i = 0; i < evaluatorAgents.length; i++) {
-      const agent = evaluatorAgents[i];
-      if (!agent) continue;
-
-      const agentIndex = 2 + i; // Evaluators start at index 2
-
-      try {
-        const role = this.getAgentRole(agent, agentIndex, context);
-        logger.debug(
-          { agentId: agent.id, role, index: agentIndex },
-          'Agent role assigned (sequential phase)'
-        );
-
-        // Build context with all previous responses
-        const evalContext: DebateContext = {
-          ...context,
-          previousResponses: [...context.previousResponses, ...allResponses],
-          modePrompt: this.buildAgentPromptForIndex(
-            { ...context, previousResponses: [...context.previousResponses, ...allResponses] },
-            agentIndex
-          ),
-        };
-
-        const agentContext = this.transformContext(evalContext, agent);
-        agent.setToolkit(toolkit);
-        let response = await agent.generateResponse(agentContext);
-        response = this.validateResponse(response, evalContext);
-        allResponses.push(response);
-      } catch (error) {
-        logger.error({ err: error, agentId: agent.id }, 'Error from evaluator agent');
-      }
-    }
-
-    return allResponses;
   }
 
   /**
