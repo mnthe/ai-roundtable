@@ -21,13 +21,9 @@ async function runBenchmark() {
   const keys = detectApiKeys();
   const { warnings } = setupProviders(registry, keys);
   console.log('Warnings:', warnings);
-
-  // Create default agents (this was missing!)
   createDefaultAgents(registry);
-
   const allAgents = registry.getActiveAgents();
   console.log('Available agents:', allAgents.map(a => a.getInfo().name));
-
   const results: any[] = [];
 
   for (const topic of TOPICS) {
@@ -57,21 +53,13 @@ async function runBenchmark() {
 
       try {
         const responses = await mode.executeRound(allAgents.slice(0, 3), context, toolkit);
-
         const violations = responses.filter(r => r._roleViolation);
-        const result = {
+        results.push({
           topic: topic.substring(0, 50),
           config: config.name,
-          responses: responses.map(r => ({
-            agent: r.agentName,
-            stance: r.stance,
-            violation: r._roleViolation ? 'Expected ' + r._roleViolation.expected + ', got ' + r._roleViolation.actual : null,
-            positionExcerpt: r.position.substring(0, 100),
-          })),
           violationCount: violations.length,
-        };
-        results.push(result);
-
+          total: responses.length,
+        });
         console.log('Violations:', violations.length + '/' + responses.length);
         for (const r of responses) {
           const viol = r._roleViolation ? ' ⚠️ VIOLATION (expected ' + r._roleViolation.expected + ')' : '';
@@ -84,15 +72,13 @@ async function runBenchmark() {
   }
 
   console.log('\n\n' + '='.repeat(60));
-  console.log('SUMMARY');
+  console.log('SUMMARY (FIRM TONE)');
   console.log('='.repeat(60));
 
   const byConfig: Record<string, { total: number; violations: number }> = {};
   for (const r of results) {
-    if (!byConfig[r.config]) {
-      byConfig[r.config] = { total: 0, violations: 0 };
-    }
-    byConfig[r.config].total += r.responses.length;
+    if (!byConfig[r.config]) byConfig[r.config] = { total: 0, violations: 0 };
+    byConfig[r.config].total += r.total;
     byConfig[r.config].violations += r.violationCount;
   }
 
