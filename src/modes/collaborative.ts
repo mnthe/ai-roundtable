@@ -91,6 +91,7 @@ const COLLABORATIVE_CONFIG: ModePromptConfig = {
  */
 export class CollaborativeMode extends BaseModeStrategy {
   readonly name = 'collaborative';
+  readonly needsGroupthinkDetection = true;
 
   /**
    * Execute a collaborative round

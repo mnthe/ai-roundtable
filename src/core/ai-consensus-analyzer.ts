@@ -60,9 +60,9 @@ export interface AIAnalysisDiagnostics {
 }
 
 /**
- * Analysis prompt template for the AI model
+ * Base analysis prompt template (without groupthink detection)
  */
-const ANALYSIS_PROMPT = `You are analyzing debate positions from multiple AI agents. Your task is to perform semantic analysis - understanding meaning, not just matching keywords.
+const BASE_ANALYSIS_PROMPT = `You are analyzing debate positions from multiple AI agents. Your task is to perform semantic analysis - understanding meaning, not just matching keywords.
 
 ## Debate Topic
 {topic}
@@ -90,11 +90,6 @@ Analyze these positions semantically and return a JSON object with this exact st
     "conditionalPositions": ["<positions that depend on conditions>"],
     "uncertainties": ["<areas where agents express uncertainty>"]
   },
-  "groupthinkWarning": {
-    "detected": <boolean - true if groupthink indicators present>,
-    "indicators": ["<list of detected groupthink indicators>"],
-    "recommendation": "<suggested action if groupthink detected>"
-  },
   "summary": "<2-3 sentence overall summary>",
   "reasoning": "<brief explanation of your analysis>"
 }
@@ -106,14 +101,38 @@ Important:
 - Consider degrees of agreement (strong vs weak agreement)
 - Identify nuanced positions (conditional, partial, uncertain)
 
+Return ONLY the JSON object, no other text.`;
+
+/**
+ * Groupthink detection addition to the prompt
+ */
+const GROUPTHINK_PROMPT_ADDITION = `
+
+Additionally, include groupthink detection in your analysis:
+
+Add this field to your JSON response:
+  "groupthinkWarning": {
+    "detected": <boolean - true if groupthink indicators present>,
+    "indicators": ["<list of detected groupthink indicators>"],
+    "recommendation": "<suggested action if groupthink detected>"
+  }
+
 Groupthink Detection - Set detected=true if ANY of these are present:
 - All agents show very high confidence (>=85%) without substantive disagreement
 - All positions converge on identical conclusion without exploring alternatives
 - No devil's advocate or contrarian perspectives despite controversial topic
 - Arguments rely on social proof ("everyone agrees") rather than evidence
-- Dissenting viewpoints are dismissed without proper consideration
+- Dissenting viewpoints are dismissed without proper consideration`;
 
-Return ONLY the JSON object, no other text.`;
+/**
+ * Build the analysis prompt, optionally including groupthink detection
+ */
+function buildAnalysisPrompt(includeGroupthink: boolean): string {
+  if (includeGroupthink) {
+    return BASE_ANALYSIS_PROMPT + GROUPTHINK_PROMPT_ADDITION;
+  }
+  return BASE_ANALYSIS_PROMPT;
+}
 
 /**
  * AI-Based Consensus Analyzer
@@ -135,15 +154,18 @@ export class AIConsensusAnalyzer {
    *
    * @param responses - Agent responses to analyze
    * @param topic - The debate topic for context
-   * @param _groupthinkThreshold - Optional threshold for groupthink detection (reserved for future use)
+   * @param options - Analysis options
+   * @param options.includeGroupthinkDetection - Whether to include groupthink detection (default: true)
    * @returns AI-enhanced consensus result
    * @throws Error if no AI agent is available
    */
   async analyzeConsensus(
     responses: AgentResponse[],
     topic: string,
-    _groupthinkThreshold?: number
+    options?: { includeGroupthinkDetection?: boolean }
   ): Promise<AIConsensusResult> {
+    const includeGroupthink = options?.includeGroupthinkDetection ?? true;
+
     // Handle edge cases
     if (responses.length === 0) {
       return this.createEmptyResult('No responses to analyze');
@@ -184,8 +206,11 @@ export class AIConsensusAnalyzer {
       throw new Error(errorMessage);
     }
 
-    logger.debug({ topic, responseCount: responses.length }, 'Performing AI consensus analysis');
-    return await this.performAIAnalysis(result.agent, responses, topic);
+    logger.debug(
+      { topic, responseCount: responses.length, includeGroupthink },
+      'Performing AI consensus analysis'
+    );
+    return await this.performAIAnalysis(result.agent, responses, topic, includeGroupthink);
   }
 
   /**
@@ -199,13 +224,17 @@ export class AIConsensusAnalyzer {
     }
 
     if (diagnostics.totalAgents === 0) {
-      parts.push('Hint: No agents registered. Ensure API keys are set and setupAgents() was called.');
+      parts.push(
+        'Hint: No agents registered. Ensure API keys are set and setupAgents() was called.'
+      );
     } else if (diagnostics.activeAgents === 0) {
       const inactiveInfo = diagnostics.inactiveAgents
         .slice(0, 3)
         .map((a) => `${a.provider}: ${a.error ?? 'unknown error'}`)
         .join('; ');
-      parts.push(`Hint: All ${diagnostics.totalAgents} agents failed health checks. Errors: ${inactiveInfo}`);
+      parts.push(
+        `Hint: All ${diagnostics.totalAgents} agents failed health checks. Errors: ${inactiveInfo}`
+      );
     }
 
     return parts.join('. ');
@@ -236,9 +265,7 @@ export class AIConsensusAnalyzer {
 
     // Try preferred provider first
     if (this.preferredProvider) {
-      const preferred = activeAgents.find(
-        (a) => a.getInfo().provider === this.preferredProvider
-      );
+      const preferred = activeAgents.find((a) => a.getInfo().provider === this.preferredProvider);
       if (preferred) {
         logger.debug(
           { provider: this.preferredProvider, agentId: preferred.getInfo().id },
@@ -282,7 +309,8 @@ export class AIConsensusAnalyzer {
   private async performAIAnalysis(
     agent: BaseAgent,
     responses: AgentResponse[],
-    topic: string
+    topic: string,
+    includeGroupthink: boolean
   ): Promise<AIConsensusResult> {
     // Format positions for the prompt
     const positionsText = responses
@@ -295,11 +323,9 @@ export class AIConsensusAnalyzer {
       )
       .join('\n\n');
 
-    // Build the analysis prompt
-    const prompt = ANALYSIS_PROMPT.replace('{topic}', topic).replace(
-      '{positions}',
-      positionsText
-    );
+    // Build the analysis prompt (conditionally includes groupthink detection)
+    const promptTemplate = buildAnalysisPrompt(includeGroupthink);
+    const prompt = promptTemplate.replace('{topic}', topic).replace('{positions}', positionsText);
 
     // System prompt for JSON-only output
     const systemPrompt =
@@ -369,10 +395,7 @@ export class AIConsensusAnalyzer {
         return partialResult;
       }
     } catch (error) {
-      logger.debug(
-        { err: error, strategy: 'partial-json' },
-        'partial-json failed, using fallback'
-      );
+      logger.debug({ err: error, strategy: 'partial-json' }, 'partial-json failed, using fallback');
     }
 
     // Strategy 3: Extract agreementLevel with regex as last resort
@@ -594,9 +617,7 @@ export class AIConsensusAnalyzer {
     return {
       agreementLevel: Math.max(0, Math.min(1, Number(parsed.agreementLevel) || 0.5)),
       commonGround: Array.isArray(parsed.commonGround) ? parsed.commonGround : [],
-      disagreementPoints: Array.isArray(parsed.disagreementPoints)
-        ? parsed.disagreementPoints
-        : [],
+      disagreementPoints: Array.isArray(parsed.disagreementPoints) ? parsed.disagreementPoints : [],
       summary: String(parsed.summary || 'Analysis complete'),
       clusters: Array.isArray(parsed.clusters) ? parsed.clusters : undefined,
       nuances: parsed.nuances
@@ -684,9 +705,7 @@ export class AIConsensusAnalyzer {
         .join('; ');
       reason = `All agents failed health checks. ${errorSummary}`;
     } else if (this.preferredProvider) {
-      const preferredAvailable = activeAgents.some(
-        (a) => a.provider === this.preferredProvider
-      );
+      const preferredAvailable = activeAgents.some((a) => a.provider === this.preferredProvider);
       if (preferredAvailable) {
         available = true;
       } else {

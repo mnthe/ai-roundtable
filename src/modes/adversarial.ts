@@ -90,6 +90,7 @@ const ADVERSARIAL_CONFIG: ModePromptConfig = {
  */
 export class AdversarialMode extends BaseModeStrategy {
   readonly name = 'adversarial';
+  readonly needsGroupthinkDetection = false;
 
   /**
    * Execute an adversarial round

@@ -6,6 +6,8 @@
 import type { DebateEngine } from '../../core/debate-engine.js';
 import type { SessionManager } from '../../core/session-manager.js';
 import type { AIConsensusAnalyzer } from '../../core/ai-consensus-analyzer.js';
+import { getGlobalModeRegistry } from '../../modes/registry.js';
+import type { DebateMode } from '../../types/index.js';
 import {
   GetConsensusInputSchema,
   GetRoundDetailsInputSchema,
@@ -14,6 +16,15 @@ import {
   GetThoughtsInputSchema,
 } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
+
+/**
+ * Get whether groupthink detection is needed for a given mode
+ */
+function needsGroupthinkDetection(mode: DebateMode): boolean {
+  const registry = getGlobalModeRegistry();
+  const strategy = registry.getMode(mode);
+  return strategy?.needsGroupthinkDetection ?? true;
+}
 
 /**
  * Handler: get_consensus
@@ -58,7 +69,10 @@ export async function handleGetConsensus(
     if (!aiConsensusAnalyzer) {
       return createErrorResponse('AI consensus analyzer not available. Ensure API keys are configured.');
     }
-    const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic);
+    const includeGroupthink = needsGroupthinkDetection(session.mode);
+    const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
+      includeGroupthinkDetection: includeGroupthink,
+    });
 
     return createSuccessResponse({
       sessionId: input.sessionId,
@@ -109,7 +123,10 @@ export async function handleGetRoundDetails(
     if (!aiConsensusAnalyzer) {
       return createErrorResponse('AI consensus analyzer not available. Ensure API keys are configured.');
     }
-    const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic);
+    const includeGroupthink = needsGroupthinkDetection(session.mode);
+    const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
+      includeGroupthinkDetection: includeGroupthink,
+    });
 
     return createSuccessResponse({
       sessionId: input.sessionId,

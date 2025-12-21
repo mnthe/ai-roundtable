@@ -91,6 +91,7 @@ const SOCRATIC_CONFIG: ModePromptConfig = {
  */
 export class SocraticMode extends BaseModeStrategy {
   readonly name = 'socratic';
+  readonly needsGroupthinkDetection = false;
 
   /**
    * Execute a Socratic round

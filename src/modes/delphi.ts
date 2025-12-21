@@ -136,6 +136,7 @@ const SUBSEQUENT_ROUND_SECTIONS: OutputSection[] = createOutputSections([
  */
 export class DelphiMode extends BaseModeStrategy {
   readonly name = 'delphi';
+  readonly needsGroupthinkDetection = true;
 
   /** Processor chain for context transformation */
   private readonly processorChain: ContextProcessor;

@@ -76,8 +76,10 @@ export class DebateEngine {
       // Fall back to simple round-robin if no strategy found
       logger.warn({ mode: context.mode }, 'No mode strategy found, using simple round-robin');
       const responses = await this.executeSimpleRound(agents, context);
-      const groupthinkThreshold = context.flags?.groupthinkDetection?.threshold;
-      const consensus = await this.analyzeConsensusWithAI(responses, context.topic, groupthinkThreshold);
+      // Default to including groupthink detection when no strategy is found
+      const consensus = await this.analyzeConsensusWithAI(responses, context.topic, {
+        includeGroupthinkDetection: true,
+      });
       return {
         roundNumber: context.currentRound,
         responses,
@@ -87,8 +89,11 @@ export class DebateEngine {
 
     // Use the strategy to execute the round
     const responses = await strategy.executeRound(agents, context, this.toolkit);
-    const groupthinkThreshold = context.flags?.groupthinkDetection?.threshold;
-    const consensus = await this.analyzeConsensusWithAI(responses, context.topic, groupthinkThreshold);
+    // Get groupthink detection preference from mode strategy (default: true)
+    const includeGroupthinkDetection = strategy.needsGroupthinkDetection ?? true;
+    const consensus = await this.analyzeConsensusWithAI(responses, context.topic, {
+      includeGroupthinkDetection,
+    });
 
     return {
       roundNumber: context.currentRound,
@@ -218,20 +223,21 @@ export class DebateEngine {
    *
    * @param responses - Agent responses to analyze
    * @param topic - Debate topic for context
-   * @param groupthinkThreshold - Optional threshold for groupthink detection
+   * @param options - Analysis options
+   * @param options.includeGroupthinkDetection - Whether to include groupthink detection (default: true)
    * @returns Consensus analysis result
    * @throws Error if AI consensus analyzer is not available
    */
   async analyzeConsensusWithAI(
     responses: AgentResponse[],
     topic: string,
-    groupthinkThreshold?: number
+    options?: { includeGroupthinkDetection?: boolean }
   ): Promise<ConsensusResult> {
     if (!this.aiConsensusAnalyzer) {
       throw new Error('AI consensus analyzer not available. Configure aiConsensusAnalyzer in DebateEngineOptions.');
     }
 
-    return this.aiConsensusAnalyzer.analyzeConsensus(responses, topic, groupthinkThreshold);
+    return this.aiConsensusAnalyzer.analyzeConsensus(responses, topic, options);
   }
 
   /**

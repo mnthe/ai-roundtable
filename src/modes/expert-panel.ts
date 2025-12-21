@@ -182,6 +182,7 @@ const EXPERT_PANEL_CONFIG: ModePromptConfig = {
  */
 export class ExpertPanelMode extends BaseModeStrategy {
   readonly name = 'expert-panel';
+  readonly needsGroupthinkDetection = true;
   override readonly executionPattern = 'parallel' as const;
 
   /**

@@ -24,6 +24,17 @@ export interface DebateModeStrategy {
   readonly name: string;
 
   /**
+   * Whether this mode needs groupthink detection during consensus analysis
+   *
+   * Modes where agents are expected to agree (collaborative, delphi) benefit from
+   * groupthink detection. Modes with built-in opposition (adversarial, devils-advocate)
+   * typically don't need it as disagreement is structurally enforced.
+   *
+   * Default: true (for backward compatibility)
+   */
+  readonly needsGroupthinkDetection?: boolean;
+
+  /**
    * Execute a debate round with the given agents
    *
    * @param agents - Array of agents participating in this round
