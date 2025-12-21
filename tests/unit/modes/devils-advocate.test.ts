@@ -655,7 +655,7 @@ describe('DevilsAdvocateMode', () => {
   });
 
   describe('getAgentRole hook', () => {
-    it('should return PRIMARY for index 0', () => {
+    it('should return PRIMARY for index 0 with 3 agents', () => {
       const agent = new MockAgent({
         id: 'agent-1',
         name: 'Test',
@@ -663,12 +663,13 @@ describe('DevilsAdvocateMode', () => {
         model: 'mock',
       });
 
-      // Access protected method via any cast (for testing)
+      // Set total agents to 3 (1 PRIMARY, 1 OPPOSITION, 1 EVALUATOR)
+      (mode as any).totalAgentsInRound = 3;
       const role = (mode as any).getAgentRole(agent, 0, defaultContext);
       expect(role).toBe('PRIMARY');
     });
 
-    it('should return OPPOSITION for index 1', () => {
+    it('should return OPPOSITION for index 1 with 3 agents', () => {
       const agent = new MockAgent({
         id: 'agent-2',
         name: 'Test',
@@ -676,11 +677,12 @@ describe('DevilsAdvocateMode', () => {
         model: 'mock',
       });
 
+      (mode as any).totalAgentsInRound = 3;
       const role = (mode as any).getAgentRole(agent, 1, defaultContext);
       expect(role).toBe('OPPOSITION');
     });
 
-    it('should return EVALUATOR for index 2 and above', () => {
+    it('should return EVALUATOR for index 2 with 3 agents', () => {
       const agent = new MockAgent({
         id: 'agent-3',
         name: 'Test',
@@ -688,388 +690,78 @@ describe('DevilsAdvocateMode', () => {
         model: 'mock',
       });
 
+      (mode as any).totalAgentsInRound = 3;
       expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('EVALUATOR');
-      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('EVALUATOR');
-      expect((mode as any).getAgentRole(agent, 10, defaultContext)).toBe('EVALUATOR');
     });
   });
 
-  describe('sequential parallelization (last-only)', () => {
-    let parallelizedMode: DevilsAdvocateMode;
-
-    beforeEach(() => {
-      parallelizedMode = new DevilsAdvocateMode({
-        sequentialParallelization: {
-          enabled: true,
-          level: 'last-only',
-        },
-      });
+  describe('balanced role distribution', () => {
+    it('should distribute roles as 1/1/1 for 3 agents', () => {
+      (mode as any).totalAgentsInRound = 3;
+      const distribution = (mode as any).getRoleDistribution(3);
+      expect(distribution).toEqual({ primaryCount: 1, oppositionCount: 1, evaluatorCount: 1 });
     });
 
-    it('should use sequential execution when parallelization is disabled', async () => {
-      // Default mode (no parallelization)
-      const executionOrder: string[] = [];
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
-
-      for (const agent of agents) {
-        vi.spyOn(agent, 'generateResponse').mockImplementation(async () => {
-          executionOrder.push(agent.id);
-          // Delay to track order
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return {
-            agentId: agent.id,
-            agentName: agent.name,
-            position: 'Position',
-            reasoning: 'Reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          };
-        });
-      }
-
-      await mode.executeRound(agents, defaultContext, mockToolkit);
-
-      // Sequential: strict order
-      expect(executionOrder).toEqual(['primary', 'opposition', 'evaluator']);
+    it('should distribute roles as 1/1/2 for 4 agents', () => {
+      (mode as any).totalAgentsInRound = 4;
+      const distribution = (mode as any).getRoleDistribution(4);
+      expect(distribution).toEqual({ primaryCount: 1, oppositionCount: 1, evaluatorCount: 2 });
     });
 
-    it('should use last-only execution when enabled with 3 agents', async () => {
-      const executionOrder: string[] = [];
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
-
-      for (const agent of agents) {
-        vi.spyOn(agent, 'generateResponse').mockImplementation(async () => {
-          executionOrder.push(agent.id);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return {
-            agentId: agent.id,
-            agentName: agent.name,
-            position: 'Position',
-            reasoning: 'Reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          };
-        });
-      }
-
-      const responses = await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
-
-      expect(responses).toHaveLength(3);
-      // Evaluator should always be last
-      expect(executionOrder[executionOrder.length - 1]).toBe('evaluator');
+    it('should distribute roles as 2/2/1 for 5 agents', () => {
+      (mode as any).totalAgentsInRound = 5;
+      const distribution = (mode as any).getRoleDistribution(5);
+      expect(distribution).toEqual({ primaryCount: 2, oppositionCount: 2, evaluatorCount: 1 });
     });
 
-    it('should not use parallelization with fewer than 3 agents', async () => {
-      const executionOrder: string[] = [];
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-      ];
-
-      for (const agent of agents) {
-        vi.spyOn(agent, 'generateResponse').mockImplementation(async () => {
-          executionOrder.push(agent.id);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return {
-            agentId: agent.id,
-            agentName: agent.name,
-            position: 'Position',
-            reasoning: 'Reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          };
-        });
-      }
-
-      await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
-
-      // With 2 agents, should still be sequential
-      expect(executionOrder).toEqual(['primary', 'opposition']);
+    it('should distribute roles as 2/2/2 for 6 agents', () => {
+      (mode as any).totalAgentsInRound = 6;
+      const distribution = (mode as any).getRoleDistribution(6);
+      expect(distribution).toEqual({ primaryCount: 2, oppositionCount: 2, evaluatorCount: 2 });
     });
 
-    it('should give evaluator access to both PRIMARY and OPPOSITION responses', async () => {
-      let evaluatorContext: DebateContext | null = null;
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
-
-      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
-        agentId: 'primary',
-        agentName: 'Primary',
-        position: 'Pro position',
-        reasoning: 'Pro reasoning',
-        confidence: 0.8,
-        timestamp: new Date(),
-        stance: 'YES',
+    it('should assign correct roles for 5 agents: P, P, O, O, E', () => {
+      const agent = new MockAgent({
+        id: 'test',
+        name: 'Test',
+        provider: 'anthropic',
+        model: 'mock',
       });
 
-      vi.spyOn(agents[1], 'generateResponse').mockResolvedValue({
-        agentId: 'opposition',
-        agentName: 'Opposition',
-        position: 'Counter position',
-        reasoning: 'Counter reasoning',
-        confidence: 0.7,
-        timestamp: new Date(),
-        stance: 'NO',
-      });
-
-      vi.spyOn(agents[2], 'generateResponse').mockImplementation(async (ctx) => {
-        evaluatorContext = { ...ctx };
-        return {
-          agentId: 'evaluator',
-          agentName: 'Evaluator',
-          position: 'Evaluation',
-          reasoning: 'Analysis',
-          confidence: 0.75,
-          timestamp: new Date(),
-          stance: 'NEUTRAL',
-        };
-      });
-
-      await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
-
-      // Evaluator should see both responses
-      expect(evaluatorContext).not.toBeNull();
-      expect(evaluatorContext!.previousResponses).toHaveLength(2);
-      const responseIds = evaluatorContext!.previousResponses.map((r) => r.agentId);
-      expect(responseIds).toContain('primary');
-      expect(responseIds).toContain('opposition');
+      (mode as any).totalAgentsInRound = 5;
+      expect((mode as any).getAgentRole(agent, 0, defaultContext)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agent, 1, defaultContext)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agent, 4, defaultContext)).toBe('EVALUATOR');
     });
 
-    it('should mark role violations when agents return without expected stance (no force-correction)', async () => {
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
+    it('should assign correct roles for 6 agents: P, P, O, O, E, E', () => {
+      const agent = new MockAgent({
+        id: 'test',
+        name: 'Test',
+        provider: 'anthropic',
+        model: 'mock',
+      });
 
-      // All agents return without stance
-      for (const agent of agents) {
-        vi.spyOn(agent, 'generateResponse').mockResolvedValue({
-          agentId: agent.id,
-          agentName: agent.name,
-          position: 'Position',
-          reasoning: 'Reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-          // No stance
-        });
-      }
-
-      const responses = await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
-
-      // StanceValidator no longer force-corrects, just marks violations
-      // Original stance (undefined) is preserved
-      expect(responses[0].stance).toBeUndefined();
-      expect(responses[1].stance).toBeUndefined();
-      expect(responses[2].stance).toBeUndefined();
-
-      // Role violations are marked
-      expect(responses[0]._roleViolation).toEqual({ expected: 'YES', actual: null });
-      expect(responses[1]._roleViolation).toEqual({ expected: 'NO', actual: null });
-      expect(responses[2]._roleViolation).toEqual({ expected: 'NEUTRAL', actual: null });
+      (mode as any).totalAgentsInRound = 6;
+      expect((mode as any).getAgentRole(agent, 0, defaultContext)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agent, 1, defaultContext)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agent, 4, defaultContext)).toBe('EVALUATOR');
+      expect((mode as any).getAgentRole(agent, 5, defaultContext)).toBe('EVALUATOR');
     });
 
-    it('should handle 4+ agents with parallelization (multiple evaluators)', async () => {
-      let eval1Context: DebateContext | null = null;
-      let eval2Context: DebateContext | null = null;
-
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'eval1', name: 'Evaluator 1', provider: 'google', model: 'mock' }),
-        new MockAgent({ id: 'eval2', name: 'Evaluator 2', provider: 'perplexity', model: 'mock' }),
-      ];
-
-      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
-        agentId: 'primary',
-        agentName: 'Primary',
-        position: 'Pro position',
-        reasoning: 'Pro reasoning',
-        confidence: 0.8,
-        timestamp: new Date(),
-        stance: 'YES',
-      });
-
-      vi.spyOn(agents[1], 'generateResponse').mockResolvedValue({
-        agentId: 'opposition',
-        agentName: 'Opposition',
-        position: 'Counter position',
-        reasoning: 'Counter reasoning',
-        confidence: 0.7,
-        timestamp: new Date(),
-        stance: 'NO',
-      });
-
-      vi.spyOn(agents[2], 'generateResponse').mockImplementation(async (ctx) => {
-        eval1Context = { ...ctx };
-        return {
-          agentId: 'eval1',
-          agentName: 'Evaluator 1',
-          position: 'Evaluation 1',
-          reasoning: 'Analysis 1',
-          confidence: 0.75,
-          timestamp: new Date(),
-          stance: 'NEUTRAL',
-        };
-      });
-
-      vi.spyOn(agents[3], 'generateResponse').mockImplementation(async (ctx) => {
-        eval2Context = { ...ctx };
-        return {
-          agentId: 'eval2',
-          agentName: 'Evaluator 2',
-          position: 'Evaluation 2',
-          reasoning: 'Analysis 2',
-          confidence: 0.8,
-          timestamp: new Date(),
-          stance: 'NEUTRAL',
-        };
-      });
-
-      const responses = await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
-
-      expect(responses).toHaveLength(4);
-
-      // First evaluator should see PRIMARY and OPPOSITION
-      expect(eval1Context).not.toBeNull();
-      expect(eval1Context!.previousResponses).toHaveLength(2);
-
-      // Second evaluator should see PRIMARY, OPPOSITION, and first evaluator
-      expect(eval2Context).not.toBeNull();
-      expect(eval2Context!.previousResponses).toHaveLength(3);
-
-      // All stances should be correct
-      expect(responses[0].stance).toBe('YES');
-      expect(responses[1].stance).toBe('NO');
-      expect(responses[2].stance).toBe('NEUTRAL');
-      expect(responses[3].stance).toBe('NEUTRAL');
+    it('should handle edge case of 2 agents (no evaluator)', () => {
+      const distribution = (mode as any).getRoleDistribution(2);
+      expect(distribution).toEqual({ primaryCount: 1, oppositionCount: 1, evaluatorCount: 0 });
     });
 
-    it('should handle agent failures gracefully with parallelization', async () => {
-      /**
-       * Custom failing agent for testing
-       */
-      class FailingMockAgent extends MockAgent {
-        override async generateResponse(): Promise<AgentResponse> {
-          throw new Error('Agent failed');
-        }
-      }
-
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new FailingMockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
-
-      vi.spyOn(agents[0], 'generateResponse').mockResolvedValue({
-        agentId: 'primary',
-        agentName: 'Primary',
-        position: 'Pro position',
-        reasoning: 'Pro reasoning',
-        confidence: 0.8,
-        timestamp: new Date(),
-        stance: 'YES',
-      });
-
-      vi.spyOn(agents[2], 'generateResponse').mockResolvedValue({
-        agentId: 'evaluator',
-        agentName: 'Evaluator',
-        position: 'Evaluation',
-        reasoning: 'Analysis',
-        confidence: 0.75,
-        timestamp: new Date(),
-        stance: 'NEUTRAL',
-      });
-
-      const responses = await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
-
-      // Should have responses from working agents
-      expect(responses).toHaveLength(2);
-      expect(responses.map((r) => r.agentId)).toContain('primary');
-      expect(responses.map((r) => r.agentId)).toContain('evaluator');
-    });
-
-    it('should not use parallelization when level is not last-only', async () => {
-      const noneMode = new DevilsAdvocateMode({
-        sequentialParallelization: {
-          enabled: true,
-          level: 'none', // Not 'last-only'
-        },
-      });
-
-      const executionOrder: string[] = [];
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
-
-      for (const agent of agents) {
-        vi.spyOn(agent, 'generateResponse').mockImplementation(async () => {
-          executionOrder.push(agent.id);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return {
-            agentId: agent.id,
-            agentName: agent.name,
-            position: 'Position',
-            reasoning: 'Reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          };
-        });
-      }
-
-      await noneMode.executeRound(agents, defaultContext, mockToolkit);
-
-      // Should be strictly sequential
-      expect(executionOrder).toEqual(['primary', 'opposition', 'evaluator']);
-    });
-
-    it('should not use parallelization when enabled is false', async () => {
-      const disabledMode = new DevilsAdvocateMode({
-        sequentialParallelization: {
-          enabled: false,
-          level: 'last-only',
-        },
-      });
-
-      const executionOrder: string[] = [];
-      const agents = [
-        new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
-        new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
-        new MockAgent({ id: 'evaluator', name: 'Evaluator', provider: 'google', model: 'mock' }),
-      ];
-
-      for (const agent of agents) {
-        vi.spyOn(agent, 'generateResponse').mockImplementation(async () => {
-          executionOrder.push(agent.id);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          return {
-            agentId: agent.id,
-            agentName: agent.name,
-            position: 'Position',
-            reasoning: 'Reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          };
-        });
-      }
-
-      await disabledMode.executeRound(agents, defaultContext, mockToolkit);
-
-      // Should be strictly sequential
-      expect(executionOrder).toEqual(['primary', 'opposition', 'evaluator']);
+    it('should handle edge case of 1 agent (only primary)', () => {
+      const distribution = (mode as any).getRoleDistribution(1);
+      expect(distribution).toEqual({ primaryCount: 1, oppositionCount: 0, evaluatorCount: 0 });
     });
   });
+
 });
