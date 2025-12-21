@@ -9,11 +9,7 @@ export type { AgentTool, AgentToolkit, ToolExecutor, ToolDefinition } from './ty
 export {
   DefaultAgentToolkit,
   createDefaultToolkit,
-  type WebSearchProvider,
   type SessionDataProvider,
-  type PerplexitySearchProvider,
-  type PerplexitySearchInput,
-  type PerplexitySearchResult,
 } from './toolkit.js';
 
 // Export validation schemas and utilities
@@ -22,12 +18,8 @@ export {
   TOOL_INPUT_SCHEMAS,
   GetContextInputSchema,
   SubmitResponseInputSchema,
-  SearchWebInputSchema,
   FactCheckInputSchema,
-  PerplexitySearchInputSchema,
   type GetContextInput,
   type SubmitResponseInput,
-  type SearchWebInput,
   type FactCheckInput,
-  type PerplexitySearchInput as PerplexitySearchInputValidated,
 } from './schemas.js';
