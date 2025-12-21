@@ -5,7 +5,6 @@ import {
   loadFlagsFromEnv,
   FeatureFlagResolver,
   type FeatureFlags,
-  type ParallelizationLevel,
 } from '../../../src/config/feature-flags.js';
 
 describe('Feature Flag System', () => {
@@ -25,10 +24,6 @@ describe('Feature Flag System', () => {
 
   describe('DEFAULT_FLAGS', () => {
     it('should have correct default values', () => {
-      // Optimized defaults based on benchmark results
-      expect(DEFAULT_FLAGS.sequentialParallelization.enabled).toBe(true);
-      expect(DEFAULT_FLAGS.sequentialParallelization.level).toBe('last-only');
-
       expect(DEFAULT_FLAGS.exitCriteria.enabled).toBe(true);
       expect(DEFAULT_FLAGS.exitCriteria.consensusThreshold).toBe(0.9);
       expect(DEFAULT_FLAGS.exitCriteria.convergenceRounds).toBe(2);
@@ -104,40 +99,6 @@ describe('Feature Flag System', () => {
   });
 
   describe('loadFlagsFromEnv', () => {
-    describe('sequentialParallelization', () => {
-      it('should load enabled flag', () => {
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.sequentialParallelization?.enabled).toBe(true);
-      });
-
-      it('should load level flag', () => {
-        process.env.ROUNDTABLE_PARALLEL_LEVEL = 'last-only';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.sequentialParallelization?.level).toBe('last-only');
-      });
-
-      it('should default to last-only for invalid level', () => {
-        process.env.ROUNDTABLE_PARALLEL_LEVEL = 'invalid';
-        const flags = loadFlagsFromEnv();
-
-        // Invalid level falls back to DEFAULT_FLAGS.sequentialParallelization.level
-        expect(flags.sequentialParallelization?.level).toBe('last-only');
-      });
-
-      it('should parse all valid parallelization levels', () => {
-        const levels: ParallelizationLevel[] = ['none', 'last-only', 'full'];
-
-        for (const level of levels) {
-          process.env.ROUNDTABLE_PARALLEL_LEVEL = level;
-          const flags = loadFlagsFromEnv();
-          expect(flags.sequentialParallelization?.level).toBe(level);
-        }
-      });
-    });
-
     describe('exitCriteria', () => {
       it('should load enabled flag', () => {
         process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
@@ -159,6 +120,20 @@ describe('Feature Flag System', () => {
 
         expect(flags.exitCriteria?.convergenceRounds).toBe(3);
       });
+
+      it('should not set threshold for invalid value', () => {
+        process.env.ROUNDTABLE_EXIT_CONSENSUS = 'invalid';
+        const flags = loadFlagsFromEnv();
+
+        expect(flags.exitCriteria?.consensusThreshold).toBeUndefined();
+      });
+
+      it('should not set threshold for out-of-range value', () => {
+        process.env.ROUNDTABLE_EXIT_CONSENSUS = '1.5';
+        const flags = loadFlagsFromEnv();
+
+        expect(flags.exitCriteria?.consensusThreshold).toBeUndefined();
+      });
     });
 
     it('should return empty partial when no env vars set', () => {
@@ -168,16 +143,12 @@ describe('Feature Flag System', () => {
     });
 
     it('should load all flags correctly', () => {
-      process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
-      process.env.ROUNDTABLE_PARALLEL_LEVEL = 'full';
       process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
       process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.95';
       process.env.ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS = '3';
 
       const flags = loadFlagsFromEnv();
 
-      expect(flags.sequentialParallelization?.enabled).toBe(true);
-      expect(flags.sequentialParallelization?.level).toBe('full');
       expect(flags.exitCriteria?.enabled).toBe(true);
       expect(flags.exitCriteria?.consensusThreshold).toBe(0.95);
       expect(flags.exitCriteria?.convergenceRounds).toBe(3);
@@ -194,31 +165,31 @@ describe('Feature Flag System', () => {
       });
 
       it('should apply environment overrides', () => {
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
-        process.env.ROUNDTABLE_PARALLEL_LEVEL = 'last-only';
+        process.env.ROUNDTABLE_EXIT_ENABLED = 'false';
+        process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.85';
 
         const resolver = new FeatureFlagResolver();
         const flags = resolver.resolve();
 
-        expect(flags.sequentialParallelization.enabled).toBe(true);
-        expect(flags.sequentialParallelization.level).toBe('last-only');
+        expect(flags.exitCriteria.enabled).toBe(false);
+        expect(flags.exitCriteria.consensusThreshold).toBe(0.85);
       });
 
       it('should apply session overrides with highest priority', () => {
-        process.env.ROUNDTABLE_PARALLEL_LEVEL = 'last-only';
+        process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.85';
 
         const resolver = new FeatureFlagResolver();
         const sessionOverride: Partial<FeatureFlags> = {
-          sequentialParallelization: {
-            enabled: true,
-            level: 'full',
+          exitCriteria: {
+            enabled: false,
+            consensusThreshold: 0.95,
           },
         };
         const flags = resolver.resolve(sessionOverride);
 
         // Session override takes precedence over env
-        expect(flags.sequentialParallelization.enabled).toBe(true);
-        expect(flags.sequentialParallelization.level).toBe('full');
+        expect(flags.exitCriteria.enabled).toBe(false);
+        expect(flags.exitCriteria.consensusThreshold).toBe(0.95);
       });
 
       it('should merge partial session overrides with defaults', () => {
@@ -233,8 +204,8 @@ describe('Feature Flag System', () => {
 
         expect(flags.exitCriteria.enabled).toBe(false);
         expect(flags.exitCriteria.consensusThreshold).toBe(0.95);
-        // Other flags should remain default
-        expect(flags.sequentialParallelization).toEqual(DEFAULT_FLAGS.sequentialParallelization);
+        // convergenceRounds should remain default
+        expect(flags.exitCriteria.convergenceRounds).toBe(2);
       });
     });
 
@@ -243,34 +214,34 @@ describe('Feature Flag System', () => {
         const resolver = new FeatureFlagResolver();
         const resolutions = resolver.resolveWithSource();
 
-        expect(resolutions['sequentialParallelization.enabled'].source).toBe('default');
-        expect(resolutions['sequentialParallelization.enabled'].value).toBe(true);
+        expect(resolutions['exitCriteria.enabled'].source).toBe('default');
+        expect(resolutions['exitCriteria.enabled'].value).toBe(true);
       });
 
       it('should show env as source when env var set', () => {
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
+        process.env.ROUNDTABLE_EXIT_ENABLED = 'false';
 
         const resolver = new FeatureFlagResolver();
         const resolutions = resolver.resolveWithSource();
 
-        expect(resolutions['sequentialParallelization.enabled'].source).toBe('env');
-        expect(resolutions['sequentialParallelization.enabled'].value).toBe(true);
+        expect(resolutions['exitCriteria.enabled'].source).toBe('env');
+        expect(resolutions['exitCriteria.enabled'].value).toBe(false);
       });
 
       it('should show session as source when session override provided', () => {
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
+        process.env.ROUNDTABLE_EXIT_ENABLED = 'false';
 
         const resolver = new FeatureFlagResolver();
         const sessionOverride: Partial<FeatureFlags> = {
-          sequentialParallelization: {
-            enabled: false,
-            level: 'full',
+          exitCriteria: {
+            enabled: true,
+            consensusThreshold: 0.95,
           },
         };
         const resolutions = resolver.resolveWithSource(sessionOverride);
 
-        expect(resolutions['sequentialParallelization.enabled'].source).toBe('session');
-        expect(resolutions['sequentialParallelization.enabled'].value).toBe(false);
+        expect(resolutions['exitCriteria.enabled'].source).toBe('session');
+        expect(resolutions['exitCriteria.enabled'].value).toBe(true);
       });
 
       it('should track sources for all flag fields', () => {
@@ -279,9 +250,6 @@ describe('Feature Flag System', () => {
 
         // Check that all expected keys exist
         const expectedKeys = [
-          'sequentialParallelization.enabled',
-          'sequentialParallelization.level',
-          'sequentialParallelization.modes',
           'exitCriteria.enabled',
           'exitCriteria.consensusThreshold',
           'exitCriteria.convergenceRounds',
@@ -296,20 +264,19 @@ describe('Feature Flag System', () => {
 
     describe('getEnvFlags', () => {
       it('should return copy of env flags', () => {
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
+        process.env.ROUNDTABLE_EXIT_ENABLED = 'false';
 
         const resolver = new FeatureFlagResolver();
         const envFlags = resolver.getEnvFlags();
 
-        expect(envFlags.sequentialParallelization?.enabled).toBe(true);
+        expect(envFlags.exitCriteria?.enabled).toBe(false);
 
         // Modifying returned object should not affect resolver
-        envFlags.sequentialParallelization = {
-          enabled: false,
-          level: 'full',
-        };
+        if (envFlags.exitCriteria) {
+          envFlags.exitCriteria.enabled = true;
+        }
         const envFlags2 = resolver.getEnvFlags();
-        expect(envFlags2.sequentialParallelization?.enabled).toBe(true);
+        expect(envFlags2.exitCriteria?.enabled).toBe(false);
       });
     });
 
@@ -321,9 +288,9 @@ describe('Feature Flag System', () => {
         expect(defaults).toEqual(DEFAULT_FLAGS);
 
         // Modifying returned object should not affect resolver
-        defaults.sequentialParallelization.enabled = false;
+        defaults.exitCriteria.enabled = false;
         const defaults2 = resolver.getDefaultFlags();
-        expect(defaults2.sequentialParallelization.enabled).toBe(true);
+        expect(defaults2.exitCriteria.enabled).toBe(true);
       });
     });
 
@@ -331,19 +298,19 @@ describe('Feature Flag System', () => {
       it('should reload flags from environment', () => {
         const resolver = new FeatureFlagResolver();
         let flags = resolver.resolve();
-        expect(flags.sequentialParallelization.enabled).toBe(true);
+        expect(flags.exitCriteria.enabled).toBe(true);
 
         // Set env var after resolver creation to override default
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'false';
+        process.env.ROUNDTABLE_EXIT_ENABLED = 'false';
 
         // Before reload, should still be default value
         flags = resolver.resolve();
-        expect(flags.sequentialParallelization.enabled).toBe(true);
+        expect(flags.exitCriteria.enabled).toBe(true);
 
         // After reload, should pick up new env value
         resolver.reloadEnvFlags();
         flags = resolver.resolve();
-        expect(flags.sequentialParallelization.enabled).toBe(false);
+        expect(flags.exitCriteria.enabled).toBe(false);
       });
     });
   });
@@ -351,40 +318,35 @@ describe('Feature Flag System', () => {
   describe('integration scenarios', () => {
     it('should handle MCP server config scenario', () => {
       // Simulate MCP server with env config
-      process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
-      process.env.ROUNDTABLE_PARALLEL_LEVEL = 'last-only';
+      process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
       process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.85';
+      process.env.ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS = '3';
 
       const resolver = new FeatureFlagResolver();
       const flags = resolver.resolve();
 
-      expect(flags.sequentialParallelization.enabled).toBe(true);
-      expect(flags.sequentialParallelization.level).toBe('last-only');
+      expect(flags.exitCriteria.enabled).toBe(true);
       expect(flags.exitCriteria.consensusThreshold).toBe(0.85);
+      expect(flags.exitCriteria.convergenceRounds).toBe(3);
     });
 
     it('should handle per-session override scenario', () => {
       // Base env config
-      process.env.ROUNDTABLE_PARALLEL_LEVEL = 'last-only';
+      process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.85';
 
       const resolver = new FeatureFlagResolver();
 
       // Session 1: Use env defaults
       const session1Flags = resolver.resolve();
-      expect(session1Flags.sequentialParallelization.level).toBe('last-only');
+      expect(session1Flags.exitCriteria.consensusThreshold).toBe(0.85);
 
       // Session 2: Override for specific use case
       const session2Flags = resolver.resolve({
-        sequentialParallelization: {
-          enabled: true,
-          level: 'full',
-        },
         exitCriteria: {
           enabled: true,
           consensusThreshold: 0.95,
         },
       });
-      expect(session2Flags.sequentialParallelization.level).toBe('full');
       expect(session2Flags.exitCriteria.enabled).toBe(true);
       expect(session2Flags.exitCriteria.consensusThreshold).toBe(0.95);
 
@@ -395,23 +357,8 @@ describe('Feature Flag System', () => {
           consensusThreshold: 0.75,
         },
       });
-      expect(session3Flags.sequentialParallelization.level).toBe('last-only'); // Back to env
       expect(session3Flags.exitCriteria.enabled).toBe(false);
       expect(session3Flags.exitCriteria.consensusThreshold).toBe(0.75);
-    });
-
-    it('should preserve type safety with mode arrays', () => {
-      const resolver = new FeatureFlagResolver();
-      const sessionOverride: Partial<FeatureFlags> = {
-        sequentialParallelization: {
-          enabled: true,
-          level: 'last-only',
-          modes: ['adversarial', 'socratic'],
-        },
-      };
-      const flags = resolver.resolve(sessionOverride);
-
-      expect(flags.sequentialParallelization.modes).toEqual(['adversarial', 'socratic']);
     });
   });
 });

@@ -33,7 +33,7 @@ export async function handleGetConsensus(
   args: unknown,
   sessionManager: SessionManager,
   aiConsensusAnalyzer: AIConsensusAnalyzer | null,
-  debateEngine: DebateEngine
+  _debateEngine: DebateEngine
 ): Promise<ToolResponse> {
   try {
     // Validate input
@@ -93,7 +93,7 @@ export async function handleGetRoundDetails(
   args: unknown,
   sessionManager: SessionManager,
   aiConsensusAnalyzer: AIConsensusAnalyzer | null,
-  debateEngine: DebateEngine
+  _debateEngine: DebateEngine
 ): Promise<ToolResponse> {
   try {
     // Validate input

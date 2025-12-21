@@ -95,17 +95,15 @@ export class AdversarialMode extends BaseModeStrategy {
   /**
    * Execute an adversarial round
    *
-   * Default: Agents respond sequentially, with each agent seeing and
+   * Agents respond sequentially, with each agent seeing and
    * challenging previous responses from the current round.
-   *
-   * With flags: Can be parallelized via sequentialParallelization flag.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    return this.executeWithFlags(agents, context, toolkit, 'sequential');
+    return this.executeSequential(agents, context, toolkit);
   }
 
   /**

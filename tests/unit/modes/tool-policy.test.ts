@@ -5,15 +5,11 @@ import {
   isSequentialMode,
   isParallelMode,
   getToolGuidanceForMode,
-  getParallelizationLevel,
-  supportsLastOnlyParallelization,
   TOOL_USAGE_POLICIES,
   MODE_EXECUTION_PATTERN,
-  MODE_PARALLELIZATION,
   SEQUENTIAL_MODE_TOOL_GUIDANCE,
   type ExecutionPattern,
   type ToolUsagePolicy,
-  type ParallelizationLevel,
 } from '../../../src/modes/tool-policy.js';
 import type { DebateMode } from '../../../src/types/index.js';
 
@@ -274,89 +270,5 @@ describe('Type Safety', () => {
     expect(typeof policy.minCalls).toBe('number');
     expect(typeof policy.maxCalls).toBe('number');
     expect(typeof policy.guidance).toBe('string');
-  });
-});
-
-describe('MODE_PARALLELIZATION', () => {
-  it('should map all debate modes', () => {
-    for (const mode of ALL_MODES) {
-      expect(MODE_PARALLELIZATION[mode]).toBeDefined();
-      expect(['none', 'last-only', 'full']).toContain(MODE_PARALLELIZATION[mode]);
-    }
-  });
-
-  it('should map parallel modes to full', () => {
-    for (const mode of PARALLEL_MODES) {
-      expect(MODE_PARALLELIZATION[mode]).toBe('full');
-    }
-  });
-
-  it('should map adversarial to none', () => {
-    expect(MODE_PARALLELIZATION['adversarial']).toBe('none');
-  });
-
-  it('should map socratic to none', () => {
-    expect(MODE_PARALLELIZATION['socratic']).toBe('none');
-  });
-
-  it('should map devils-advocate to last-only', () => {
-    expect(MODE_PARALLELIZATION['devils-advocate']).toBe('last-only');
-  });
-});
-
-describe('getParallelizationLevel', () => {
-  it('should return full for parallel modes', () => {
-    for (const mode of PARALLEL_MODES) {
-      expect(getParallelizationLevel(mode)).toBe('full');
-    }
-  });
-
-  it('should return none for adversarial and socratic', () => {
-    expect(getParallelizationLevel('adversarial')).toBe('none');
-    expect(getParallelizationLevel('socratic')).toBe('none');
-  });
-
-  it('should return last-only for devils-advocate', () => {
-    expect(getParallelizationLevel('devils-advocate')).toBe('last-only');
-  });
-
-  it('should match MODE_PARALLELIZATION values', () => {
-    for (const mode of ALL_MODES) {
-      expect(getParallelizationLevel(mode)).toBe(MODE_PARALLELIZATION[mode]);
-    }
-  });
-});
-
-describe('supportsLastOnlyParallelization', () => {
-  it('should return true only for devils-advocate', () => {
-    for (const mode of ALL_MODES) {
-      if (mode === 'devils-advocate') {
-        expect(supportsLastOnlyParallelization(mode)).toBe(true);
-      } else {
-        expect(supportsLastOnlyParallelization(mode)).toBe(false);
-      }
-    }
-  });
-
-  it('should return false for all sequential modes except devils-advocate', () => {
-    expect(supportsLastOnlyParallelization('adversarial')).toBe(false);
-    expect(supportsLastOnlyParallelization('socratic')).toBe(false);
-  });
-
-  it('should return false for all parallel modes', () => {
-    for (const mode of PARALLEL_MODES) {
-      expect(supportsLastOnlyParallelization(mode)).toBe(false);
-    }
-  });
-});
-
-describe('ParallelizationLevel Type', () => {
-  it('should have all valid levels in MODE_PARALLELIZATION values', () => {
-    const validLevels: ParallelizationLevel[] = ['none', 'last-only', 'full'];
-    const usedLevels = new Set(Object.values(MODE_PARALLELIZATION));
-
-    for (const level of usedLevels) {
-      expect(validLevels).toContain(level);
-    }
   });
 });

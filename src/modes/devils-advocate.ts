@@ -250,7 +250,7 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     this.totalAgentsInRound = agents.length;
 
     // Always use sequential execution for devils-advocate mode
-    return this.executeWithFlags(agents, context, toolkit, 'sequential');
+    return this.executeSequential(agents, context, toolkit);
   }
 
   /**

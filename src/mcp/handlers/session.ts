@@ -290,26 +290,17 @@ export async function handleListSessions(sessionManager: SessionManager): Promis
 /**
  * Build session-level feature flag overrides from MCP tool input params
  *
- * Converts user-friendly params (parallel, exitOnConsensus) into FeatureFlags structure
+ * Converts user-friendly params (exitOnConsensus) into FeatureFlags structure
  */
 function buildSessionFlags(input: {
-  parallel?: 'none' | 'last-only' | 'full';
   exitOnConsensus?: boolean;
 }): Partial<FeatureFlags> | undefined {
   // Return undefined if no flag overrides specified
-  if (input.parallel === undefined && input.exitOnConsensus === undefined) {
+  if (input.exitOnConsensus === undefined) {
     return undefined;
   }
 
   const flags: Partial<FeatureFlags> = {};
-
-  // Map parallel param to sequentialParallelization
-  if (input.parallel !== undefined) {
-    flags.sequentialParallelization = {
-      enabled: input.parallel !== 'none',
-      level: input.parallel,
-    };
-  }
 
   // Map exitOnConsensus param to exitCriteria
   if (input.exitOnConsensus !== undefined) {

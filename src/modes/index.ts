@@ -56,15 +56,11 @@ export {
   isSequentialMode,
   isParallelMode,
   getToolGuidanceForMode,
-  getParallelizationLevel,
-  supportsLastOnlyParallelization,
   TOOL_USAGE_POLICIES,
   MODE_EXECUTION_PATTERN,
-  MODE_PARALLELIZATION,
   SEQUENTIAL_MODE_TOOL_GUIDANCE,
   type ExecutionPattern,
   type ToolUsagePolicy,
-  type ParallelizationLevel,
 } from './tool-policy.js';
 
 // Context processors

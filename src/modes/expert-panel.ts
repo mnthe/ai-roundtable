@@ -217,7 +217,7 @@ export class ExpertPanelMode extends BaseModeStrategy {
       this.agentPerspectiveMap.set(agent.id, perspective);
     }
 
-    return this.executeWithFlags(agents, context, toolkit, 'parallel');
+    return this.executeParallel(agents, context, toolkit);
   }
 
   /**

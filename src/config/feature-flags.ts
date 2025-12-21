@@ -10,20 +10,11 @@
  * 3. Default values (hardcoded fallback)
  */
 
-import type { DebateMode } from '../types/index.js';
 import { getEnvBoolean, getEnvNumber } from '../utils/env.js';
 
 // ============================================
 // Types
 // ============================================
-
-/**
- * Parallelization level for sequential modes
- * - 'none': Fully sequential execution
- * - 'last-only': All agents except last run in parallel, last sees all
- * - 'full': All agents run in parallel (converts to parallel mode)
- */
-export type ParallelizationLevel = 'none' | 'last-only' | 'full';
 
 /**
  * Source of a feature flag value
@@ -36,18 +27,6 @@ export type FlagSource = 'session' | 'env' | 'default';
 export interface FlagResolution {
   value: unknown;
   source: FlagSource;
-}
-
-/**
- * Sequential parallelization feature configuration
- */
-export interface SequentialParallelizationConfig {
-  /** Enable parallel execution for sequential modes */
-  enabled: boolean;
-  /** Parallelization strategy */
-  level: ParallelizationLevel;
-  /** Override parallelization for specific modes */
-  modes?: DebateMode[];
 }
 
 /**
@@ -66,8 +45,6 @@ export interface ExitCriteriaConfig {
  * Complete feature flags configuration
  */
 export interface FeatureFlags {
-  /** Sequential mode parallelization */
-  sequentialParallelization: SequentialParallelizationConfig;
   /** Exit criteria */
   exitCriteria: ExitCriteriaConfig;
 }
@@ -79,15 +56,9 @@ export interface FeatureFlags {
 /**
  * Default feature flag values
  *
- * These defaults are optimized based on benchmark results:
- * - sequentialParallelization: 18% latency reduction with last-only
- * - exitCriteria: Cost savings via early termination
+ * exitCriteria: Cost savings via early termination
  */
 export const DEFAULT_FLAGS: FeatureFlags = {
-  sequentialParallelization: {
-    enabled: true,
-    level: 'last-only',
-  },
   exitCriteria: {
     enabled: true,
     consensusThreshold: 0.9,
@@ -95,26 +66,9 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   },
 };
 
-/**
- * Valid parallelization levels
- */
-const VALID_PARALLELIZATION_LEVELS: ParallelizationLevel[] = ['none', 'last-only', 'full'];
-
 // ============================================
 // Utility Functions
 // ============================================
-
-/**
- * Parse parallelization level from string
- */
-function parseParallelizationLevel(value: string | undefined): ParallelizationLevel {
-  if (!value) return DEFAULT_FLAGS.sequentialParallelization.level;
-  const normalized = value.toLowerCase().trim();
-  if (VALID_PARALLELIZATION_LEVELS.includes(normalized as ParallelizationLevel)) {
-    return normalized as ParallelizationLevel;
-  }
-  return DEFAULT_FLAGS.sequentialParallelization.level;
-}
 
 /**
  * Deep merge utility for feature flag objects
@@ -191,8 +145,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Load feature flags from environment variables
  *
  * Environment variables:
- * - ROUNDTABLE_PARALLEL_ENABLED: Enable sequential parallelization
- * - ROUNDTABLE_PARALLEL_LEVEL: Parallelization level (none/last-only/full)
  * - ROUNDTABLE_EXIT_ENABLED: Enable exit criteria
  * - ROUNDTABLE_EXIT_CONSENSUS: Consensus threshold for early exit
  * - ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS: Convergence rounds for early exit
@@ -201,19 +153,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  */
 export function loadFlagsFromEnv(): Partial<FeatureFlags> {
   const flags: Partial<FeatureFlags> = {};
-
-  // Sequential parallelization
-  const parallelEnabled = process.env.ROUNDTABLE_PARALLEL_ENABLED;
-  const parallelLevel = process.env.ROUNDTABLE_PARALLEL_LEVEL;
-
-  if (parallelEnabled !== undefined || parallelLevel !== undefined) {
-    flags.sequentialParallelization = {
-      enabled: parallelEnabled !== undefined
-        ? getEnvBoolean('ROUNDTABLE_PARALLEL_ENABLED', false)
-        : DEFAULT_FLAGS.sequentialParallelization.enabled,
-      level: parseParallelizationLevel(parallelLevel),
-    };
-  }
 
   // Exit criteria
   const exitEnabled = process.env.ROUNDTABLE_EXIT_ENABLED;
@@ -299,26 +238,6 @@ export class FeatureFlagResolver {
         result[path] = { value: defaultVal, source: 'default' };
       }
     };
-
-    // Sequential parallelization
-    resolveValue(
-      'sequentialParallelization.enabled',
-      this.defaultFlags.sequentialParallelization.enabled,
-      this.envFlags.sequentialParallelization?.enabled,
-      sessionOverride?.sequentialParallelization?.enabled
-    );
-    resolveValue(
-      'sequentialParallelization.level',
-      this.defaultFlags.sequentialParallelization.level,
-      this.envFlags.sequentialParallelization?.level,
-      sessionOverride?.sequentialParallelization?.level
-    );
-    resolveValue(
-      'sequentialParallelization.modes',
-      this.defaultFlags.sequentialParallelization.modes,
-      this.envFlags.sequentialParallelization?.modes,
-      sessionOverride?.sequentialParallelization?.modes
-    );
 
     // Exit criteria
     resolveValue(

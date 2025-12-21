@@ -147,12 +147,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           break;
 
         case 'get_consensus':
-          result = await handleGetConsensus(
-            args,
-            sessionManager,
-            aiConsensusAnalyzer,
-            debateEngine
-          );
+          result = await handleGetConsensus(args, sessionManager, aiConsensusAnalyzer);
           break;
 
         case 'get_agents':
@@ -176,12 +171,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           break;
 
         case 'get_round_details':
-          result = await handleGetRoundDetails(
-            args,
-            sessionManager,
-            aiConsensusAnalyzer,
-            debateEngine
-          );
+          result = await handleGetRoundDetails(args, sessionManager, aiConsensusAnalyzer);
           break;
 
         case 'get_response_detail':

@@ -104,7 +104,7 @@ export class SocraticMode extends BaseModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    return this.executeWithFlags(agents, context, toolkit, 'sequential');
+    return this.executeSequential(agents, context, toolkit);
   }
 
   /**
