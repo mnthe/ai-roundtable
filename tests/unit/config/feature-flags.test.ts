@@ -29,9 +29,6 @@ describe('Feature Flag System', () => {
       expect(DEFAULT_FLAGS.sequentialParallelization.enabled).toBe(true);
       expect(DEFAULT_FLAGS.sequentialParallelization.level).toBe('last-only');
 
-      expect(DEFAULT_FLAGS.groupthinkDetection.enabled).toBe(true);
-      expect(DEFAULT_FLAGS.groupthinkDetection.threshold).toBe(0.85);
-
       expect(DEFAULT_FLAGS.exitCriteria.enabled).toBe(true);
       expect(DEFAULT_FLAGS.exitCriteria.consensusThreshold).toBe(0.9);
       expect(DEFAULT_FLAGS.exitCriteria.convergenceRounds).toBe(2);
@@ -141,36 +138,6 @@ describe('Feature Flag System', () => {
       });
     });
 
-    describe('groupthinkDetection', () => {
-      it('should load enabled flag', () => {
-        process.env.ROUNDTABLE_GROUPTHINK_ENABLED = 'false';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.groupthinkDetection?.enabled).toBe(false);
-      });
-
-      it('should load threshold', () => {
-        process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD = '0.85';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.groupthinkDetection?.threshold).toBe(0.85);
-      });
-
-      it('should not set threshold for invalid value', () => {
-        process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD = 'invalid';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.groupthinkDetection?.threshold).toBeUndefined();
-      });
-
-      it('should not set threshold for out-of-range value', () => {
-        process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD = '1.5';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.groupthinkDetection?.threshold).toBeUndefined();
-      });
-    });
-
     describe('exitCriteria', () => {
       it('should load enabled flag', () => {
         process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
@@ -203,8 +170,6 @@ describe('Feature Flag System', () => {
     it('should load all flags correctly', () => {
       process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
       process.env.ROUNDTABLE_PARALLEL_LEVEL = 'full';
-      process.env.ROUNDTABLE_GROUPTHINK_ENABLED = 'true';
-      process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD = '0.8';
       process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
       process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.95';
       process.env.ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS = '3';
@@ -213,8 +178,6 @@ describe('Feature Flag System', () => {
 
       expect(flags.sequentialParallelization?.enabled).toBe(true);
       expect(flags.sequentialParallelization?.level).toBe('full');
-      expect(flags.groupthinkDetection?.enabled).toBe(true);
-      expect(flags.groupthinkDetection?.threshold).toBe(0.8);
       expect(flags.exitCriteria?.enabled).toBe(true);
       expect(flags.exitCriteria?.consensusThreshold).toBe(0.95);
       expect(flags.exitCriteria?.convergenceRounds).toBe(3);
@@ -261,17 +224,17 @@ describe('Feature Flag System', () => {
       it('should merge partial session overrides with defaults', () => {
         const resolver = new FeatureFlagResolver();
         const sessionOverride: Partial<FeatureFlags> = {
-          groupthinkDetection: {
-            enabled: true,
-            threshold: 0.9,
+          exitCriteria: {
+            enabled: false,
+            consensusThreshold: 0.95,
           },
         };
         const flags = resolver.resolve(sessionOverride);
 
-        expect(flags.groupthinkDetection.enabled).toBe(true);
-        expect(flags.groupthinkDetection.threshold).toBe(0.9);
+        expect(flags.exitCriteria.enabled).toBe(false);
+        expect(flags.exitCriteria.consensusThreshold).toBe(0.95);
         // Other flags should remain default
-        expect(flags.exitCriteria).toEqual(DEFAULT_FLAGS.exitCriteria);
+        expect(flags.sequentialParallelization).toEqual(DEFAULT_FLAGS.sequentialParallelization);
       });
     });
 
@@ -319,8 +282,6 @@ describe('Feature Flag System', () => {
           'sequentialParallelization.enabled',
           'sequentialParallelization.level',
           'sequentialParallelization.modes',
-          'groupthinkDetection.enabled',
-          'groupthinkDetection.threshold',
           'exitCriteria.enabled',
           'exitCriteria.consensusThreshold',
           'exitCriteria.convergenceRounds',
@@ -392,14 +353,14 @@ describe('Feature Flag System', () => {
       // Simulate MCP server with env config
       process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
       process.env.ROUNDTABLE_PARALLEL_LEVEL = 'last-only';
-      process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD = '0.85';
+      process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.85';
 
       const resolver = new FeatureFlagResolver();
       const flags = resolver.resolve();
 
       expect(flags.sequentialParallelization.enabled).toBe(true);
       expect(flags.sequentialParallelization.level).toBe('last-only');
-      expect(flags.groupthinkDetection.threshold).toBe(0.85);
+      expect(flags.exitCriteria.consensusThreshold).toBe(0.85);
     });
 
     it('should handle per-session override scenario', () => {
@@ -429,14 +390,14 @@ describe('Feature Flag System', () => {
 
       // Session 3: Different override
       const session3Flags = resolver.resolve({
-        groupthinkDetection: {
+        exitCriteria: {
           enabled: false,
-          threshold: 0.75,
+          consensusThreshold: 0.75,
         },
       });
       expect(session3Flags.sequentialParallelization.level).toBe('last-only'); // Back to env
-      expect(session3Flags.groupthinkDetection.enabled).toBe(false);
-      expect(session3Flags.groupthinkDetection.threshold).toBe(0.75);
+      expect(session3Flags.exitCriteria.enabled).toBe(false);
+      expect(session3Flags.exitCriteria.consensusThreshold).toBe(0.75);
     });
 
     it('should preserve type safety with mode arrays', () => {

@@ -7,7 +7,7 @@ export { CollaborativeMode } from './collaborative.js';
 export { AdversarialMode } from './adversarial.js';
 export { SocraticMode } from './socratic.js';
 export { ExpertPanelMode } from './expert-panel.js';
-export { DevilsAdvocateMode, type DevilsAdvocateModeOptions } from './devils-advocate.js';
+export { DevilsAdvocateMode } from './devils-advocate.js';
 export { DelphiMode } from './delphi.js';
 export { RedTeamBlueTeamMode } from './red-team-blue-team.js';
 export {

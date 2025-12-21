@@ -51,16 +51,6 @@ export interface SequentialParallelizationConfig {
 }
 
 /**
- * Groupthink detection feature configuration
- */
-export interface GroupthinkDetectionConfig {
-  /** Enable groupthink warning */
-  enabled: boolean;
-  /** Agreement level threshold to trigger warning (0-1) */
-  threshold?: number;
-}
-
-/**
  * Exit criteria feature configuration
  */
 export interface ExitCriteriaConfig {
@@ -78,8 +68,6 @@ export interface ExitCriteriaConfig {
 export interface FeatureFlags {
   /** Sequential mode parallelization */
   sequentialParallelization: SequentialParallelizationConfig;
-  /** Groupthink detection */
-  groupthinkDetection: GroupthinkDetectionConfig;
   /** Exit criteria */
   exitCriteria: ExitCriteriaConfig;
 }
@@ -94,16 +82,11 @@ export interface FeatureFlags {
  * These defaults are optimized based on benchmark results:
  * - sequentialParallelization: 18% latency reduction with last-only
  * - exitCriteria: Cost savings via early termination
- * - groupthinkDetection: 0.85 threshold for earlier warnings
  */
 export const DEFAULT_FLAGS: FeatureFlags = {
   sequentialParallelization: {
     enabled: true,
     level: 'last-only',
-  },
-  groupthinkDetection: {
-    enabled: true,
-    threshold: 0.85,
   },
   exitCriteria: {
     enabled: true,
@@ -210,8 +193,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Environment variables:
  * - ROUNDTABLE_PARALLEL_ENABLED: Enable sequential parallelization
  * - ROUNDTABLE_PARALLEL_LEVEL: Parallelization level (none/last-only/full)
- * - ROUNDTABLE_GROUPTHINK_ENABLED: Enable groupthink detection
- * - ROUNDTABLE_GROUPTHINK_THRESHOLD: Agreement threshold for warning
  * - ROUNDTABLE_EXIT_ENABLED: Enable exit criteria
  * - ROUNDTABLE_EXIT_CONSENSUS: Consensus threshold for early exit
  * - ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS: Convergence rounds for early exit
@@ -232,24 +213,6 @@ export function loadFlagsFromEnv(): Partial<FeatureFlags> {
         : DEFAULT_FLAGS.sequentialParallelization.enabled,
       level: parseParallelizationLevel(parallelLevel),
     };
-  }
-
-  // Groupthink detection
-  const groupthinkEnabled = process.env.ROUNDTABLE_GROUPTHINK_ENABLED;
-  const groupthinkThreshold = process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD;
-
-  if (groupthinkEnabled !== undefined || groupthinkThreshold !== undefined) {
-    flags.groupthinkDetection = {
-      enabled: groupthinkEnabled !== undefined
-        ? getEnvBoolean('ROUNDTABLE_GROUPTHINK_ENABLED', true)
-        : DEFAULT_FLAGS.groupthinkDetection.enabled,
-    };
-    if (groupthinkThreshold !== undefined) {
-      const threshold = parseFloat(groupthinkThreshold);
-      if (!isNaN(threshold) && threshold >= 0 && threshold <= 1) {
-        flags.groupthinkDetection.threshold = threshold;
-      }
-    }
   }
 
   // Exit criteria
@@ -355,20 +318,6 @@ export class FeatureFlagResolver {
       this.defaultFlags.sequentialParallelization.modes,
       this.envFlags.sequentialParallelization?.modes,
       sessionOverride?.sequentialParallelization?.modes
-    );
-
-    // Groupthink detection
-    resolveValue(
-      'groupthinkDetection.enabled',
-      this.defaultFlags.groupthinkDetection.enabled,
-      this.envFlags.groupthinkDetection?.enabled,
-      sessionOverride?.groupthinkDetection?.enabled
-    );
-    resolveValue(
-      'groupthinkDetection.threshold',
-      this.defaultFlags.groupthinkDetection.threshold,
-      this.envFlags.groupthinkDetection?.threshold,
-      sessionOverride?.groupthinkDetection?.threshold
     );
 
     // Exit criteria
