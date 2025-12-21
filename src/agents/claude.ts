@@ -3,7 +3,16 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import type { MessageParam, Tool, ToolUseBlock, TextBlock } from '@anthropic-ai/sdk/resources/messages';
+import type {
+  MessageParam,
+  Tool,
+  ToolUseBlock,
+  TextBlock,
+  ServerToolUseBlock,
+  WebSearchToolResultBlock,
+  WebSearchResultBlock,
+  ToolUnion,
+} from '@anthropic-ai/sdk/resources/messages';
 import { createLogger } from '../utils/logger.js';
 import { withRetry } from '../utils/retry.js';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
@@ -18,6 +27,20 @@ import type {
 const logger = createLogger('ClaudeAgent');
 
 /**
+ * Web search configuration options
+ */
+export interface WebSearchConfig {
+  /** Enable native web search (default: true) */
+  enabled?: boolean;
+  /** Only include results from these domains */
+  allowedDomains?: string[];
+  /** Exclude results from these domains */
+  blockedDomains?: string[];
+  /** Maximum number of web searches per request (default: 5) */
+  maxUses?: number;
+}
+
+/**
  * Configuration options for Claude Agent
  */
 export interface ClaudeAgentOptions {
@@ -25,6 +48,8 @@ export interface ClaudeAgentOptions {
   apiKey?: string;
   /** Custom Anthropic client instance (for testing) */
   client?: Anthropic;
+  /** Web search configuration (default: enabled) */
+  webSearch?: WebSearchConfig;
 }
 
 /**
@@ -37,6 +62,7 @@ export interface ClaudeAgentOptions {
  */
 export class ClaudeAgent extends BaseAgent {
   private client: Anthropic;
+  private webSearchConfig: WebSearchConfig;
 
   constructor(config: AgentConfig, options?: ClaudeAgentOptions) {
     super(config);
@@ -48,12 +74,21 @@ export class ClaudeAgent extends BaseAgent {
         apiKey: options?.apiKey ?? process.env.ANTHROPIC_API_KEY,
       });
     }
+
+    // Web search enabled by default
+    this.webSearchConfig = {
+      enabled: options?.webSearch?.enabled !== false,
+      allowedDomains: options?.webSearch?.allowedDomains,
+      blockedDomains: options?.webSearch?.blockedDomains,
+      maxUses: options?.webSearch?.maxUses ?? 5,
+    };
   }
 
   /**
    * Call Claude API to generate a response
    *
    * Implements the provider-specific API call for the template method pattern.
+   * Supports both toolkit tools and native web search.
    */
   protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
     const systemPrompt = this.buildSystemPrompt(context);
@@ -64,8 +99,8 @@ export class ClaudeAgent extends BaseAgent {
     const toolCalls: ToolCallRecord[] = [];
     const citations: Citation[] = [];
 
-    // Build tools if toolkit is available
-    const tools = this.toolkit ? this.buildAnthropicTools() : undefined;
+    // Build tools: toolkit tools + native web search
+    const tools = this.buildAllTools();
 
     // Make the API call with retry logic
     let response = await withRetry(
@@ -75,20 +110,65 @@ export class ClaudeAgent extends BaseAgent {
           max_tokens: this.maxTokens,
           system: systemPrompt,
           messages,
-          tools,
+          tools: tools.length > 0 ? tools : undefined,
           temperature: this.temperature,
         }),
       { maxRetries: 3 }
     );
 
-    // Handle tool use loop
+    // Handle tool use loop (both regular tools and server tools like web_search)
     while (response.stop_reason === 'tool_use') {
+      // Handle regular toolkit tools
       const toolUseBlocks = response.content.filter(
         (block): block is ToolUseBlock => block.type === 'tool_use'
       );
 
+      // Handle server-side tools (web_search)
+      const serverToolUseBlocks = response.content.filter(
+        (block): block is ServerToolUseBlock => block.type === 'server_tool_use'
+      );
+
+      // Handle web search results that may already be in the response
+      const webSearchResults = response.content.filter(
+        (block): block is WebSearchToolResultBlock => block.type === 'web_search_tool_result'
+      );
+
+      // Extract citations from web search results
+      for (const result of webSearchResults) {
+        const webCitations = this.extractCitationsFromWebSearch(result);
+        citations.push(...webCitations);
+
+        // Record tool call for web search
+        if (Array.isArray(result.content)) {
+          toolCalls.push({
+            toolName: 'web_search',
+            input: {},
+            output: {
+              success: true,
+              data: {
+                results: result.content.map((r) => ({
+                  title: r.title,
+                  url: r.url,
+                  pageAge: r.page_age,
+                })),
+              },
+            },
+            timestamp: new Date(),
+          });
+        }
+      }
+
+      // Record server tool use for logging purposes
+      for (const serverTool of serverToolUseBlocks) {
+        logger.debug(
+          { agentId: this.id, toolName: serverTool.name },
+          'Server tool invoked'
+        );
+      }
+
       const toolResults: MessageParam['content'] = [];
 
+      // Execute regular toolkit tools
       for (const toolUse of toolUseBlocks) {
         const result = await this.executeTool(toolUse.name, toolUse.input);
 
@@ -99,7 +179,7 @@ export class ClaudeAgent extends BaseAgent {
           timestamp: new Date(),
         });
 
-        // Extract citations from search results
+        // Extract citations from toolkit tool results
         const extractedCitations = this.extractCitationsFromToolResult(toolUse.name, result);
         citations.push(...extractedCitations);
 
@@ -112,7 +192,9 @@ export class ClaudeAgent extends BaseAgent {
 
       // Continue the conversation with tool results
       messages.push({ role: 'assistant', content: response.content });
-      messages.push({ role: 'user', content: toolResults });
+      if (toolResults.length > 0) {
+        messages.push({ role: 'user', content: toolResults });
+      }
 
       response = await withRetry(
         () =>
@@ -121,11 +203,39 @@ export class ClaudeAgent extends BaseAgent {
             max_tokens: this.maxTokens,
             system: systemPrompt,
             messages,
-            tools,
+            tools: tools.length > 0 ? tools : undefined,
             temperature: this.temperature,
           }),
         { maxRetries: 3 }
       );
+    }
+
+    // Check final response for any remaining web search results
+    const finalWebSearchResults = response.content.filter(
+      (block): block is WebSearchToolResultBlock => block.type === 'web_search_tool_result'
+    );
+    for (const result of finalWebSearchResults) {
+      const webCitations = this.extractCitationsFromWebSearch(result);
+      citations.push(...webCitations);
+
+      // Record tool call for web search in final response
+      if (Array.isArray(result.content)) {
+        toolCalls.push({
+          toolName: 'web_search',
+          input: {},
+          output: {
+            success: true,
+            data: {
+              results: result.content.map((r) => ({
+                title: r.title,
+                url: r.url,
+                pageAge: r.page_age,
+              })),
+            },
+          },
+          timestamp: new Date(),
+        });
+      }
     }
 
     // Extract text from final response
@@ -222,6 +332,25 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
+   * Build all tools: toolkit tools + native web search
+   */
+  private buildAllTools(): ToolUnion[] {
+    const tools: ToolUnion[] = [];
+
+    // Add toolkit tools
+    if (this.toolkit) {
+      tools.push(...this.buildAnthropicTools());
+    }
+
+    // Add native web search if enabled
+    if (this.webSearchConfig.enabled) {
+      tools.push(this.buildWebSearchTool());
+    }
+
+    return tools;
+  }
+
+  /**
    * Build Anthropic-format tool definitions from toolkit
    */
   private buildAnthropicTools(): Tool[] {
@@ -237,6 +366,36 @@ export class ClaudeAgent extends BaseAgent {
         properties: tool.parameters,
         required: Object.keys(tool.parameters),
       },
+    }));
+  }
+
+  /**
+   * Build the native web search tool configuration
+   */
+  private buildWebSearchTool(): ToolUnion {
+    return {
+      type: 'web_search_20250305',
+      name: 'web_search',
+      allowed_domains: this.webSearchConfig.allowedDomains ?? null,
+      blocked_domains: this.webSearchConfig.blockedDomains ?? null,
+      max_uses: this.webSearchConfig.maxUses ?? 5,
+    };
+  }
+
+  /**
+   * Extract citations from web search results
+   */
+  private extractCitationsFromWebSearch(result: WebSearchToolResultBlock): Citation[] {
+    if (!Array.isArray(result.content)) {
+      // Error result, no citations
+      return [];
+    }
+
+    return result.content.map((searchResult: WebSearchResultBlock) => ({
+      title: searchResult.title,
+      url: searchResult.url,
+      snippet: undefined, // encrypted_content is not human-readable
+      source: 'web_search',
     }));
   }
 }

@@ -9,7 +9,12 @@ export {
   resetGlobalRegistry,
   type AgentFactory,
 } from './registry.js';
-export { ClaudeAgent, createClaudeAgent, type ClaudeAgentOptions } from './claude.js';
+export {
+  ClaudeAgent,
+  createClaudeAgent,
+  type ClaudeAgentOptions,
+  type WebSearchConfig,
+} from './claude.js';
 export { ChatGPTAgent, createChatGPTAgent, type ChatGPTAgentOptions } from './chatgpt.js';
 export { GeminiAgent, createGeminiAgent, type GeminiAgentOptions } from './gemini.js';
 export {

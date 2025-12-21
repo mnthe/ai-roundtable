@@ -23,3 +23,9 @@ export {
   type SubmitResponseInput,
   type FactCheckInput,
 } from './schemas.js';
+
+// Export providers
+export {
+  SessionManagerAdapter,
+  createSessionManagerAdapter,
+} from './providers/index.js';

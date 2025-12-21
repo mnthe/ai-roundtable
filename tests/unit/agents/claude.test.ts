@@ -220,6 +220,7 @@ describe('ClaudeAgent', () => {
 
       const agent = new ClaudeAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+        webSearch: { enabled: false }, // Disable web_search for this test
       });
       agent.setToolkit(mockToolkit);
 
@@ -378,6 +379,222 @@ describe('ClaudeAgent', () => {
       // Should record the tool call
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('submit_response');
+    });
+  });
+
+  describe('native web search', () => {
+    it('should include web_search tool by default', async () => {
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({
+          position: 'Test',
+          reasoning: 'Test',
+          confidence: 0.5,
+        })
+      );
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      const call = mockClient.messages.create.mock.calls[0]?.[0];
+      expect(call?.tools).toBeDefined();
+      // Should have web_search tool
+      const webSearchTool = call?.tools?.find(
+        (t: { name: string }) => t.name === 'web_search'
+      );
+      expect(webSearchTool).toBeDefined();
+      expect(webSearchTool?.type).toBe('web_search_20250305');
+    });
+
+    it('should not include web_search when disabled', async () => {
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({
+          position: 'Test',
+          reasoning: 'Test',
+          confidence: 0.5,
+        })
+      );
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+        webSearch: { enabled: false },
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      const call = mockClient.messages.create.mock.calls[0]?.[0];
+      // Should have no tools (no toolkit set, web_search disabled)
+      expect(call?.tools).toBeUndefined();
+    });
+
+    it('should configure web_search with allowed/blocked domains', async () => {
+      const mockClient = createMockAnthropicClient(
+        createJsonResponse({
+          position: 'Test',
+          reasoning: 'Test',
+          confidence: 0.5,
+        })
+      );
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+        webSearch: {
+          enabled: true,
+          allowedDomains: ['example.com', 'test.org'],
+          maxUses: 3,
+        },
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      const call = mockClient.messages.create.mock.calls[0]?.[0];
+      const webSearchTool = call?.tools?.find(
+        (t: { name: string }) => t.name === 'web_search'
+      ) as { allowed_domains?: string[]; max_uses?: number } | undefined;
+      expect(webSearchTool?.allowed_domains).toEqual(['example.com', 'test.org']);
+      expect(webSearchTool?.max_uses).toBe(3);
+    });
+
+    it('should extract citations from web search results', async () => {
+      // Create a mock that returns web search results in the response
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                type: 'web_search_tool_result',
+                tool_use_id: 'ws-123',
+                content: [
+                  {
+                    type: 'web_search_result',
+                    title: 'AI Safety Research',
+                    url: 'https://example.com/ai-safety',
+                    encrypted_content: 'encrypted...',
+                    page_age: '2024-01-01',
+                  },
+                  {
+                    type: 'web_search_result',
+                    title: 'Regulation Guidelines',
+                    url: 'https://gov.example.com/guidelines',
+                    encrypted_content: 'encrypted...',
+                    page_age: '2024-06-15',
+                  },
+                ],
+              },
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  position: 'Based on research',
+                  reasoning: 'Found relevant sources',
+                  confidence: 0.9,
+                }),
+              },
+            ],
+            stop_reason: 'end_turn',
+          }),
+        },
+      };
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.citations).toHaveLength(2);
+      expect(response.citations?.[0]?.title).toBe('AI Safety Research');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/ai-safety');
+      expect(response.citations?.[0]?.source).toBe('web_search');
+      expect(response.citations?.[1]?.title).toBe('Regulation Guidelines');
+    });
+
+    it('should record web search tool calls', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                type: 'web_search_tool_result',
+                tool_use_id: 'ws-123',
+                content: [
+                  {
+                    type: 'web_search_result',
+                    title: 'Test Result',
+                    url: 'https://example.com/test',
+                    encrypted_content: 'encrypted...',
+                    page_age: '2024-01-01',
+                  },
+                ],
+              },
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  position: 'Test',
+                  reasoning: 'Test',
+                  confidence: 0.5,
+                }),
+              },
+            ],
+            stop_reason: 'end_turn',
+          }),
+        },
+      };
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls?.[0]?.toolName).toBe('web_search');
+      expect(response.toolCalls?.[0]?.output).toMatchObject({
+        success: true,
+        data: {
+          results: [{ title: 'Test Result', url: 'https://example.com/test' }],
+        },
+      });
+    });
+
+    it('should handle web search errors gracefully', async () => {
+      const mockClient = {
+        messages: {
+          create: vi.fn().mockResolvedValue({
+            content: [
+              {
+                type: 'web_search_tool_result',
+                tool_use_id: 'ws-error',
+                content: {
+                  type: 'web_search_tool_result_error',
+                  error_code: 'unavailable',
+                },
+              },
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  position: 'Continued without search',
+                  reasoning: 'Search unavailable',
+                  confidence: 0.4,
+                }),
+              },
+            ],
+            stop_reason: 'end_turn',
+          }),
+        },
+      };
+
+      const agent = new ClaudeAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ClaudeAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should not extract citations from error (empty array or undefined)
+      expect(response.citations?.length ?? 0).toBe(0);
+      // Should still generate a response
+      expect(response.position).toBe('Continued without search');
     });
   });
 });
