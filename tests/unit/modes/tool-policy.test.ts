@@ -45,7 +45,7 @@ describe('Tool Usage Policies', () => {
       const policy = TOOL_USAGE_POLICIES.parallel;
 
       expect(policy.minCalls).toBe(1);
-      expect(policy.maxCalls).toBe(6);
+      expect(policy.maxCalls).toBe(10);
       expect(policy.guidance).toContain('freely');
       expect(policy.guidance).toContain('comprehensive');
     });
@@ -54,9 +54,9 @@ describe('Tool Usage Policies', () => {
       const policy = TOOL_USAGE_POLICIES.sequential;
 
       expect(policy.minCalls).toBe(1);
-      expect(policy.maxCalls).toBe(2);
+      expect(policy.maxCalls).toBe(5);
       expect(policy.guidance).toContain('previous responses');
-      expect(policy.guidance).toContain('1-2');
+      expect(policy.guidance).toContain('1-5');
     });
 
     it('should have sequential maxCalls less than parallel', () => {
@@ -134,7 +134,7 @@ describe('getToolPolicy', () => {
     for (const mode of PARALLEL_MODES) {
       const policy = getToolPolicy(mode);
 
-      expect(policy.maxCalls).toBe(6);
+      expect(policy.maxCalls).toBe(10);
       expect(policy.minCalls).toBe(1);
       expect(policy.guidance).toContain('freely');
     }
@@ -144,9 +144,9 @@ describe('getToolPolicy', () => {
     for (const mode of SEQUENTIAL_MODES) {
       const policy = getToolPolicy(mode);
 
-      expect(policy.maxCalls).toBe(2);
+      expect(policy.maxCalls).toBe(5);
       expect(policy.minCalls).toBe(1);
-      expect(policy.guidance).toContain('1-2');
+      expect(policy.guidance).toContain('1-5');
     }
   });
 

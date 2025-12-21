@@ -26,14 +26,6 @@ import { getEnvBoolean, getEnvNumber } from '../utils/env.js';
 export type ParallelizationLevel = 'none' | 'last-only' | 'full';
 
 /**
- * Enforcement level for various features
- * - 'strict': Strict enforcement with validation
- * - 'normal': Default behavior
- * - 'relaxed': Minimal enforcement
- */
-export type EnforcementLevel = 'strict' | 'normal' | 'relaxed';
-
-/**
  * Source of a feature flag value
  */
 export type FlagSource = 'session' | 'env' | 'default';
@@ -56,20 +48,6 @@ export interface SequentialParallelizationConfig {
   level: ParallelizationLevel;
   /** Override parallelization for specific modes */
   modes?: DebateMode[];
-}
-
-/**
- * Tool enforcement feature configuration
- */
-export interface ToolEnforcementConfig {
-  /** Enable tool usage enforcement */
-  enabled: boolean;
-  /** Enforcement level */
-  level: EnforcementLevel;
-  /** Minimum tool calls per round */
-  minCalls?: number;
-  /** Maximum tool calls per round */
-  maxCalls?: number;
 }
 
 /**
@@ -100,8 +78,6 @@ export interface ExitCriteriaConfig {
 export interface FeatureFlags {
   /** Sequential mode parallelization */
   sequentialParallelization: SequentialParallelizationConfig;
-  /** Tool usage enforcement */
-  toolEnforcement: ToolEnforcementConfig;
   /** Groupthink detection */
   groupthinkDetection: GroupthinkDetectionConfig;
   /** Exit criteria */
@@ -125,12 +101,6 @@ export const DEFAULT_FLAGS: FeatureFlags = {
     enabled: true,
     level: 'last-only',
   },
-  toolEnforcement: {
-    enabled: true,
-    level: 'normal',
-    minCalls: 1,
-    maxCalls: 6,
-  },
   groupthinkDetection: {
     enabled: true,
     threshold: 0.85,
@@ -147,11 +117,6 @@ export const DEFAULT_FLAGS: FeatureFlags = {
  */
 const VALID_PARALLELIZATION_LEVELS: ParallelizationLevel[] = ['none', 'last-only', 'full'];
 
-/**
- * Valid enforcement levels
- */
-const VALID_ENFORCEMENT_LEVELS: EnforcementLevel[] = ['strict', 'normal', 'relaxed'];
-
 // ============================================
 // Utility Functions
 // ============================================
@@ -166,18 +131,6 @@ function parseParallelizationLevel(value: string | undefined): ParallelizationLe
     return normalized as ParallelizationLevel;
   }
   return DEFAULT_FLAGS.sequentialParallelization.level;
-}
-
-/**
- * Parse enforcement level from string
- */
-function parseEnforcementLevel(value: string | undefined): EnforcementLevel {
-  if (!value) return 'normal';
-  const normalized = value.toLowerCase().trim();
-  if (VALID_ENFORCEMENT_LEVELS.includes(normalized as EnforcementLevel)) {
-    return normalized as EnforcementLevel;
-  }
-  return 'normal';
 }
 
 /**
@@ -257,9 +210,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Environment variables:
  * - ROUNDTABLE_PARALLEL_ENABLED: Enable sequential parallelization
  * - ROUNDTABLE_PARALLEL_LEVEL: Parallelization level (none/last-only/full)
- * - ROUNDTABLE_TOOL_ENFORCEMENT: Tool enforcement level (strict/normal/relaxed)
- * - ROUNDTABLE_TOOL_MIN_CALLS: Minimum tool calls per round
- * - ROUNDTABLE_TOOL_MAX_CALLS: Maximum tool calls per round
  * - ROUNDTABLE_GROUPTHINK_ENABLED: Enable groupthink detection
  * - ROUNDTABLE_GROUPTHINK_THRESHOLD: Agreement threshold for warning
  * - ROUNDTABLE_EXIT_ENABLED: Enable exit criteria
@@ -282,24 +232,6 @@ export function loadFlagsFromEnv(): Partial<FeatureFlags> {
         : DEFAULT_FLAGS.sequentialParallelization.enabled,
       level: parseParallelizationLevel(parallelLevel),
     };
-  }
-
-  // Tool enforcement
-  const toolEnforcement = process.env.ROUNDTABLE_TOOL_ENFORCEMENT;
-  const toolMinCalls = process.env.ROUNDTABLE_TOOL_MIN_CALLS;
-  const toolMaxCalls = process.env.ROUNDTABLE_TOOL_MAX_CALLS;
-
-  if (toolEnforcement !== undefined || toolMinCalls !== undefined || toolMaxCalls !== undefined) {
-    flags.toolEnforcement = {
-      enabled: DEFAULT_FLAGS.toolEnforcement.enabled,
-      level: parseEnforcementLevel(toolEnforcement),
-    };
-    if (toolMinCalls !== undefined) {
-      flags.toolEnforcement.minCalls = getEnvNumber('ROUNDTABLE_TOOL_MIN_CALLS', 1);
-    }
-    if (toolMaxCalls !== undefined) {
-      flags.toolEnforcement.maxCalls = getEnvNumber('ROUNDTABLE_TOOL_MAX_CALLS', 6);
-    }
   }
 
   // Groupthink detection
@@ -423,32 +355,6 @@ export class FeatureFlagResolver {
       this.defaultFlags.sequentialParallelization.modes,
       this.envFlags.sequentialParallelization?.modes,
       sessionOverride?.sequentialParallelization?.modes
-    );
-
-    // Tool enforcement
-    resolveValue(
-      'toolEnforcement.enabled',
-      this.defaultFlags.toolEnforcement.enabled,
-      this.envFlags.toolEnforcement?.enabled,
-      sessionOverride?.toolEnforcement?.enabled
-    );
-    resolveValue(
-      'toolEnforcement.level',
-      this.defaultFlags.toolEnforcement.level,
-      this.envFlags.toolEnforcement?.level,
-      sessionOverride?.toolEnforcement?.level
-    );
-    resolveValue(
-      'toolEnforcement.minCalls',
-      this.defaultFlags.toolEnforcement.minCalls,
-      this.envFlags.toolEnforcement?.minCalls,
-      sessionOverride?.toolEnforcement?.minCalls
-    );
-    resolveValue(
-      'toolEnforcement.maxCalls',
-      this.defaultFlags.toolEnforcement.maxCalls,
-      this.envFlags.toolEnforcement?.maxCalls,
-      sessionOverride?.toolEnforcement?.maxCalls
     );
 
     // Groupthink detection

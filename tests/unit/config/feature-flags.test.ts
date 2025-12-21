@@ -6,7 +6,6 @@ import {
   FeatureFlagResolver,
   type FeatureFlags,
   type ParallelizationLevel,
-  type EnforcementLevel,
 } from '../../../src/config/feature-flags.js';
 
 describe('Feature Flag System', () => {
@@ -29,11 +28,6 @@ describe('Feature Flag System', () => {
       // Optimized defaults based on benchmark results
       expect(DEFAULT_FLAGS.sequentialParallelization.enabled).toBe(true);
       expect(DEFAULT_FLAGS.sequentialParallelization.level).toBe('last-only');
-
-      expect(DEFAULT_FLAGS.toolEnforcement.enabled).toBe(true);
-      expect(DEFAULT_FLAGS.toolEnforcement.level).toBe('normal');
-      expect(DEFAULT_FLAGS.toolEnforcement.minCalls).toBe(1);
-      expect(DEFAULT_FLAGS.toolEnforcement.maxCalls).toBe(6);
 
       expect(DEFAULT_FLAGS.groupthinkDetection.enabled).toBe(true);
       expect(DEFAULT_FLAGS.groupthinkDetection.threshold).toBe(0.85);
@@ -147,41 +141,6 @@ describe('Feature Flag System', () => {
       });
     });
 
-    describe('toolEnforcement', () => {
-      it('should load enforcement level', () => {
-        process.env.ROUNDTABLE_TOOL_ENFORCEMENT = 'strict';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.toolEnforcement?.level).toBe('strict');
-      });
-
-      it('should load min/max calls', () => {
-        process.env.ROUNDTABLE_TOOL_MIN_CALLS = '2';
-        process.env.ROUNDTABLE_TOOL_MAX_CALLS = '4';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.toolEnforcement?.minCalls).toBe(2);
-        expect(flags.toolEnforcement?.maxCalls).toBe(4);
-      });
-
-      it('should parse all valid enforcement levels', () => {
-        const levels: EnforcementLevel[] = ['strict', 'normal', 'relaxed'];
-
-        for (const level of levels) {
-          process.env.ROUNDTABLE_TOOL_ENFORCEMENT = level;
-          const flags = loadFlagsFromEnv();
-          expect(flags.toolEnforcement?.level).toBe(level);
-        }
-      });
-
-      it('should default to normal for invalid enforcement level', () => {
-        process.env.ROUNDTABLE_TOOL_ENFORCEMENT = 'invalid';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.toolEnforcement?.level).toBe('normal');
-      });
-    });
-
     describe('groupthinkDetection', () => {
       it('should load enabled flag', () => {
         process.env.ROUNDTABLE_GROUPTHINK_ENABLED = 'false';
@@ -244,9 +203,6 @@ describe('Feature Flag System', () => {
     it('should load all flags correctly', () => {
       process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
       process.env.ROUNDTABLE_PARALLEL_LEVEL = 'full';
-      process.env.ROUNDTABLE_TOOL_ENFORCEMENT = 'strict';
-      process.env.ROUNDTABLE_TOOL_MIN_CALLS = '2';
-      process.env.ROUNDTABLE_TOOL_MAX_CALLS = '4';
       process.env.ROUNDTABLE_GROUPTHINK_ENABLED = 'true';
       process.env.ROUNDTABLE_GROUPTHINK_THRESHOLD = '0.8';
       process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
@@ -257,9 +213,6 @@ describe('Feature Flag System', () => {
 
       expect(flags.sequentialParallelization?.enabled).toBe(true);
       expect(flags.sequentialParallelization?.level).toBe('full');
-      expect(flags.toolEnforcement?.level).toBe('strict');
-      expect(flags.toolEnforcement?.minCalls).toBe(2);
-      expect(flags.toolEnforcement?.maxCalls).toBe(4);
       expect(flags.groupthinkDetection?.enabled).toBe(true);
       expect(flags.groupthinkDetection?.threshold).toBe(0.8);
       expect(flags.exitCriteria?.enabled).toBe(true);
@@ -286,8 +239,6 @@ describe('Feature Flag System', () => {
 
         expect(flags.sequentialParallelization.enabled).toBe(true);
         expect(flags.sequentialParallelization.level).toBe('last-only');
-        // Other flags should remain default
-        expect(flags.toolEnforcement).toEqual(DEFAULT_FLAGS.toolEnforcement);
       });
 
       it('should apply session overrides with highest priority', () => {
@@ -310,42 +261,17 @@ describe('Feature Flag System', () => {
       it('should merge partial session overrides with defaults', () => {
         const resolver = new FeatureFlagResolver();
         const sessionOverride: Partial<FeatureFlags> = {
-          toolEnforcement: {
+          groupthinkDetection: {
             enabled: true,
-            level: 'strict',
-            minCalls: 2,
+            threshold: 0.9,
           },
         };
         const flags = resolver.resolve(sessionOverride);
 
-        expect(flags.toolEnforcement.enabled).toBe(true);
-        expect(flags.toolEnforcement.level).toBe('strict');
-        expect(flags.toolEnforcement.minCalls).toBe(2);
-        // maxCalls should come from DEFAULT_FLAGS (now has default value 6)
-        expect(flags.toolEnforcement.maxCalls).toBe(6);
-      });
-
-      it('should handle complex nested overrides', () => {
-        process.env.ROUNDTABLE_TOOL_ENFORCEMENT = 'relaxed';
-        process.env.ROUNDTABLE_TOOL_MIN_CALLS = '1';
-
-        const resolver = new FeatureFlagResolver();
-        const sessionOverride: Partial<FeatureFlags> = {
-          toolEnforcement: {
-            enabled: false,
-            level: 'strict',
-            maxCalls: 5,
-          },
-        };
-        const flags = resolver.resolve(sessionOverride);
-
-        // Session overrides env
-        expect(flags.toolEnforcement.enabled).toBe(false);
-        expect(flags.toolEnforcement.level).toBe('strict');
-        // Env value for minCalls
-        expect(flags.toolEnforcement.minCalls).toBe(1);
-        // Session value for maxCalls
-        expect(flags.toolEnforcement.maxCalls).toBe(5);
+        expect(flags.groupthinkDetection.enabled).toBe(true);
+        expect(flags.groupthinkDetection.threshold).toBe(0.9);
+        // Other flags should remain default
+        expect(flags.exitCriteria).toEqual(DEFAULT_FLAGS.exitCriteria);
       });
     });
 
@@ -393,10 +319,6 @@ describe('Feature Flag System', () => {
           'sequentialParallelization.enabled',
           'sequentialParallelization.level',
           'sequentialParallelization.modes',
-          'toolEnforcement.enabled',
-          'toolEnforcement.level',
-          'toolEnforcement.minCalls',
-          'toolEnforcement.maxCalls',
           'groupthinkDetection.enabled',
           'groupthinkDetection.threshold',
           'exitCriteria.enabled',
@@ -507,13 +429,14 @@ describe('Feature Flag System', () => {
 
       // Session 3: Different override
       const session3Flags = resolver.resolve({
-        toolEnforcement: {
-          enabled: true,
-          level: 'strict',
+        groupthinkDetection: {
+          enabled: false,
+          threshold: 0.75,
         },
       });
       expect(session3Flags.sequentialParallelization.level).toBe('last-only'); // Back to env
-      expect(session3Flags.toolEnforcement.level).toBe('strict');
+      expect(session3Flags.groupthinkDetection.enabled).toBe(false);
+      expect(session3Flags.groupthinkDetection.threshold).toBe(0.75);
     });
 
     it('should preserve type safety with mode arrays', () => {

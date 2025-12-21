@@ -68,28 +68,18 @@ const FLAG_CONFIGURATIONS: { name: string; flags: Partial<FeatureFlags> }[] = [
     name: 'baseline',
     flags: {
       sequentialParallelization: { enabled: false, level: 'none' },
-      toolEnforcement: { enabled: true, level: 'normal' },
-    },
-  },
-  {
-    name: 'strict-enforcement',
-    flags: {
-      sequentialParallelization: { enabled: false, level: 'none' },
-      toolEnforcement: { enabled: true, level: 'strict', minCalls: 1, maxCalls: 3 },
     },
   },
   {
     name: 'parallel-optimized',
     flags: {
       sequentialParallelization: { enabled: true, level: 'last-only' },
-      toolEnforcement: { enabled: true, level: 'normal' },
     },
   },
   {
     name: 'full-optimization',
     flags: {
       sequentialParallelization: { enabled: true, level: 'last-only' },
-      toolEnforcement: { enabled: true, level: 'strict', minCalls: 1, maxCalls: 2 },
       exitCriteria: { enabled: true, consensusThreshold: 0.9, convergenceRounds: 2 },
       groupthinkDetection: { enabled: true, threshold: 0.85 },
     },

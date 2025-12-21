@@ -5,7 +5,7 @@
  * Implements the 4-layer prompt structure used across all debate modes.
  */
 
-import type { DebateContext, AgentResponse, DebateMode, FeatureFlags } from '../../types/index.js';
+import type { DebateContext, AgentResponse, DebateMode } from '../../types/index.js';
 import { getToolGuidanceForMode, getToolPolicy, isSequentialMode } from '../tool-policy.js';
 
 /**
@@ -202,12 +202,10 @@ ${config.additionalContext}
  *
  * @param config - Behavioral contract configuration
  * @param mode - Optional debate mode for mode-aware tool guidance
- * @param flags - Optional feature flags for tool enforcement limits
  */
 export function buildBehavioralContract(
   config: BehavioralContractConfig,
-  mode?: DebateMode,
-  flags?: Partial<FeatureFlags>
+  mode?: DebateMode
 ): string {
   // Combine mode-specific behaviors with tool usage requirements (unless disabled)
   const includeToolUsage = config.includeToolUsageRequirements !== false;
@@ -250,9 +248,9 @@ ${priorities}
 ⛔ FAILURE MODE: ${config.failureMode}
 `;
 
-  // Add tool enforcement limits if enabled
-  if (mode && flags?.toolEnforcement?.enabled !== false) {
-    const toolPolicy = getToolPolicy(mode, flags);
+  // Add tool usage limits based on mode execution pattern
+  if (mode) {
+    const toolPolicy = getToolPolicy(mode);
     prompt += `
 📊 TOOL USAGE LIMITS:
 - Minimum tool calls: ${toolPolicy.minCalls}
@@ -390,7 +388,7 @@ Mode: ${config.modeName}
 `;
 
   prompt += buildRoleAnchor(config.roleAnchor);
-  prompt += buildBehavioralContract(config.behavioralContract, context.mode, context.flags);
+  prompt += buildBehavioralContract(config.behavioralContract, context.mode);
   prompt += buildStructuralEnforcement(config.structuralEnforcement, context);
   prompt += buildVerificationLoop(config.verificationLoop, context.mode);
   prompt += buildFocusQuestionSection(context, config.focusQuestion);

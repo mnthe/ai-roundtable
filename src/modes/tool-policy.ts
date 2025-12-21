@@ -6,7 +6,7 @@
  * already gathered evidence that later agents can leverage.
  */
 
-import type { DebateMode, FeatureFlags } from '../types/index.js';
+import type { DebateMode } from '../types/index.js';
 import type { ParallelizationLevel } from '../config/feature-flags.js';
 
 /**
@@ -35,13 +35,13 @@ export interface ToolUsagePolicy {
 export const TOOL_USAGE_POLICIES: Record<ExecutionPattern, ToolUsagePolicy> = {
   parallel: {
     minCalls: 1,
-    maxCalls: 6,
+    maxCalls: 10,
     guidance: 'Use tools freely to gather comprehensive evidence.',
   },
   sequential: {
     minCalls: 1,
-    maxCalls: 2,
-    guidance: 'Leverage previous responses; limit to 1-2 essential tool calls.',
+    maxCalls: 5,
+    guidance: 'Leverage previous responses; limit to 1-5 essential tool calls.',
   },
 };
 
@@ -111,27 +111,16 @@ MUST NOT:
 /**
  * Get the tool usage policy for a specific debate mode
  *
+ * Returns the appropriate policy based on the mode's execution pattern:
+ * - parallel: Agents gather evidence independently
+ * - sequential: Agents leverage previous responses, limited tool usage
+ *
  * @param mode - The debate mode
- * @param flags - Optional feature flags for overriding defaults
  * @returns The tool usage policy for the mode's execution pattern
  */
-export function getToolPolicy(
-  mode: DebateMode,
-  flags?: Partial<FeatureFlags>
-): ToolUsagePolicy {
+export function getToolPolicy(mode: DebateMode): ToolUsagePolicy {
   const pattern = MODE_EXECUTION_PATTERN[mode];
-  const basePolicy = TOOL_USAGE_POLICIES[pattern];
-
-  // If toolEnforcement flags are provided, override the base policy
-  if (flags?.toolEnforcement) {
-    return {
-      minCalls: flags.toolEnforcement.minCalls ?? basePolicy.minCalls,
-      maxCalls: flags.toolEnforcement.maxCalls ?? basePolicy.maxCalls,
-      guidance: basePolicy.guidance,
-    };
-  }
-
-  return basePolicy;
+  return TOOL_USAGE_POLICIES[pattern];
 }
 
 /**
