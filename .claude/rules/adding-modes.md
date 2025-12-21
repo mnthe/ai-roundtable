@@ -31,6 +31,9 @@ import {
 export class MyMode extends BaseModeStrategy {
   readonly name = 'my-mode';
 
+  // Optional: Disable groupthink detection for modes with structural opposition
+  // readonly needsGroupthinkDetection = false;
+
   /**
    * Execute one round of debate
    *
@@ -386,13 +389,169 @@ async executeRound(agents, context, toolkit) {
 }
 ```
 
+## Optional Hooks
+
+BaseModeStrategy provides optional hooks for advanced mode customization. These hooks are called automatically by `executeParallel()` and `executeSequential()`.
+
+### transformContext
+
+Transform the debate context before passing it to an agent. Use for anonymization, statistics injection, or context modification.
+
+```typescript
+/**
+ * Example: Anonymize previous responses for Delphi mode
+ */
+protected override transformContext(
+  context: DebateContext,
+  agent: BaseAgent
+): DebateContext {
+  return {
+    ...context,
+    previousResponses: context.previousResponses.map((r, i) => ({
+      ...r,
+      agentId: `participant-${i + 1}`,
+      agentName: `Participant ${i + 1}`,
+    })),
+  };
+}
+```
+
+### validateResponse
+
+Validate and potentially modify a response after generation. Use for stance enforcement or response correction.
+
+```typescript
+/**
+ * Example: Enforce stance requirement for Devils Advocate mode
+ */
+protected override validateResponse(
+  response: AgentResponse,
+  context: DebateContext
+): AgentResponse {
+  if (!response.stance) {
+    // Default to NEUTRAL if stance is missing
+    return { ...response, stance: 'NEUTRAL' };
+  }
+  return response;
+}
+```
+
+### getAgentRole
+
+Assign role identifiers to agents based on their position in the execution order. Useful for logging and role-based behavior.
+
+```typescript
+/**
+ * Example: Assign PRIMARY/OPPOSITION/EVALUATOR roles
+ */
+protected override getAgentRole(
+  agent: BaseAgent,
+  index: number,
+  context: DebateContext
+): string | undefined {
+  const roles = ['PRIMARY', 'OPPOSITION', 'EVALUATOR'];
+  return roles[index % roles.length];
+}
+```
+
+## Mode Extension Utilities
+
+Reusable utilities in `src/modes/` for common mode patterns:
+
+### Context Processors (`modes/processors/`)
+
+Pre-built context transformers that can be composed:
+
+```typescript
+import { AnonymizationProcessor, StatisticsProcessor } from '../processors/index.js';
+
+// In your mode class
+protected override transformContext(
+  context: DebateContext,
+  agent: BaseAgent
+): DebateContext {
+  let transformed = context;
+  transformed = AnonymizationProcessor.process(transformed);
+  transformed = StatisticsProcessor.process(transformed);
+  return transformed;
+}
+```
+
+| Processor | Purpose |
+|-----------|---------|
+| `AnonymizationProcessor` | Remove agent identities from previous responses |
+| `StatisticsProcessor` | Inject round statistics (confidence distribution, position clusters) |
+
+### Response Validators (`modes/validators/`)
+
+Post-response validation and correction:
+
+```typescript
+import { StanceValidator, ConfidenceRangeValidator } from '../validators/index.js';
+
+// In your mode class
+protected override validateResponse(
+  response: AgentResponse,
+  context: DebateContext
+): AgentResponse {
+  let validated = response;
+  validated = StanceValidator.validate(validated, { required: true, defaultStance: 'NEUTRAL' });
+  validated = ConfidenceRangeValidator.validate(validated, { min: 0.1, max: 0.95 });
+  return validated;
+}
+```
+
+| Validator | Purpose |
+|-----------|---------|
+| `StanceValidator` | Ensure stance field is present (YES/NO/NEUTRAL) |
+| `ConfidenceRangeValidator` | Clamp confidence to specified range |
+| `RequiredFieldsValidator` | Ensure required fields are non-empty |
+
+### Tool Policy (`modes/tool-policy.ts`)
+
+Mode-aware guidance for agent tool usage:
+
+```typescript
+import { getToolPolicy } from '../tool-policy.js';
+
+// Get recommended tool usage for a mode
+const policy = getToolPolicy('adversarial');
+// Returns: { encouraged: ['fact_check'], discouraged: ['search_web'], reason: '...' }
+```
+
+## needsGroupthinkDetection Property
+
+Controls whether AIConsensusAnalyzer performs groupthink detection for this mode:
+
+```typescript
+export class MyMode extends BaseModeStrategy {
+  readonly name = 'my-mode';
+
+  // Set to false for modes with built-in structural opposition
+  // Default is true (groupthink detection enabled)
+  readonly needsGroupthinkDetection = false;
+}
+```
+
+| Mode | needsGroupthinkDetection | Rationale |
+|------|--------------------------|-----------|
+| collaborative | true (default) | Consensus-seeking, risk of groupthink |
+| adversarial | false | Built-in opposition |
+| devils-advocate | false | Structural role-based opposition |
+| delphi | true (default) | Anonymous consensus, risk of conformity |
+
 ## Checklist
 
 - [ ] Mode class extends `BaseModeStrategy`
 - [ ] `name` property set as readonly
+- [ ] `needsGroupthinkDetection` set appropriately (if not default)
 - [ ] `executeRound()` implemented using `executeParallel()` or `executeSequential()`
 - [ ] `buildAgentPrompt()` uses 4-layer structure via prompt-builder utilities
 - [ ] First round sections differ from subsequent round sections
+- [ ] Optional hooks implemented if needed:
+  - [ ] `transformContext()` for context modification
+  - [ ] `validateResponse()` for response validation
+  - [ ] `getAgentRole()` for role assignment
 - [ ] Mode added to `DebateMode` type in `src/types/index.ts`
 - [ ] Mode registered in `ModeRegistry` (`src/modes/registry.ts`)
 - [ ] Exported from `src/modes/index.ts`
@@ -402,4 +561,5 @@ async executeRound(agents, context, toolkit) {
   - [ ] Graceful error handling (agent failures)
   - [ ] 4-layer prompt structure
   - [ ] First round vs subsequent round sections
+  - [ ] Hook behavior (if implemented)
 - [ ] README.md updated with mode description

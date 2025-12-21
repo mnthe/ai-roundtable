@@ -126,6 +126,45 @@ interface Session {
 }
 ```
 
+### ExitCriteria
+
+Configuration for automatic debate termination.
+
+```typescript
+interface ExitCriteria {
+  /** Minimum consensus level to exit (default: 0.9) */
+  consensusThreshold: number;
+
+  /** Rounds with stable positions to exit (default: 2) */
+  convergenceRounds: number;
+
+  /** Minimum confidence for all agents to exit (default: 0.85) */
+  confidenceThreshold: number;
+
+  /** Maximum rounds (fallback termination) */
+  maxRounds: number;
+
+  /** Whether exit criteria checking is enabled */
+  enabled: boolean;
+}
+
+interface ExitCheckResult {
+  shouldExit: boolean;
+  reason?: ExitReason;
+  details?: string;
+}
+
+type ExitReason = 'consensus' | 'convergence' | 'confidence' | 'max_rounds';
+```
+
+**Environment Variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROUNDTABLE_EXIT_ENABLED` | `true` | Enable/disable exit criteria |
+| `ROUNDTABLE_EXIT_CONSENSUS_THRESHOLD` | `0.9` | Consensus level threshold |
+| `ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS` | `2` | Position stability rounds |
+| `ROUNDTABLE_EXIT_CONFIDENCE_THRESHOLD` | `0.85` | Confidence threshold |
+
 ### ConsensusResult
 
 Analysis of agreement/disagreement.
@@ -136,6 +175,13 @@ interface ConsensusResult {
   commonGround: string[];     // Points of agreement
   disagreementPoints: string[]; // Points of disagreement
   summary: string;            // Overall summary
+  groupthinkWarning?: GroupthinkWarning;  // Optional groupthink detection
+}
+
+interface GroupthinkWarning {
+  detected: boolean;
+  indicators: string[];
+  recommendation: string;
 }
 ```
 
@@ -514,6 +560,9 @@ Interface for debate execution strategies.
 interface DebateModeStrategy {
   readonly name: string;
 
+  /** Whether this mode needs groupthink detection (default: true) */
+  readonly needsGroupthinkDetection?: boolean;
+
   executeRound(
     agents: BaseAgent[],
     context: DebateContext,
@@ -521,6 +570,110 @@ interface DebateModeStrategy {
   ): Promise<AgentResponse[]>;
 
   buildAgentPrompt(context: DebateContext): string;
+}
+```
+
+### BaseModeStrategy
+
+Abstract base class with optional hooks for mode customization.
+
+```typescript
+abstract class BaseModeStrategy implements DebateModeStrategy {
+  abstract readonly name: string;
+
+  /** Execution pattern for optimization guidance */
+  readonly executionPattern?: 'parallel' | 'sequential';
+
+  abstract executeRound(
+    agents: BaseAgent[],
+    context: DebateContext,
+    toolkit: AgentToolkit
+  ): Promise<AgentResponse[]>;
+
+  abstract buildAgentPrompt(context: DebateContext): string;
+
+  // Optional Hooks
+
+  /**
+   * Transform context before passing to agent.
+   * Use case: Delphi anonymization, statistics injection
+   */
+  protected transformContext?(context: DebateContext, agent: BaseAgent): DebateContext;
+
+  /**
+   * Validate and potentially modify response after generation.
+   * Use case: Devils-advocate stance enforcement
+   */
+  protected validateResponse?(response: AgentResponse, context: DebateContext): AgentResponse;
+
+  /**
+   * Get role identifier for an agent.
+   * Use case: Devils-advocate PRIMARY/OPPOSITION/EVALUATOR
+   */
+  protected getAgentRole?(
+    agent: BaseAgent,
+    index: number,
+    context: DebateContext
+  ): string | undefined;
+
+  // Core Execution Methods
+
+  /** Execute all agents in parallel (collaborative, expert-panel, delphi) */
+  protected executeParallel(
+    agents: BaseAgent[],
+    context: DebateContext,
+    toolkit: AgentToolkit
+  ): Promise<AgentResponse[]>;
+
+  /** Execute agents sequentially (adversarial, socratic) */
+  protected executeSequential(
+    agents: BaseAgent[],
+    context: DebateContext,
+    toolkit: AgentToolkit
+  ): Promise<AgentResponse[]>;
+}
+```
+
+### Context Processors
+
+Reusable context transformation utilities (`src/modes/processors/`).
+
+```typescript
+// Anonymize previous responses (remove agent identities)
+interface AnonymizationProcessor {
+  process(context: DebateContext): DebateContext;
+}
+
+// Inject round statistics (confidence distribution, position clusters)
+interface StatisticsProcessor {
+  process(context: DebateContext): DebateContext;
+}
+```
+
+### Response Validators
+
+Post-response validation utilities (`src/modes/validators/`).
+
+```typescript
+// Ensure stance field is present
+interface StanceValidator {
+  validate(
+    response: AgentResponse,
+    options: { required: boolean; defaultStance?: 'YES' | 'NO' | 'NEUTRAL' }
+  ): AgentResponse;
+}
+
+// Clamp confidence to specified range
+interface ConfidenceRangeValidator {
+  validate(
+    response: AgentResponse,
+    options: { min: number; max: number }
+  ): AgentResponse;
+}
+
+// Ensure required fields are non-empty
+interface RequiredFieldsValidator {
+  validate(response: AgentResponse, fields: string[]): AgentResponse;
 }
 ```
 
@@ -808,14 +961,12 @@ class DebateEngine {
     focusQuestion?: string
   ): Promise<RoundResult[]>;
 
-  // Analyze consensus with AI (falls back to rule-based if AI unavailable)
+  // Analyze consensus with AI (throws error if AI analyzer not configured)
   async analyzeConsensusWithAI(
     responses: AgentResponse[],
-    topic: string
+    topic: string,
+    options?: { includeGroupthinkDetection?: boolean }
   ): Promise<ConsensusResult>;
-
-  // Rule-based consensus analysis (fallback)
-  analyzeConsensus(responses: AgentResponse[]): ConsensusResult;
 
   // Toolkit management
   getToolkit(): AgentToolkit;
@@ -850,16 +1001,6 @@ class SessionManager {
   addResponse(sessionId: string, response: AgentResponse): Promise<void>;
   listSessions(): Promise<Session[]>;
   deleteSession(id: string): Promise<void>;
-}
-```
-
-### ConsensusAnalyzer
-
-Analyzes consensus among agents using rule-based analysis.
-
-```typescript
-class ConsensusAnalyzer {
-  analyzeConsensus(responses: AgentResponse[]): ConsensusResult;
 }
 ```
 

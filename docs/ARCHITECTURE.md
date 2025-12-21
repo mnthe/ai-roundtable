@@ -28,17 +28,17 @@ This document visualizes the debate flow and system architecture of AI Roundtabl
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           AI Roundtable Server                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  MCP Server  │  │ DebateEngine │  │   Session    │  │  Consensus   │     │
+│  │  MCP Server  │  │ DebateEngine │  │   Session    │  │ AIConsensus  │     │
 │  │   (tools)    │──│              │──│   Manager    │──│   Analyzer   │     │
 │  └──────────────┘  └──────┬───────┘  └──────────────┘  └──────────────┘     │
 │                           │                                                 │
-│         ┌─────────────────┼─────────────────┐                               │
-│         │                 │                 │                               │
-│         ▼                 ▼                 ▼                               │
-│  ┌─────────────┐   ┌──────────────┐  ┌────────────┐                         │
-│  │Mode Registry│   │Agent Registry│  │   SQLite   │                         │
-│  │  (7 modes)  │   │ (4 providers)│  │  Storage   │                         │
-│  └─────────────┘   └──────┬───────┘  └────────────┘                         │
+│         ┌─────────────────┼─────────────────┬───────────────┐               │
+│         │                 │                 │               │               │
+│         ▼                 ▼                 ▼               ▼               │
+│  ┌─────────────┐   ┌──────────────┐  ┌────────────┐  ┌────────────┐         │
+│  │Mode Registry│   │Agent Registry│  │   SQLite   │  │   Exit     │         │
+│  │  (7 modes)  │   │ (4 providers)│  │  Storage   │  │  Criteria  │         │
+│  └─────────────┘   └──────┬───────┘  └────────────┘  └────────────┘         │
 └───────────────────────────┼─────────────────────────────────────────────────┘
                             │
          ┌──────────────────┼─────────────────┬─────────────────┐
@@ -67,11 +67,16 @@ flowchart TD
     Round1 --> Analyze1[Analyze Consensus]
     Analyze1 --> Store1[Store Responses]
 
-    Store1 --> MoreRounds{More Rounds?}
+    Store1 --> ExitCheck1{Check Exit Criteria}
+    ExitCheck1 -->|Exit| Complete([Session Complete])
+    ExitCheck1 -->|Continue| MoreRounds{More Rounds?}
+
     MoreRounds -->|Yes| NextRound[Execute Next Round]
     NextRound --> AnalyzeN[Analyze Consensus]
     AnalyzeN --> StoreN[Store Responses]
-    StoreN --> MoreRounds
+    StoreN --> ExitCheckN{Check Exit Criteria}
+    ExitCheckN -->|Exit| Complete
+    ExitCheckN -->|Continue| MoreRounds
 
     MoreRounds -->|No| Complete([Session Complete])
 
@@ -332,11 +337,10 @@ Round 2: Revision Based on Anonymous Summary
 │                    DebateEngine Initialization                              │
 │                                                                             │
 │   interface DebateEngineOptions {                                           │
-│     toolkit?: AgentToolkit;           // Required                           │
+│     toolkit: AgentToolkit;                    // Required                   │
 │     aiConsensusAnalyzer?: AIConsensusAnalyzer;  // Optional                 │
 │   }                                                                         │
 │                                                                             │
-│   ⚠️ aiConsensusAnalyzer CAN be null (optional dependency)                   │
 └─────────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -344,13 +348,9 @@ Round 2: Revision Based on Anonymous Summary
 │              DebateEngine.analyzeConsensusWithAI()                          │
 │                                                                             │
 │   if (aiConsensusAnalyzer) {                                                │
-│     try {                                                                   │
-│       return await aiConsensusAnalyzer.analyzeConsensus(...)  ← Primary     │
-│     } catch {                                                               │
-│       // Fall back to rule-based on error                                   │
-│     }                                                                       │
+│     return await aiConsensusAnalyzer.analyzeConsensus(...)                  │
 │   }                                                                         │
-│   return this.analyzeConsensus(responses);  ← Fallback (rule-based)         │
+│   throw new Error('AI consensus analyzer not configured');                  │
 └─────────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -366,9 +366,9 @@ Round 2: Revision Based on Anonymous Summary
 │   ┌───────────────────┐     │  • Detect negation │                          │
 │   │  performBasic     │     │  • Find nuances    │                          │
 │   │  Analysis()       │     │  • Cluster themes  │                          │
-│   │                   │     └────────────────────┘                          │
-│   │  agreementLevel = │                                                     │
-│   │  1-(unique-1)/n   │ ← Simple string equality, no Jaccard                │
+│   │                   │     │  • Groupthink      │                          │
+│   │  agreementLevel = │     │    detection       │                          │
+│   │  1-(unique-1)/n   │     └────────────────────┘                          │
 │   └───────────────────┘                                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -381,9 +381,8 @@ Round 2: Revision Based on Anonymous Summary
 | API key exists + AI failure | `AIConsensusAnalyzer.performBasicAnalysis()` | `1 - (uniquePositionCount - 1) / n` |
 | No API key (no agents)      | `AIConsensusAnalyzer.performBasicAnalysis()` | `1 - (uniquePositionCount - 1) / n` |
 
-> **Note:** `ConsensusAnalyzer` (rule-based, in `DebateEngine.analyzeConsensus()`) is used as a fallback when:
-> - `aiConsensusAnalyzer` is not provided to DebateEngine
-> - AI analysis fails due to API errors or other issues
+> **Note:** Groupthink detection is configurable per mode via `needsGroupthinkDetection` property.
+> Modes with built-in opposition (adversarial, devils-advocate) disable it by default.
 
 ### Light Models for Analysis
 
@@ -803,15 +802,24 @@ src/
 │       ├── tool-converters.ts    # Toolkit → provider format
 │       └── light-model-factory.ts
 │
+├── benchmark/           # Benchmark framework
+│   ├── benchmark-runner.ts   # Runs benchmark scenarios
+│   ├── metrics-collector.ts  # Collects debate performance metrics
+│   ├── types.ts              # BenchmarkMetrics, BenchmarkScenario
+│   └── index.ts
+│
+├── config/              # Configuration
+│   └── exit-criteria.ts     # Exit criteria environment config
+│
 ├── core/                # Core business logic
 │   ├── debate-engine.ts         # Main orchestrator
 │   ├── session-manager.ts
-│   ├── consensus-analyzer.ts    # Rule-based
-│   ├── ai-consensus-analyzer.ts # AI-based
+│   ├── ai-consensus-analyzer.ts # AI-based consensus analysis
+│   ├── exit-criteria.ts         # Exit criteria checking logic
 │   └── key-points-extractor.ts  # For 4-layer responses
 │
 ├── modes/               # Debate mode strategies
-│   ├── base.ts          # BaseModeStrategy abstract class
+│   ├── base.ts          # BaseModeStrategy with hooks
 │   ├── collaborative.ts
 │   ├── adversarial.ts
 │   ├── socratic.ts
@@ -820,6 +828,11 @@ src/
 │   ├── delphi.ts
 │   ├── red-team-blue-team.ts
 │   ├── registry.ts
+│   ├── tool-policy.ts   # Mode-aware tool usage policy
+│   ├── processors/      # Context processors
+│   │   └── index.ts         # Anonymization, Statistics
+│   ├── validators/      # Response validators
+│   │   └── index.ts         # Stance, Confidence, RequiredFields
 │   └── utils/           # Prompt builder utilities
 │       └── prompt-builder.ts  # 4-layer prompt structure
 │
