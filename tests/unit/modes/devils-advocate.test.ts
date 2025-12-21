@@ -438,7 +438,7 @@ describe('DevilsAdvocateMode', () => {
   });
 
   describe('stance validation (validateResponse hook)', () => {
-    it('should enforce YES stance for primary agent', async () => {
+    it('should mark role violation when primary agent has no stance (no force-correction)', async () => {
       const agents = [
         new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
       ];
@@ -456,11 +456,12 @@ describe('DevilsAdvocateMode', () => {
 
       const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
 
-      // Stance should be enforced to YES
-      expect(responses[0].stance).toBe('YES');
+      // StanceValidator no longer force-corrects, just marks violation
+      expect(responses[0].stance).toBeUndefined();
+      expect(responses[0]._roleViolation).toEqual({ expected: 'YES', actual: null });
     });
 
-    it('should enforce NO stance for opposition agent', async () => {
+    it('should mark role violation when opposition agent has wrong stance (no force-correction)', async () => {
       const agents = [
         new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
         new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
@@ -489,13 +490,15 @@ describe('DevilsAdvocateMode', () => {
 
       const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
 
-      // First agent: YES
+      // First agent: correct stance, no violation
       expect(responses[0].stance).toBe('YES');
-      // Second agent: should be corrected to NO
-      expect(responses[1].stance).toBe('NO');
+      expect(responses[0]._roleViolation).toBeUndefined();
+      // Second agent: wrong stance preserved, violation marked
+      expect(responses[1].stance).toBe('YES');
+      expect(responses[1]._roleViolation).toEqual({ expected: 'NO', actual: 'YES' });
     });
 
-    it('should enforce NEUTRAL stance for evaluator agents', async () => {
+    it('should mark role violation when evaluator has wrong stance (no force-correction)', async () => {
       const agents = [
         new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
         new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
@@ -536,11 +539,15 @@ describe('DevilsAdvocateMode', () => {
       const responses = await mode.executeRound(agents, defaultContext, mockToolkit);
 
       expect(responses[0].stance).toBe('YES');
+      expect(responses[0]._roleViolation).toBeUndefined();
       expect(responses[1].stance).toBe('NO');
-      expect(responses[2].stance).toBe('NEUTRAL');
+      expect(responses[1]._roleViolation).toBeUndefined();
+      // Evaluator: wrong stance preserved, violation marked
+      expect(responses[2].stance).toBe('YES');
+      expect(responses[2]._roleViolation).toEqual({ expected: 'NEUTRAL', actual: 'YES' });
     });
 
-    it('should not modify response when stance is correct', async () => {
+    it('should not mark violation when stance is correct', async () => {
       const agents = [
         new MockAgent({ id: 'agent-1', name: 'Primary', provider: 'anthropic', model: 'mock' }),
         new MockAgent({ id: 'agent-2', name: 'Opposition', provider: 'openai', model: 'mock' }),
@@ -584,8 +591,11 @@ describe('DevilsAdvocateMode', () => {
       const results = await mode.executeRound(agents, defaultContext, mockToolkit);
 
       expect(results[0].stance).toBe('YES');
+      expect(results[0]._roleViolation).toBeUndefined();
       expect(results[1].stance).toBe('NO');
+      expect(results[1]._roleViolation).toBeUndefined();
       expect(results[2].stance).toBe('NEUTRAL');
+      expect(results[2]._roleViolation).toBeUndefined();
     });
 
     it('should reset agent index tracker between rounds', async () => {
@@ -609,9 +619,11 @@ describe('DevilsAdvocateMode', () => {
 
       const round1Results = await mode.executeRound(agents, defaultContext, mockToolkit);
 
-      // Verify round 1 stance enforcement
-      expect(round1Results[0].stance).toBe('YES');
-      expect(round1Results[1].stance).toBe('NO');
+      // Verify round 1: violations marked (not force-corrected)
+      expect(round1Results[0].stance).toBeUndefined();
+      expect(round1Results[0]._roleViolation).toEqual({ expected: 'YES', actual: null });
+      expect(round1Results[1].stance).toBeUndefined();
+      expect(round1Results[1]._roleViolation).toEqual({ expected: 'NO', actual: null });
 
       // Round 2 - agents respond without stance again
       const round2Context: DebateContext = {
@@ -634,9 +646,11 @@ describe('DevilsAdvocateMode', () => {
 
       const round2Results = await mode.executeRound(agents, round2Context, mockToolkit);
 
-      // Verify round 2 stance enforcement (should still work correctly)
-      expect(round2Results[0].stance).toBe('YES');
-      expect(round2Results[1].stance).toBe('NO');
+      // Verify round 2: violations still marked correctly (index reset working)
+      expect(round2Results[0].stance).toBeUndefined();
+      expect(round2Results[0]._roleViolation).toEqual({ expected: 'YES', actual: null });
+      expect(round2Results[1].stance).toBeUndefined();
+      expect(round2Results[1]._roleViolation).toEqual({ expected: 'NO', actual: null });
     });
   });
 
@@ -832,7 +846,7 @@ describe('DevilsAdvocateMode', () => {
       expect(responseIds).toContain('opposition');
     });
 
-    it('should still enforce correct stances with parallelization', async () => {
+    it('should mark role violations when agents return without expected stance (no force-correction)', async () => {
       const agents = [
         new MockAgent({ id: 'primary', name: 'Primary', provider: 'anthropic', model: 'mock' }),
         new MockAgent({ id: 'opposition', name: 'Opposition', provider: 'openai', model: 'mock' }),
@@ -854,9 +868,16 @@ describe('DevilsAdvocateMode', () => {
 
       const responses = await parallelizedMode.executeRound(agents, defaultContext, mockToolkit);
 
-      expect(responses[0].stance).toBe('YES'); // PRIMARY
-      expect(responses[1].stance).toBe('NO'); // OPPOSITION
-      expect(responses[2].stance).toBe('NEUTRAL'); // EVALUATOR
+      // StanceValidator no longer force-corrects, just marks violations
+      // Original stance (undefined) is preserved
+      expect(responses[0].stance).toBeUndefined();
+      expect(responses[1].stance).toBeUndefined();
+      expect(responses[2].stance).toBeUndefined();
+
+      // Role violations are marked
+      expect(responses[0]._roleViolation).toEqual({ expected: 'YES', actual: null });
+      expect(responses[1]._roleViolation).toEqual({ expected: 'NO', actual: null });
+      expect(responses[2]._roleViolation).toEqual({ expected: 'NEUTRAL', actual: null });
     });
 
     it('should handle 4+ agents with parallelization (multiple evaluators)', async () => {

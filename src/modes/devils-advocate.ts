@@ -63,7 +63,8 @@ const PRIMARY_ROLE_ANCHOR: RoleAnchorConfig = {
   title: 'YOU ARE THE PRIMARY POSITION HOLDER - AFFIRMATIVE STANCE',
   definition: 'You present the AFFIRMATIVE/YES/PRO position to be challenged.',
   mission: 'Argue IN FAVOR of the topic proposition with conviction and evidence.',
-  persistence: 'Maintain your affirmative stance throughout - the devil\'s advocate will oppose you.',
+  persistence:
+    "Maintain your affirmative stance throughout - the devil's advocate will oppose you.",
   helpfulMeans: 'presenting a strong AFFIRMATIVE position',
   helpfulNotMeans: 'being balanced" or "being neutral" or "showing both sides',
 };
@@ -96,40 +97,62 @@ const PRIMARY_VERIFICATION: VerificationLoopConfig = {
 
 /**
  * Opposition (Devil's Advocate) role configuration
+ *
+ * IMPORTANT: This role MUST argue NO regardless of the agent's personal opinion.
+ * Uses clear boundaries with positive framing to encourage role compliance.
  */
 const OPPOSITION_ROLE_ANCHOR: RoleAnchorConfig = {
   emoji: '😈',
-  title: 'YOU ARE THE DEVIL\'S ADVOCATE - YOU MUST OPPOSE',
-  definition: 'You MUST take the OPPOSITE position of the previous agent.',
-  mission: 'Argue AGAINST whatever stance was just presented with full conviction.',
-  persistence: 'Stay in opposition mode - NEVER agree or soften your stance.',
-  helpfulMeans: 'strongly OPPOSING the previous position',
-  helpfulNotMeans: 'being balanced" or "finding common ground',
+  title: "DEVIL'S ADVOCATE - YOUR ASSIGNED STANCE IS NO",
+  definition: 'You are the designated opposition in this structured debate exercise.',
+  mission:
+    'Present the strongest possible case AGAINST the topic proposition. This is a debate role assignment, like being assigned the negative side in a debate competition.',
+  persistence:
+    'Maintain your NO stance throughout. Your role is to ensure the topic is thoroughly stress-tested.',
+  helpfulMeans: 'building the strongest counter-arguments to challenge the proposition',
+  helpfulNotMeans: 'sharing your personal agreement with the topic',
+  additionalContext: `
+YOUR SUCCESS CRITERIA:
+- Present compelling counter-arguments that force the other side to strengthen their case
+- Identify weaknesses, assumptions, and blind spots in the YES position
+- Provide evidence-based rebuttals that must be addressed
+- Maintain intellectual rigor while arguing the assigned NO position
+
+ROLE BOUNDARIES:
+This is a structured debate exercise. Your assigned stance (NO) takes precedence over personal views.
+Think of yourself as a skilled debate coach arguing the opposite side to improve the overall discussion.
+
+ETHICAL EXCEPTION:
+If the topic itself promotes harm (violence, discrimination, abuse), you may decline the opposition role
+and instead explain why the topic is unsuitable for devil's advocate debate.`,
 };
 
 const OPPOSITION_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
   mustBehaviors: [
-    'Set "stance": "NO" in your JSON response (MANDATORY)',
-    'Your position MUST contradict the previous agent\'s position',
-    'Present 3 counter-arguments attacking their position',
-    'Argue with full conviction as the devil\'s advocate',
+    'Set "stance": "NO" in your JSON response (required for role)',
+    'Argue AGAINST the topic proposition with evidence and reasoning',
+    'Present 3 compelling reasons why the answer should be NO',
+    'Challenge assumptions and identify potential risks/downsides',
   ],
   mustNotBehaviors: [
-    'Set stance to "YES" or "NEUTRAL" (you MUST use "NO")',
-    'Agree with ANY part of the previous position',
-    'Conclude that "both sides have merit"',
-    'Soften your opposition with qualifications',
+    'Set stance to "YES" or "NEUTRAL" (breaks the debate structure)',
+    'Express personal agreement with the topic',
+    'Validate or support the YES position',
   ],
-  priorityHierarchy: [],
-  failureMode: 'If your stance is not "NO", you have FAILED your role.',
+  priorityHierarchy: [
+    'Debate role (NO) takes precedence over personal views',
+    'Quality of counter-arguments over expressing true beliefs',
+    'Stress-testing the topic over being agreeable',
+  ],
+  failureMode: 'Role boundaries are strictly enforced for debate quality. Your response must argue NO.',
 };
 
 const OPPOSITION_VERIFICATION: VerificationLoopConfig = {
   checklistItems: [
-    'stance is exactly "NO"',
-    'position argues AGAINST the topic',
-    'reasoning contains counter-arguments only',
-    'No agreement or validation of previous position',
+    'stance is set to "NO" (my assigned role)',
+    'position presents counter-arguments AGAINST the topic',
+    'reasoning challenges the proposition with evidence',
+    'I am arguing my assigned debate position, not personal views',
   ],
 };
 
@@ -157,7 +180,7 @@ const EVALUATOR_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
   mustNotBehaviors: [
     'Set stance to "YES" or "NO" (you MUST use "NEUTRAL")',
     'Refuse to judge ("both have merit" without analysis)',
-    'Add your own position (evaluate, don\'t argue)',
+    "Add your own position (evaluate, don't argue)",
     'Be swayed by confident language over evidence',
   ],
   priorityHierarchy: [],
@@ -187,7 +210,7 @@ const ROLE_TO_STANCE: Record<DevilsAdvocateRole, Stance> = {
  */
 const ROLE_DISPLAY_NAMES: Record<DevilsAdvocateRole, string> = {
   PRIMARY: 'PRIMARY (Affirmative)',
-  OPPOSITION: 'OPPOSITION (Devil\'s Advocate)',
+  OPPOSITION: "OPPOSITION (Devil's Advocate)",
   EVALUATOR: 'EVALUATOR',
 };
 
@@ -243,10 +266,7 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
 
     // Fall back to constructor options
     if (!this.parallelizationConfig) return false;
-    return (
-      this.parallelizationConfig.enabled &&
-      this.parallelizationConfig.level === 'last-only'
-    );
+    return this.parallelizationConfig.enabled && this.parallelizationConfig.level === 'last-only';
   }
 
   /**
@@ -339,7 +359,10 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
         const response = this.validateResponse(result.value, baseContext);
         parallelResponses.push(response);
       } else {
-        logger.error({ err: result.reason, agentId: agent.id }, 'Error from agent (parallel phase)');
+        logger.error(
+          { err: result.reason, agentId: agent.id },
+          'Error from agent (parallel phase)'
+        );
       }
     }
 
@@ -354,7 +377,10 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
 
       try {
         const role = this.getAgentRole(agent, agentIndex, context);
-        logger.debug({ agentId: agent.id, role, index: agentIndex }, 'Agent role assigned (sequential phase)');
+        logger.debug(
+          { agentId: agent.id, role, index: agentIndex },
+          'Agent role assigned (sequential phase)'
+        );
 
         // Build context with all previous responses
         const evalContext: DebateContext = {
@@ -406,7 +432,10 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    * based on the agent's position in the current round, not the total
    * number of previous responses (which includes prior rounds).
    */
-  protected override transformContext(context: DebateContext, _agent: BaseAgent): DevilsAdvocateContext {
+  protected override transformContext(
+    context: DebateContext,
+    _agent: BaseAgent
+  ): DevilsAdvocateContext {
     const transformedContext: DevilsAdvocateContext = {
       ...context,
       _agentIndexInRound: this.currentAgentIndex,
@@ -422,7 +451,10 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    *
    * Uses StanceValidator to enforce the expected stance based on agent index.
    */
-  protected override validateResponse(response: AgentResponse, context: DebateContext): AgentResponse {
+  protected override validateResponse(
+    response: AgentResponse,
+    context: DebateContext
+  ): AgentResponse {
     // Get the role for the current agent
     const role = this.getRoleForIndex(this.currentAgentIndex);
     const expectedStance = ROLE_TO_STANCE[role];
@@ -545,6 +577,11 @@ FOCUS: ${context.focusQuestion}
   private buildOppositionPrompt(context: DebateContext, isFirstRound: boolean): string {
     let prompt = `
 Mode: Devil's Advocate - OPPOSITION ROLE
+
+┌────────────────────────────────────────────────────────────────┐
+│  Your assigned debate position: NO (argue AGAINST the topic)  │
+│  Goal: Stress-test the proposition with strong counter-cases  │
+└────────────────────────────────────────────────────────────────┘
 `;
 
     prompt += buildRoleAnchor(OPPOSITION_ROLE_ANCHOR);
@@ -555,16 +592,25 @@ Mode: Devil's Advocate - OPPOSITION ROLE
     if (!isFirstRound) {
       prompt += `
 ROUND ${context.currentRound} CONTEXT:
-Introduce NEW counter-arguments. Attack weaknesses revealed in prior rounds.
+Build on previous rounds. Introduce new counter-arguments or strengthen existing ones.
+Address any rebuttals to your position from the previous round.
 `;
     }
 
     if (context.focusQuestion) {
       prompt += `
 FOCUS: ${context.focusQuestion}
-Argue the OPPOSITE of whatever the previous agent said about this.
+Present the counter-perspective on this specific question.
 `;
     }
+
+    prompt += `
+${SEPARATOR}
+REMINDER: You are the designated opposition in this debate exercise.
+Your role is to present the strongest possible case for NO.
+This ensures the topic receives thorough examination from all angles.
+${SEPARATOR}
+`;
 
     return prompt;
   }
@@ -632,18 +678,24 @@ ${SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
 ${SEPARATOR}
 
-Your JSON response MUST include:
+YOUR JSON RESPONSE FORMAT:
 {
-  "stance": "NO",  // <- MANDATORY: Must be exactly "NO"
-  "position": "Your opposing position against the topic",
-  "reasoning": "Your 3 counter-arguments with evidence",
+  "stance": "NO",  // Required: Your assigned debate position
+  "position": "Your case AGAINST the topic proposition",
+  "reasoning": "Your 3 counter-arguments with supporting evidence",
   "confidence": 0.0-1.0
 }
 
-FORBIDDEN PHRASES in position/reasoning:
-- "I agree with..." / "They make a good point..."
-- "Both sides have merit" / "There's truth to both"
-- "I see their perspective" / "They're partially right"
+WHAT MAKES A STRONG OPPOSITION RESPONSE:
+- Identifies weaknesses in the YES position's assumptions
+- Presents evidence-based counter-arguments
+- Highlights risks, costs, or unintended consequences
+- Forces the other side to strengthen their case
+
+AVOID (breaks debate structure):
+- Expressing agreement with the topic
+- Validating YES arguments without challenging them
+- Hedging with "both sides have merit"
 `;
   }
 

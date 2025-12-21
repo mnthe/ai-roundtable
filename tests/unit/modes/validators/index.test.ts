@@ -34,18 +34,24 @@ describe('Response Validators', () => {
   });
 
   describe('StanceValidator', () => {
-    it('should enforce expected stance when different', () => {
+    it('should mark role violation when stance differs (does NOT force-correct)', () => {
       const validator = new StanceValidator('YES');
       const response = createMockResponse({ stance: 'NO' });
       const context = createMockContext();
 
       const result = validator.validate(response, context);
 
-      expect(result.stance).toBe('YES');
+      // Stance is preserved (not force-corrected)
+      expect(result.stance).toBe('NO');
+      // Role violation is marked
+      expect(result._roleViolation).toEqual({
+        expected: 'YES',
+        actual: 'NO',
+      });
       expect(result).not.toBe(response); // Should be a new object
     });
 
-    it('should preserve correct stance', () => {
+    it('should preserve correct stance without marking violation', () => {
       const validator = new StanceValidator('NO');
       const response = createMockResponse({ stance: 'NO' });
       const context = createMockContext();
@@ -53,17 +59,24 @@ describe('Response Validators', () => {
       const result = validator.validate(response, context);
 
       expect(result.stance).toBe('NO');
+      expect(result._roleViolation).toBeUndefined();
       expect(result).toBe(response); // Should return same object
     });
 
-    it('should enforce stance when undefined', () => {
+    it('should mark role violation when stance is undefined', () => {
       const validator = new StanceValidator('NEUTRAL');
       const response = createMockResponse({ stance: undefined });
       const context = createMockContext();
 
       const result = validator.validate(response, context);
 
-      expect(result.stance).toBe('NEUTRAL');
+      // Stance is preserved (undefined)
+      expect(result.stance).toBeUndefined();
+      // Role violation is marked
+      expect(result._roleViolation).toEqual({
+        expected: 'NEUTRAL',
+        actual: null,
+      });
     });
 
     it('should have correct name', () => {
@@ -289,7 +302,9 @@ describe('Response Validators', () => {
 
       expect(result.position).toBe('No position provided');
       expect(result.confidence).toBe(1);
-      expect(result.stance).toBe('YES');
+      // StanceValidator no longer force-corrects, just marks violation
+      expect(result.stance).toBe('NO');
+      expect(result._roleViolation).toEqual({ expected: 'YES', actual: 'NO' });
     });
 
     it('should have correct name', () => {
@@ -307,7 +322,9 @@ describe('Response Validators', () => {
 
       const response = createMockResponse({ stance: 'NO' });
       const result = validator.validate(response, createMockContext());
-      expect(result.stance).toBe('YES');
+      // StanceValidator marks violation, doesn't force-correct
+      expect(result.stance).toBe('NO');
+      expect(result._roleViolation).toEqual({ expected: 'YES', actual: 'NO' });
     });
 
     it('createConfidenceRangeValidator should create ConfidenceRangeValidator', () => {
@@ -342,7 +359,9 @@ describe('Response Validators', () => {
 
       const response = createMockResponse({ stance: 'YES', confidence: 5 });
       const result = chain.validate(response, createMockContext());
-      expect(result.stance).toBe('NEUTRAL');
+      // StanceValidator marks violation, doesn't force-correct
+      expect(result.stance).toBe('YES');
+      expect(result._roleViolation).toEqual({ expected: 'NEUTRAL', actual: 'YES' });
       expect(result.confidence).toBe(1);
     });
   });

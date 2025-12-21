@@ -51,6 +51,14 @@ export interface AgentResponse {
   /** Related questions from search (Perplexity) */
   relatedQuestions?: string[];
   timestamp: Date;
+  /**
+   * Role violation metadata (set by StanceValidator when stance doesn't match expected).
+   * Preserved for analysis - stance is NOT force-corrected to avoid data corruption.
+   */
+  _roleViolation?: {
+    expected: Stance;
+    actual: Stance | null;
+  };
 }
 
 export interface Citation {

@@ -34,8 +34,12 @@ export interface ResponseValidator {
 // ============================================
 
 /**
- * Enforces a specific stance on the response.
- * Used in devils-advocate mode to ensure agents maintain their assigned roles.
+ * Validates stance compliance for role-based debate modes.
+ * Does NOT force-correct stance - only marks role violations.
+ *
+ * Rationale: Force-correcting stance while leaving position/reasoning unchanged
+ * creates data corruption (e.g., stance="NO" with YES-supporting content).
+ * Instead, we preserve the original response and flag the violation.
  */
 export class StanceValidator implements ResponseValidator {
   readonly name = 'stance';
@@ -43,8 +47,18 @@ export class StanceValidator implements ResponseValidator {
   constructor(private expectedStance: Stance) {}
 
   validate(response: AgentResponse, _context: DebateContext): AgentResponse {
-    if (response.stance !== this.expectedStance) {
-      return { ...response, stance: this.expectedStance };
+    const hasViolation = response.stance !== this.expectedStance;
+
+    if (hasViolation) {
+      // Mark the violation but preserve original stance
+      // The calling code (DevilsAdvocateMode) handles logging
+      return {
+        ...response,
+        _roleViolation: {
+          expected: this.expectedStance,
+          actual: response.stance ?? null,
+        },
+      };
     }
     return response;
   }
