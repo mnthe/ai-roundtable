@@ -41,9 +41,6 @@ describe('Feature Flag System', () => {
       expect(DEFAULT_FLAGS.exitCriteria.enabled).toBe(true);
       expect(DEFAULT_FLAGS.exitCriteria.consensusThreshold).toBe(0.9);
       expect(DEFAULT_FLAGS.exitCriteria.convergenceRounds).toBe(2);
-
-      expect(DEFAULT_FLAGS.promptEnforcement.level).toBe('normal');
-      expect(DEFAULT_FLAGS.promptEnforcement.requireStance).toBe(true);
     });
   });
 
@@ -238,15 +235,6 @@ describe('Feature Flag System', () => {
       });
     });
 
-    describe('promptEnforcement', () => {
-      it('should load enforcement level', () => {
-        process.env.ROUNDTABLE_PROMPT_LEVEL = 'strict';
-        const flags = loadFlagsFromEnv();
-
-        expect(flags.promptEnforcement?.level).toBe('strict');
-      });
-    });
-
     it('should return empty partial when no env vars set', () => {
       const flags = loadFlagsFromEnv();
 
@@ -264,7 +252,6 @@ describe('Feature Flag System', () => {
       process.env.ROUNDTABLE_EXIT_ENABLED = 'true';
       process.env.ROUNDTABLE_EXIT_CONSENSUS = '0.95';
       process.env.ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS = '3';
-      process.env.ROUNDTABLE_PROMPT_LEVEL = 'relaxed';
 
       const flags = loadFlagsFromEnv();
 
@@ -278,7 +265,6 @@ describe('Feature Flag System', () => {
       expect(flags.exitCriteria?.enabled).toBe(true);
       expect(flags.exitCriteria?.consensusThreshold).toBe(0.95);
       expect(flags.exitCriteria?.convergenceRounds).toBe(3);
-      expect(flags.promptEnforcement?.level).toBe('relaxed');
     });
   });
 
@@ -416,9 +402,6 @@ describe('Feature Flag System', () => {
           'exitCriteria.enabled',
           'exitCriteria.consensusThreshold',
           'exitCriteria.convergenceRounds',
-          'promptEnforcement.level',
-          'promptEnforcement.requireStance',
-          'promptEnforcement.requireToolUsage',
         ];
 
         for (const key of expectedKeys) {

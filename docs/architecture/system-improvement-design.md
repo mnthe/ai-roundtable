@@ -566,11 +566,11 @@ interface SequentialModeConfig {
 
 Based on AI Roundtable evaluation, apply mode-specific parallelization:
 
-| Mode | Parallelization | Rationale |
-|------|----------------|-----------|
-| devils-advocate | ✅ Full | Roles are independent; evaluator synthesizes at end |
-| socratic | ⚠️ Conditional | Question-answer chains need some sequentiality |
-| adversarial | ❌ Minimal | Direct rebuttal requires seeing opponent's argument |
+| Mode            | Parallelization | Rationale                                           |
+| --------------- | --------------- | --------------------------------------------------- |
+| devils-advocate | ✅ Full          | Roles are independent; evaluator synthesizes at end |
+| socratic        | ⚠️ Conditional   | Question-answer chains need some sequentiality      |
+| adversarial     | ❌ Minimal       | Direct rebuttal requires seeing opponent's argument |
 
 **Implementation:**
 
@@ -653,13 +653,6 @@ interface FeatureFlags {
     consensusThreshold?: number;
     convergenceRounds?: number;
   };
-
-  /** Prompt enforcement level */
-  promptEnforcement: {
-    level: 'strict' | 'normal' | 'relaxed';
-    requireStance?: boolean;      // For devils-advocate
-    requireToolUsage?: boolean;   // For all modes
-  };
 }
 
 const DEFAULT_FLAGS: FeatureFlags = {
@@ -667,7 +660,6 @@ const DEFAULT_FLAGS: FeatureFlags = {
   toolEnforcement: { enabled: true, level: 'normal' },
   groupthinkDetection: { enabled: true, threshold: 0.9 },
   exitCriteria: { enabled: false },
-  promptEnforcement: { level: 'normal' },
 };
 ```
 
@@ -686,11 +678,11 @@ interface FlagResolution {
 
 **Resolution Order (highest to lowest):**
 
-| Priority | Source | Use Case |
-|----------|--------|----------|
-| 1 | Session-level | Per-debate override via MCP tool params |
-| 2 | Environment | MCP server config (.env, mcp.json) |
-| 3 | Default | Hardcoded fallback |
+| Priority | Source        | Use Case                                |
+| -------- | ------------- | --------------------------------------- |
+| 1        | Session-level | Per-debate override via MCP tool params |
+| 2        | Environment   | MCP server config (.env, mcp.json)      |
+| 3        | Default       | Hardcoded fallback                      |
 
 ### 3.1.2 Environment Variable Configuration
 
@@ -714,9 +706,6 @@ ROUNDTABLE_GROUPTHINK_THRESHOLD=0.9
 ROUNDTABLE_EXIT_ENABLED=false
 ROUNDTABLE_EXIT_CONSENSUS=0.9
 ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS=2
-
-# Prompt enforcement
-ROUNDTABLE_PROMPT_LEVEL=normal       # strict | normal | relaxed
 ```
 
 **Parsing:**
@@ -889,12 +878,12 @@ interface BenchmarkComparison {
 
 ### 3.3 Rollout Strategy
 
-| Phase | Scope | Flags Enabled | Duration |
-|-------|-------|---------------|----------|
-| 1 | Internal testing | All (opt-in) | 1 week |
-| 2 | devils-advocate only | sequentialParallelization | 2 weeks |
-| 3 | Expand to socratic | + toolEnforcement | 2 weeks |
-| 4 | Full rollout | All features | - |
+| Phase | Scope                | Flags Enabled             | Duration |
+| ----- | -------------------- | ------------------------- | -------- |
+| 1     | Internal testing     | All (opt-in)              | 1 week   |
+| 2     | devils-advocate only | sequentialParallelization | 2 weeks  |
+| 3     | Expand to socratic   | + toolEnforcement         | 2 weeks  |
+| 4     | Full rollout         | All features              | -        |
 
 **Rollback Trigger:**
 - Latency improvement < 30% OR
@@ -927,13 +916,13 @@ interface BenchmarkComparison {
 
 ### P2 - Medium-term (Quality)
 
-| Item                        | Description                                                   | Effort |
-| --------------------------- | ------------------------------------------------------------- | ------ |
-| Prompt Enforcement          | Layer 2-4 enhancement (tool usage, stance, verification)      | Medium |
-| Sequential Parallelization  | Implement last-only execution for devils-advocate             | Medium |
-| Refactor red-team-blue-team | Use hooks for team assignment                                 | Medium |
-| Perspective Anchors         | Add perspective assignment to expert-panel mode               | Low    |
-| Sequential Performance      | Light model option, reduced max_tokens, tool result caching   | Medium |
+| Item                        | Description                                                 | Effort |
+| --------------------------- | ----------------------------------------------------------- | ------ |
+| Prompt Enforcement          | Layer 2-4 enhancement (tool usage, stance, verification)    | Medium |
+| Sequential Parallelization  | Implement last-only execution for devils-advocate           | Medium |
+| Refactor red-team-blue-team | Use hooks for team assignment                               | Medium |
+| Perspective Anchors         | Add perspective assignment to expert-panel mode             | Low    |
+| Sequential Performance      | Light model option, reduced max_tokens, tool result caching | Medium |
 
 ---
 

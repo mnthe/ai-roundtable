@@ -95,18 +95,6 @@ export interface ExitCriteriaConfig {
 }
 
 /**
- * Prompt enforcement feature configuration
- */
-export interface PromptEnforcementConfig {
-  /** Enforcement level for prompt requirements */
-  level: EnforcementLevel;
-  /** Require explicit stance in devils-advocate mode */
-  requireStance?: boolean;
-  /** Require tool usage in all modes */
-  requireToolUsage?: boolean;
-}
-
-/**
  * Complete feature flags configuration
  */
 export interface FeatureFlags {
@@ -118,8 +106,6 @@ export interface FeatureFlags {
   groupthinkDetection: GroupthinkDetectionConfig;
   /** Exit criteria */
   exitCriteria: ExitCriteriaConfig;
-  /** Prompt enforcement */
-  promptEnforcement: PromptEnforcementConfig;
 }
 
 // ============================================
@@ -153,10 +139,6 @@ export const DEFAULT_FLAGS: FeatureFlags = {
     enabled: true,
     consensusThreshold: 0.9,
     convergenceRounds: 2,
-  },
-  promptEnforcement: {
-    level: 'normal',
-    requireStance: true,
   },
 };
 
@@ -283,7 +265,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * - ROUNDTABLE_EXIT_ENABLED: Enable exit criteria
  * - ROUNDTABLE_EXIT_CONSENSUS: Consensus threshold for early exit
  * - ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS: Convergence rounds for early exit
- * - ROUNDTABLE_PROMPT_LEVEL: Prompt enforcement level
  *
  * @returns Partial feature flags from environment
  */
@@ -359,15 +340,6 @@ export function loadFlagsFromEnv(): Partial<FeatureFlags> {
     if (exitConvergence !== undefined) {
       flags.exitCriteria.convergenceRounds = getEnvNumber('ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS', 2);
     }
-  }
-
-  // Prompt enforcement
-  const promptLevel = process.env.ROUNDTABLE_PROMPT_LEVEL;
-
-  if (promptLevel !== undefined) {
-    flags.promptEnforcement = {
-      level: parseEnforcementLevel(promptLevel),
-    };
   }
 
   return flags;
@@ -511,26 +483,6 @@ export class FeatureFlagResolver {
       this.defaultFlags.exitCriteria.convergenceRounds,
       this.envFlags.exitCriteria?.convergenceRounds,
       sessionOverride?.exitCriteria?.convergenceRounds
-    );
-
-    // Prompt enforcement
-    resolveValue(
-      'promptEnforcement.level',
-      this.defaultFlags.promptEnforcement.level,
-      this.envFlags.promptEnforcement?.level,
-      sessionOverride?.promptEnforcement?.level
-    );
-    resolveValue(
-      'promptEnforcement.requireStance',
-      this.defaultFlags.promptEnforcement.requireStance,
-      this.envFlags.promptEnforcement?.requireStance,
-      sessionOverride?.promptEnforcement?.requireStance
-    );
-    resolveValue(
-      'promptEnforcement.requireToolUsage',
-      this.defaultFlags.promptEnforcement.requireToolUsage,
-      this.envFlags.promptEnforcement?.requireToolUsage,
-      sessionOverride?.promptEnforcement?.requireToolUsage
     );
 
     return result;

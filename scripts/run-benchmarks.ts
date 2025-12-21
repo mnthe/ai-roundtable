@@ -69,7 +69,6 @@ const FLAG_CONFIGURATIONS: { name: string; flags: Partial<FeatureFlags> }[] = [
     flags: {
       sequentialParallelization: { enabled: false, level: 'none' },
       toolEnforcement: { enabled: true, level: 'normal' },
-      promptEnforcement: { level: 'normal' },
     },
   },
   {
@@ -77,7 +76,6 @@ const FLAG_CONFIGURATIONS: { name: string; flags: Partial<FeatureFlags> }[] = [
     flags: {
       sequentialParallelization: { enabled: false, level: 'none' },
       toolEnforcement: { enabled: true, level: 'strict', minCalls: 1, maxCalls: 3 },
-      promptEnforcement: { level: 'strict', requireStance: true, requireToolUsage: true },
     },
   },
   {
@@ -85,7 +83,6 @@ const FLAG_CONFIGURATIONS: { name: string; flags: Partial<FeatureFlags> }[] = [
     flags: {
       sequentialParallelization: { enabled: true, level: 'last-only' },
       toolEnforcement: { enabled: true, level: 'normal' },
-      promptEnforcement: { level: 'normal' },
     },
   },
   {
@@ -93,7 +90,6 @@ const FLAG_CONFIGURATIONS: { name: string; flags: Partial<FeatureFlags> }[] = [
     flags: {
       sequentialParallelization: { enabled: true, level: 'last-only' },
       toolEnforcement: { enabled: true, level: 'strict', minCalls: 1, maxCalls: 2 },
-      promptEnforcement: { level: 'strict', requireStance: true, requireToolUsage: true },
       exitCriteria: { enabled: true, consensusThreshold: 0.9, convergenceRounds: 2 },
       groupthinkDetection: { enabled: true, threshold: 0.85 },
     },
@@ -660,7 +656,7 @@ function printQualityReport(allResults: Map<string, BenchmarkResult[]>): void {
 
   if (overallAvg < 50) {
     console.log('    ⚠️ Overall quality is below target. Consider:');
-    console.log('       - Enabling strict prompt enforcement for clearer structure');
+    console.log('       - Enabling strict tool enforcement for better evidence');
     console.log('       - Requiring minimum tool calls for evidence gathering');
   } else if (overallAvg < 70) {
     console.log('    📈 Moderate quality. To improve:');
