@@ -26,18 +26,24 @@ describe('Feature Flag System', () => {
 
   describe('DEFAULT_FLAGS', () => {
     it('should have correct default values', () => {
-      expect(DEFAULT_FLAGS.sequentialParallelization.enabled).toBe(false);
-      expect(DEFAULT_FLAGS.sequentialParallelization.level).toBe('none');
+      // Optimized defaults based on benchmark results
+      expect(DEFAULT_FLAGS.sequentialParallelization.enabled).toBe(true);
+      expect(DEFAULT_FLAGS.sequentialParallelization.level).toBe('last-only');
 
       expect(DEFAULT_FLAGS.toolEnforcement.enabled).toBe(true);
       expect(DEFAULT_FLAGS.toolEnforcement.level).toBe('normal');
+      expect(DEFAULT_FLAGS.toolEnforcement.minCalls).toBe(1);
+      expect(DEFAULT_FLAGS.toolEnforcement.maxCalls).toBe(6);
 
       expect(DEFAULT_FLAGS.groupthinkDetection.enabled).toBe(true);
-      expect(DEFAULT_FLAGS.groupthinkDetection.threshold).toBe(0.9);
+      expect(DEFAULT_FLAGS.groupthinkDetection.threshold).toBe(0.85);
 
-      expect(DEFAULT_FLAGS.exitCriteria.enabled).toBe(false);
+      expect(DEFAULT_FLAGS.exitCriteria.enabled).toBe(true);
+      expect(DEFAULT_FLAGS.exitCriteria.consensusThreshold).toBe(0.9);
+      expect(DEFAULT_FLAGS.exitCriteria.convergenceRounds).toBe(2);
 
       expect(DEFAULT_FLAGS.promptEnforcement.level).toBe('normal');
+      expect(DEFAULT_FLAGS.promptEnforcement.requireStance).toBe(true);
     });
   });
 
@@ -125,11 +131,12 @@ describe('Feature Flag System', () => {
         expect(flags.sequentialParallelization?.level).toBe('last-only');
       });
 
-      it('should default to none for invalid level', () => {
+      it('should default to last-only for invalid level', () => {
         process.env.ROUNDTABLE_PARALLEL_LEVEL = 'invalid';
         const flags = loadFlagsFromEnv();
 
-        expect(flags.sequentialParallelization?.level).toBe('none');
+        // Invalid level falls back to DEFAULT_FLAGS.sequentialParallelization.level
+        expect(flags.sequentialParallelization?.level).toBe('last-only');
       });
 
       it('should parse all valid parallelization levels', () => {
@@ -328,8 +335,8 @@ describe('Feature Flag System', () => {
         expect(flags.toolEnforcement.enabled).toBe(true);
         expect(flags.toolEnforcement.level).toBe('strict');
         expect(flags.toolEnforcement.minCalls).toBe(2);
-        // maxCalls should remain undefined (from merged)
-        expect(flags.toolEnforcement.maxCalls).toBeUndefined();
+        // maxCalls should come from DEFAULT_FLAGS (now has default value 6)
+        expect(flags.toolEnforcement.maxCalls).toBe(6);
       });
 
       it('should handle complex nested overrides', () => {
@@ -362,7 +369,7 @@ describe('Feature Flag System', () => {
         const resolutions = resolver.resolveWithSource();
 
         expect(resolutions['sequentialParallelization.enabled'].source).toBe('default');
-        expect(resolutions['sequentialParallelization.enabled'].value).toBe(false);
+        expect(resolutions['sequentialParallelization.enabled'].value).toBe(true);
       });
 
       it('should show env as source when env var set', () => {
@@ -448,9 +455,9 @@ describe('Feature Flag System', () => {
         expect(defaults).toEqual(DEFAULT_FLAGS);
 
         // Modifying returned object should not affect resolver
-        defaults.sequentialParallelization.enabled = true;
+        defaults.sequentialParallelization.enabled = false;
         const defaults2 = resolver.getDefaultFlags();
-        expect(defaults2.sequentialParallelization.enabled).toBe(false);
+        expect(defaults2.sequentialParallelization.enabled).toBe(true);
       });
     });
 
@@ -458,19 +465,19 @@ describe('Feature Flag System', () => {
       it('should reload flags from environment', () => {
         const resolver = new FeatureFlagResolver();
         let flags = resolver.resolve();
-        expect(flags.sequentialParallelization.enabled).toBe(false);
+        expect(flags.sequentialParallelization.enabled).toBe(true);
 
-        // Set env var after resolver creation
-        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'true';
+        // Set env var after resolver creation to override default
+        process.env.ROUNDTABLE_PARALLEL_ENABLED = 'false';
 
-        // Before reload, should still be old value
-        flags = resolver.resolve();
-        expect(flags.sequentialParallelization.enabled).toBe(false);
-
-        // After reload, should pick up new value
-        resolver.reloadEnvFlags();
+        // Before reload, should still be default value
         flags = resolver.resolve();
         expect(flags.sequentialParallelization.enabled).toBe(true);
+
+        // After reload, should pick up new env value
+        resolver.reloadEnvFlags();
+        flags = resolver.resolve();
+        expect(flags.sequentialParallelization.enabled).toBe(false);
       });
     });
   });

@@ -127,8 +127,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
       tool: {
         name: 'submit_response',
         description:
-          'Submit your structured response with position, reasoning, and confidence level.',
+          'Submit your structured response with position, reasoning, confidence level, and optional stance.',
         parameters: {
+          stance: {
+            type: 'string',
+            description:
+              'Your stance on the topic: "YES" (support/affirmative), "NO" (oppose/negative), or "NEUTRAL" (evaluator/balanced). ' +
+              'Required for devils-advocate mode where each role has a mandatory stance.',
+          },
           position: {
             type: 'string',
             description: 'Your clear position statement on the topic',
@@ -320,6 +326,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
    * Note: Input is pre-validated by Zod schema in executeTool()
    */
   private async executeSubmitResponse(input: unknown): Promise<ToolResult<{
+    stance?: 'YES' | 'NO' | 'NEUTRAL';
     position: string;
     reasoning: string;
     confidence: number;
@@ -330,6 +337,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
     return {
       success: true,
       data: {
+        stance: data.stance,
         position: data.position,
         reasoning: data.reasoning,
         confidence: data.confidence,

@@ -231,8 +231,16 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
 
   /**
    * Check if last-only parallelization is enabled
+   * Checks both constructor options and context.flags
    */
-  private isLastOnlyEnabled(): boolean {
+  private isLastOnlyEnabled(context: DebateContext): boolean {
+    // Check context.flags first (runtime override takes priority)
+    const contextFlags = context.flags?.sequentialParallelization;
+    if (contextFlags?.enabled && contextFlags.level === 'last-only') {
+      return true;
+    }
+
+    // Fall back to constructor options
     if (!this.parallelizationConfig) return false;
     return (
       this.parallelizationConfig.enabled &&
@@ -258,17 +266,18 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     // Reset agent index tracker for this round
     this.currentAgentIndex = 0;
 
-    // Use last-only parallelization if enabled
+    // Use last-only parallelization if enabled (from context.flags or constructor options)
     // This runs PRIMARY and OPPOSITION in parallel, then EVALUATOR(s) sequentially
-    if (this.isLastOnlyEnabled() && agents.length >= 3) {
+    if (this.isLastOnlyEnabled(context) && agents.length >= 3) {
       logger.debug(
         { agentCount: agents.length },
-        'Using last-only parallelization for devils-advocate mode'
+        'Using last-only parallelization for devils-advocate mode (flag-enabled)'
       );
       return this.executeLastOnlyForDevilsAdvocate(agents, context, toolkit);
     }
 
-    return this.executeSequential(agents, context, toolkit);
+    // Use flag-aware execution for default sequential pattern
+    return this.executeWithFlags(agents, context, toolkit, 'sequential');
   }
 
   /**

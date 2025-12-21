@@ -15,6 +15,7 @@ import type {
 } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
+import { checkExitCriteria, type ExitCriteria } from './exit-criteria.js';
 
 const logger = createLogger('DebateEngine');
 
@@ -75,7 +76,8 @@ export class DebateEngine {
       // Fall back to simple round-robin if no strategy found
       logger.warn({ mode: context.mode }, 'No mode strategy found, using simple round-robin');
       const responses = await this.executeSimpleRound(agents, context);
-      const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
+      const groupthinkThreshold = context.flags?.groupthinkDetection?.threshold;
+      const consensus = await this.analyzeConsensusWithAI(responses, context.topic, groupthinkThreshold);
       return {
         roundNumber: context.currentRound,
         responses,
@@ -85,7 +87,8 @@ export class DebateEngine {
 
     // Use the strategy to execute the round
     const responses = await strategy.executeRound(agents, context, this.toolkit);
-    const consensus = await this.analyzeConsensusWithAI(responses, context.topic);
+    const groupthinkThreshold = context.flags?.groupthinkDetection?.threshold;
+    const consensus = await this.analyzeConsensusWithAI(responses, context.topic, groupthinkThreshold);
 
     return {
       roundNumber: context.currentRound,
@@ -113,6 +116,23 @@ export class DebateEngine {
     // Store the starting round to calculate correct round numbers
     const startingRound = session.currentRound;
 
+    // Check if exit criteria is enabled
+    const exitCriteriaEnabled = session.flags?.exitCriteria?.enabled ?? false;
+
+    // Track responses by round for exit criteria checking
+    const responsesByRound: AgentResponse[][] = [];
+
+    // Reconstruct previous rounds from session.responses
+    // Group existing responses by round (assuming they are ordered)
+    if (session.responses.length > 0 && startingRound > 0) {
+      const responsesPerRound = Math.ceil(session.responses.length / startingRound);
+      for (let r = 0; r < startingRound; r++) {
+        const start = r * responsesPerRound;
+        const end = Math.min(start + responsesPerRound, session.responses.length);
+        responsesByRound.push(session.responses.slice(start, end));
+      }
+    }
+
     for (let i = 0; i < numRounds; i++) {
       const currentRound = startingRound + i + 1;
       const context: DebateContext = {
@@ -123,6 +143,7 @@ export class DebateEngine {
         totalRounds: session.totalRounds,
         previousResponses: session.responses,
         focusQuestion,
+        flags: session.flags,
       };
 
       const result = await this.executeRound(agents, context);
@@ -131,6 +152,40 @@ export class DebateEngine {
       // Add responses to session for next round
       session.responses.push(...result.responses);
       session.currentRound = currentRound;
+
+      // Track this round's responses for exit criteria
+      responsesByRound.push(result.responses);
+
+      // Check exit criteria if enabled (and not on the last planned round)
+      if (exitCriteriaEnabled && i < numRounds - 1) {
+        const exitCriteria: ExitCriteria = {
+          maxRounds: session.totalRounds,
+          consensusThreshold: session.flags?.exitCriteria?.consensusThreshold,
+          convergenceRounds: session.flags?.exitCriteria?.convergenceRounds,
+        };
+
+        const previousRounds = responsesByRound.slice(0, -1);
+        const exitResult = checkExitCriteria(
+          result.responses,
+          previousRounds,
+          exitCriteria,
+          currentRound,
+          result.consensus
+        );
+
+        if (exitResult.shouldExit) {
+          logger.info(
+            {
+              sessionId: session.id,
+              round: currentRound,
+              reason: exitResult.reason,
+              details: exitResult.details,
+            },
+            'Early exit triggered by exit criteria'
+          );
+          break;
+        }
+      }
     }
 
     return results;
@@ -159,109 +214,24 @@ export class DebateEngine {
   }
 
   /**
-   * Analyze consensus with AI when available, falling back to rule-based
+   * Analyze consensus using AI
    *
    * @param responses - Agent responses to analyze
    * @param topic - Debate topic for context
+   * @param groupthinkThreshold - Optional threshold for groupthink detection
    * @returns Consensus analysis result
+   * @throws Error if AI consensus analyzer is not available
    */
   async analyzeConsensusWithAI(
     responses: AgentResponse[],
-    topic: string
+    topic: string,
+    groupthinkThreshold?: number
   ): Promise<ConsensusResult> {
-    // Try AI analysis first if available
-    if (this.aiConsensusAnalyzer) {
-      try {
-        return await this.aiConsensusAnalyzer.analyzeConsensus(responses, topic);
-      } catch (error) {
-        // Fall back to rule-based on error
-        logger.warn({ err: error }, 'AI consensus analysis failed, falling back to rule-based');
-      }
+    if (!this.aiConsensusAnalyzer) {
+      throw new Error('AI consensus analyzer not available. Configure aiConsensusAnalyzer in DebateEngineOptions.');
     }
 
-    // Fall back to rule-based analysis
-    return this.analyzeConsensus(responses);
-  }
-
-  /**
-   * Analyze consensus from agent responses (rule-based fallback)
-   *
-   * This is a simple implementation that looks for common themes
-   * Use analyzeConsensusWithAI for better semantic analysis
-   */
-  analyzeConsensus(responses: AgentResponse[]): ConsensusResult {
-    if (responses.length === 0) {
-      return {
-        agreementLevel: 0,
-        commonGround: [],
-        disagreementPoints: [],
-        summary: 'No responses to analyze',
-      };
-    }
-
-    // Simple heuristic: check average confidence and position similarity
-    const avgConfidence = responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
-
-    // Extract common words from positions (very basic)
-    const positions = responses.map((r) => r.position.toLowerCase());
-    const commonWords = this.findCommonWords(positions);
-
-    // Check for agreement by comparing positions
-    const uniquePositions = new Set(positions);
-    const agreementLevel = 1 - (uniquePositions.size - 1) / responses.length;
-
-    return {
-      agreementLevel: Math.max(0, Math.min(1, agreementLevel)),
-      commonGround: commonWords.slice(0, 5),
-      disagreementPoints: uniquePositions.size > 1 ? Array.from(uniquePositions) : [],
-      summary: this.generateConsensusSummary(responses, agreementLevel, avgConfidence),
-    };
-  }
-
-  /**
-   * Find common words across multiple strings
-   */
-  private findCommonWords(texts: string[]): string[] {
-    if (texts.length === 0) return [];
-
-    // Simple word frequency analysis
-    const wordCounts = new Map<string, number>();
-
-    for (const text of texts) {
-      const words = text.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-      const uniqueWords = new Set(words);
-
-      for (const word of uniqueWords) {
-        wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
-      }
-    }
-
-    // Find words that appear in multiple responses
-    const commonWords = Array.from(wordCounts.entries())
-      .filter(([_, count]) => count > 1)
-      .sort((a, b) => b[1] - a[1])
-      .map(([word]) => word);
-
-    return commonWords;
-  }
-
-  /**
-   * Generate a consensus summary
-   */
-  private generateConsensusSummary(
-    responses: AgentResponse[],
-    agreementLevel: number,
-    avgConfidence: number
-  ): string {
-    const agentCount = responses.length;
-
-    if (agreementLevel > 0.8) {
-      return `Strong consensus among ${agentCount} agents with ${Math.round(agreementLevel * 100)}% agreement (avg confidence: ${Math.round(avgConfidence * 100)}%)`;
-    } else if (agreementLevel > 0.5) {
-      return `Moderate agreement among ${agentCount} agents with ${Math.round(agreementLevel * 100)}% alignment (avg confidence: ${Math.round(avgConfidence * 100)}%)`;
-    } else {
-      return `Diverse perspectives from ${agentCount} agents with ${Math.round(agreementLevel * 100)}% agreement (avg confidence: ${Math.round(avgConfidence * 100)}%)`;
-    }
+    return this.aiConsensusAnalyzer.analyzeConsensus(responses, topic, groupthinkThreshold);
   }
 
   /**

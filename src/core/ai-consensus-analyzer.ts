@@ -11,7 +11,6 @@ import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
 import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
-import { ConsensusAnalyzer } from './consensus-analyzer.js';
 import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('AIConsensusAnalyzer');
@@ -30,8 +29,6 @@ export interface AIConsensusAnalyzerConfig {
   registry: AgentRegistry;
   /** Preferred provider for analysis (uses first available if not specified) */
   preferredProvider?: AIProvider;
-  /** Whether to fall back to rule-based analysis on AI failure */
-  fallbackToRuleBased?: boolean;
 }
 
 /**
@@ -93,6 +90,11 @@ Analyze these positions semantically and return a JSON object with this exact st
     "conditionalPositions": ["<positions that depend on conditions>"],
     "uncertainties": ["<areas where agents express uncertainty>"]
   },
+  "groupthinkWarning": {
+    "detected": <boolean - true if groupthink indicators present>,
+    "indicators": ["<list of detected groupthink indicators>"],
+    "recommendation": "<suggested action if groupthink detected>"
+  },
   "summary": "<2-3 sentence overall summary>",
   "reasoning": "<brief explanation of your analysis>"
 }
@@ -104,23 +106,28 @@ Important:
 - Consider degrees of agreement (strong vs weak agreement)
 - Identify nuanced positions (conditional, partial, uncertain)
 
+Groupthink Detection - Set detected=true if ANY of these are present:
+- All agents show very high confidence (>=85%) without substantive disagreement
+- All positions converge on identical conclusion without exploring alternatives
+- No devil's advocate or contrarian perspectives despite controversial topic
+- Arguments rely on social proof ("everyone agrees") rather than evidence
+- Dissenting viewpoints are dismissed without proper consideration
+
 Return ONLY the JSON object, no other text.`;
 
 /**
  * AI-Based Consensus Analyzer
  *
  * Provides semantic analysis of debate positions using lightweight AI models.
- * Falls back to basic analysis if AI is unavailable.
+ * Requires at least one active AI agent to function.
  */
 export class AIConsensusAnalyzer {
   private registry: AgentRegistry;
   private preferredProvider?: AIProvider;
-  private fallbackToRuleBased: boolean;
 
   constructor(config: AIConsensusAnalyzerConfig) {
     this.registry = config.registry;
     this.preferredProvider = config.preferredProvider;
-    this.fallbackToRuleBased = config.fallbackToRuleBased ?? true;
   }
 
   /**
@@ -128,11 +135,14 @@ export class AIConsensusAnalyzer {
    *
    * @param responses - Agent responses to analyze
    * @param topic - The debate topic for context
+   * @param _groupthinkThreshold - Optional threshold for groupthink detection (reserved for future use)
    * @returns AI-enhanced consensus result
+   * @throws Error if no AI agent is available
    */
   async analyzeConsensus(
     responses: AgentResponse[],
-    topic: string
+    topic: string,
+    _groupthinkThreshold?: number
   ): Promise<AIConsensusResult> {
     // Handle edge cases
     if (responses.length === 0) {
@@ -157,50 +167,48 @@ export class AIConsensusAnalyzer {
       };
     }
 
-    // Try AI analysis
-    let diagnostics: AIAnalysisDiagnostics | undefined;
-    let aiError: Error | undefined;
+    // Get analysis agent - throws if unavailable
+    const result = await this.getAnalysisAgent();
 
-    try {
-      const result = await this.getAnalysisAgent();
-      diagnostics = result.diagnostics;
-
-      if (result.agent) {
-        logger.debug({ topic, responseCount: responses.length }, 'Attempting AI consensus analysis');
-        return await this.performAIAnalysis(result.agent, responses, topic);
-      } else {
-        logger.info(
-          {
-            reason: diagnostics.reason,
-            totalAgents: diagnostics.totalAgents,
-            activeAgents: diagnostics.activeAgents,
-            registeredProviders: diagnostics.providerNames,
-          },
-          'No analysis agent available, falling back to rule-based analysis'
-        );
-      }
-    } catch (error) {
-      aiError = error instanceof Error ? error : new Error(String(error));
-      logger.warn(
+    if (!result.agent) {
+      const errorMessage = this.buildUnavailableErrorMessage(result.diagnostics);
+      logger.error(
         {
-          err: error,
-          errorMessage: aiError.message,
-          diagnostics,
+          reason: result.diagnostics.reason,
+          totalAgents: result.diagnostics.totalAgents,
+          activeAgents: result.diagnostics.activeAgents,
+          registeredProviders: result.diagnostics.providerNames,
         },
-        'AI analysis failed, falling back to rule-based analysis'
+        'No AI agent available for consensus analysis'
       );
+      throw new Error(errorMessage);
     }
 
-    // Fallback to semantic similarity-based analysis
-    if (this.fallbackToRuleBased) {
-      logger.debug('Using ConsensusAnalyzer for fallback analysis');
-      return this.performBasicAnalysis(responses, diagnostics, aiError);
+    logger.debug({ topic, responseCount: responses.length }, 'Performing AI consensus analysis');
+    return await this.performAIAnalysis(result.agent, responses, topic);
+  }
+
+  /**
+   * Build a helpful error message when AI analysis is unavailable
+   */
+  private buildUnavailableErrorMessage(diagnostics: AIAnalysisDiagnostics): string {
+    const parts: string[] = ['AI consensus analysis unavailable'];
+
+    if (diagnostics.reason) {
+      parts.push(diagnostics.reason);
     }
 
-    const unavailableReason = aiError
-      ? `AI analysis failed: ${aiError.message}`
-      : diagnostics?.reason ?? 'AI analysis unavailable';
-    return this.createEmptyResult(`${unavailableReason} and fallback disabled`);
+    if (diagnostics.totalAgents === 0) {
+      parts.push('Hint: No agents registered. Ensure API keys are set and setupAgents() was called.');
+    } else if (diagnostics.activeAgents === 0) {
+      const inactiveInfo = diagnostics.inactiveAgents
+        .slice(0, 3)
+        .map((a) => `${a.provider}: ${a.error ?? 'unknown error'}`)
+        .join('; ');
+      parts.push(`Hint: All ${diagnostics.totalAgents} agents failed health checks. Errors: ${inactiveInfo}`);
+    }
+
+    return parts.join('. ');
   }
 
   /**
@@ -312,8 +320,18 @@ export class AIConsensusAnalyzer {
       'Received raw AI consensus response'
     );
 
-    // Parse the raw JSON response
-    return this.parseRawAIResponse(rawResponse, agent.getInfo().id);
+    // Parse the raw JSON response (includes AI-based groupthink detection)
+    const result = this.parseRawAIResponse(rawResponse, agent.getInfo().id);
+
+    // Log if groupthink was detected
+    if (result.groupthinkWarning?.detected) {
+      logger.warn(
+        { indicators: result.groupthinkWarning.indicators },
+        'Groupthink detected by AI in consensus analysis'
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -450,6 +468,7 @@ export class AIConsensusAnalyzer {
       summary: String(parsed.summary || 'Partial analysis'),
       clusters: this.extractClusters(parsed.clusters),
       nuances: this.extractNuances(parsed.nuances),
+      groupthinkWarning: this.extractGroupthinkWarning(parsed.groupthinkWarning),
       reasoning: String(parsed.reasoning || 'Parsed from partial response'),
       analyzerId,
     };
@@ -593,50 +612,34 @@ export class AIConsensusAnalyzer {
               : [],
           }
         : undefined,
+      groupthinkWarning: this.extractGroupthinkWarning(parsed.groupthinkWarning),
       reasoning: String(parsed.reasoning || ''),
       analyzerId,
     };
   }
 
   /**
-   * Perform semantic similarity-based analysis as fallback
-   * Uses ConsensusAnalyzer for sophisticated clustering and agreement detection
+   * Safely extract groupthink warning from AI response
    */
-  private performBasicAnalysis(
-    responses: AgentResponse[],
-    diagnostics?: AIAnalysisDiagnostics,
-    error?: Error
-  ): AIConsensusResult {
-    // Use ConsensusAnalyzer for semantic similarity-based analysis
-    const consensusAnalyzer = new ConsensusAnalyzer();
-    const result = consensusAnalyzer.analyzeConsensus(responses);
-
-    // Build informative reasoning message
-    const reasoningParts: string[] = ['Semantic similarity analysis (AI unavailable)'];
-
-    if (error) {
-      reasoningParts.push(`Error: ${error.message}`);
-    } else if (diagnostics) {
-      reasoningParts.push(`Reason: ${diagnostics.reason}`);
+  private extractGroupthinkWarning(
+    value: unknown
+  ): { detected: boolean; indicators: string[]; recommendation: string } | undefined {
+    if (typeof value !== 'object' || value === null) {
+      return undefined;
     }
+    const v = value as Record<string, unknown>;
 
-    if (diagnostics) {
-      if (diagnostics.totalAgents === 0) {
-        reasoningParts.push('Hint: No agents registered. Ensure API keys are set and setupAgents() was called.');
-      } else if (diagnostics.activeAgents === 0) {
-        const inactiveInfo = diagnostics.inactiveAgents
-          .map((a) => `${a.provider}: ${a.error ?? 'unknown error'}`)
-          .join('; ');
-        reasoningParts.push(`Hint: All ${diagnostics.totalAgents} agents failed health checks. Errors: ${inactiveInfo}`);
-      }
+    // Only include if detected is explicitly true
+    if (v.detected !== true) {
+      return undefined;
     }
 
     return {
-      agreementLevel: result.agreementLevel,
-      commonGround: result.commonGround,
-      disagreementPoints: result.disagreementPoints,
-      summary: result.summary,
-      reasoning: reasoningParts.join('. '),
+      detected: true,
+      indicators: Array.isArray(v.indicators)
+        ? v.indicators.filter((i): i is string => typeof i === 'string')
+        : [],
+      recommendation: typeof v.recommendation === 'string' ? v.recommendation : '',
     };
   }
 

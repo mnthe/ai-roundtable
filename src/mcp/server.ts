@@ -80,7 +80,6 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
     // Initialize AI consensus analyzer with available agents
     aiConsensusAnalyzer = new AIConsensusAnalyzer({
       registry: agentRegistry,
-      fallbackToRuleBased: true,
     });
 
     // Initialize key points extractor with available agents

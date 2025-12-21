@@ -110,11 +110,20 @@ export const SearchOptionsSchema = z.object({
 // MCP Input Schemas
 // ============================================
 
+export const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
+
 export const StartRoundtableInputSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
   mode: DebateModeSchema.optional().default('collaborative'),
   agents: z.array(z.string().min(1)).optional(),
   rounds: z.number().int().positive().optional().default(3),
+  // Session-level feature flag overrides
+  parallel: ParallelizationLevelSchema.optional().describe(
+    'Parallelization level for agent execution (none: sequential, last-only: parallel except last agent, full: all parallel)'
+  ),
+  exitOnConsensus: z.boolean().optional().describe(
+    'Whether to exit early when consensus is reached'
+  ),
 });
 
 export const ContinueRoundtableInputSchema = z.object({
@@ -194,6 +203,7 @@ export const StoredResponseRowSchema = z.object({
   round_number: z.number(),
   agent_id: z.string(),
   agent_name: z.string(),
+  stance: z.string().nullable(), // 'YES' | 'NO' | 'NEUTRAL' or null
   position: z.string(),
   reasoning: z.string(),
   confidence: z.number(),

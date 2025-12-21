@@ -37,6 +37,21 @@ const createMockAgent = (id: string, provider: 'anthropic' | 'openai' | 'google'
     confidence: 0.8,
     timestamp: new Date(),
   }),
+  generateRawCompletion: vi.fn().mockResolvedValue(
+    JSON.stringify({
+      agreementLevel: 0.75,
+      clusters: [{ theme: 'Agreement', agentIds: ['agent-1', 'agent-2'], summary: 'Both agree' }],
+      commonGround: ['Point A', 'Point B'],
+      disagreementPoints: ['Difference 1'],
+      nuances: {
+        partialAgreements: ['Partial agreement on X'],
+        conditionalPositions: [],
+        uncertainties: [],
+      },
+      summary: 'Test summary',
+      reasoning: 'Test reasoning',
+    })
+  ),
   healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
 });
 
@@ -75,7 +90,6 @@ describe('DebateEngine with AI Consensus', () => {
     // Create AI consensus analyzer
     aiConsensusAnalyzer = new AIConsensusAnalyzer({
       registry,
-      fallbackToRuleBased: true,
     });
 
     // Create engine with AI consensus analyzer
@@ -197,17 +211,15 @@ describe('DebateEngine with AI Consensus', () => {
       expect(typeof result.summary).toBe('string');
     });
 
-    it('should fall back to rule-based on AI error', async () => {
+    it('should throw error when AI analyzer not configured', async () => {
       // Create engine without AI analyzer
       const engineWithoutAI = new DebateEngine({
         toolkit: mockToolkit,
       });
 
-      const result = await engineWithoutAI.analyzeConsensusWithAI(sampleResponses, 'AI Development');
-
-      expect(result).toBeDefined();
-      expect(result.agreementLevel).toBeGreaterThanOrEqual(0);
-      expect(result.agreementLevel).toBeLessThanOrEqual(1);
+      await expect(
+        engineWithoutAI.analyzeConsensusWithAI(sampleResponses, 'AI Development')
+      ).rejects.toThrow('AI consensus analyzer not available');
     });
 
     it('should handle empty responses', async () => {
@@ -228,40 +240,4 @@ describe('DebateEngine with AI Consensus', () => {
     });
   });
 
-  describe('analyzeConsensus (rule-based fallback)', () => {
-    const sampleResponses: AgentResponse[] = [
-      {
-        agentId: 'agent-1',
-        agentName: 'Agent 1',
-        position: 'Position A',
-        reasoning: 'Reasoning A',
-        confidence: 0.8,
-        timestamp: new Date(),
-      },
-      {
-        agentId: 'agent-2',
-        agentName: 'Agent 2',
-        position: 'Position B',
-        reasoning: 'Reasoning B',
-        confidence: 0.7,
-        timestamp: new Date(),
-      },
-    ];
-
-    it('should provide basic consensus analysis', () => {
-      const result = engine.analyzeConsensus(sampleResponses);
-
-      expect(result).toBeDefined();
-      expect(typeof result.agreementLevel).toBe('number');
-      expect(result.agreementLevel).toBeGreaterThanOrEqual(0);
-      expect(result.agreementLevel).toBeLessThanOrEqual(1);
-    });
-
-    it('should handle empty responses', () => {
-      const result = engine.analyzeConsensus([]);
-
-      expect(result.agreementLevel).toBe(0);
-      expect(result.summary).toBe('No responses to analyze');
-    });
-  });
 });

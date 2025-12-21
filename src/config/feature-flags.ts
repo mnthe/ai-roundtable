@@ -128,25 +128,35 @@ export interface FeatureFlags {
 
 /**
  * Default feature flag values
+ *
+ * These defaults are optimized based on benchmark results:
+ * - sequentialParallelization: 18% latency reduction with last-only
+ * - exitCriteria: Cost savings via early termination
+ * - groupthinkDetection: 0.85 threshold for earlier warnings
  */
 export const DEFAULT_FLAGS: FeatureFlags = {
   sequentialParallelization: {
-    enabled: false,
-    level: 'none',
+    enabled: true,
+    level: 'last-only',
   },
   toolEnforcement: {
     enabled: true,
     level: 'normal',
+    minCalls: 1,
+    maxCalls: 6,
   },
   groupthinkDetection: {
     enabled: true,
-    threshold: 0.9,
+    threshold: 0.85,
   },
   exitCriteria: {
-    enabled: false,
+    enabled: true,
+    consensusThreshold: 0.9,
+    convergenceRounds: 2,
   },
   promptEnforcement: {
     level: 'normal',
+    requireStance: true,
   },
 };
 

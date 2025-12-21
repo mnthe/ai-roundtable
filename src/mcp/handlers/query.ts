@@ -54,10 +54,11 @@ export async function handleGetConsensus(
       return createErrorResponse(`No responses found for round ${roundToAnalyze}`);
     }
 
-    // Analyze consensus using AI if available, otherwise fall back to rule-based
-    const consensus = aiConsensusAnalyzer
-      ? await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic)
-      : debateEngine.analyzeConsensus(responses);
+    // Analyze consensus using AI (required)
+    if (!aiConsensusAnalyzer) {
+      return createErrorResponse('AI consensus analyzer not available. Ensure API keys are configured.');
+    }
+    const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic);
 
     return createSuccessResponse({
       sessionId: input.sessionId,
@@ -104,10 +105,11 @@ export async function handleGetRoundDetails(
       return createErrorResponse(`No responses found for round ${input.roundNumber}`);
     }
 
-    // Analyze consensus using AI if available, otherwise fall back to rule-based
-    const consensus = aiConsensusAnalyzer
-      ? await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic)
-      : debateEngine.analyzeConsensus(responses);
+    // Analyze consensus using AI (required)
+    if (!aiConsensusAnalyzer) {
+      return createErrorResponse('AI consensus analyzer not available. Ensure API keys are configured.');
+    }
+    const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic);
 
     return createSuccessResponse({
       sessionId: input.sessionId,

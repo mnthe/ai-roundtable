@@ -6,7 +6,7 @@
  * already gathered evidence that later agents can leverage.
  */
 
-import type { DebateMode } from '../types/index.js';
+import type { DebateMode, FeatureFlags } from '../types/index.js';
 import type { ParallelizationLevel } from '../config/feature-flags.js';
 
 /**
@@ -112,11 +112,26 @@ MUST NOT:
  * Get the tool usage policy for a specific debate mode
  *
  * @param mode - The debate mode
+ * @param flags - Optional feature flags for overriding defaults
  * @returns The tool usage policy for the mode's execution pattern
  */
-export function getToolPolicy(mode: DebateMode): ToolUsagePolicy {
+export function getToolPolicy(
+  mode: DebateMode,
+  flags?: Partial<FeatureFlags>
+): ToolUsagePolicy {
   const pattern = MODE_EXECUTION_PATTERN[mode];
-  return TOOL_USAGE_POLICIES[pattern];
+  const basePolicy = TOOL_USAGE_POLICIES[pattern];
+
+  // If toolEnforcement flags are provided, override the base policy
+  if (flags?.toolEnforcement) {
+    return {
+      minCalls: flags.toolEnforcement.minCalls ?? basePolicy.minCalls,
+      maxCalls: flags.toolEnforcement.maxCalls ?? basePolicy.maxCalls,
+      guidance: basePolicy.guidance,
+    };
+  }
+
+  return basePolicy;
 }
 
 /**

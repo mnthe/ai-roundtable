@@ -12,12 +12,37 @@ import type {
   DebateContext,
   Session,
   AgentToolkit,
+  ConsensusResult,
 } from '../../../src/types/index.js';
 import type { DebateModeStrategy } from '../../../src/modes/base.js';
+import type { AIConsensusAnalyzer } from '../../../src/core/ai-consensus-analyzer.js';
+
+/**
+ * Create a mock AIConsensusAnalyzer for testing
+ */
+function createMockAIConsensusAnalyzer(): AIConsensusAnalyzer {
+  return {
+    analyzeConsensus: vi.fn().mockResolvedValue({
+      agreementLevel: 0.75,
+      commonGround: ['Test common ground'],
+      disagreementPoints: [],
+      summary: 'Mock consensus analysis',
+    } as ConsensusResult),
+    getDiagnostics: vi.fn().mockReturnValue({
+      available: true,
+      registeredProviders: 1,
+      providerNames: ['anthropic'],
+      totalAgents: 1,
+      activeAgents: 1,
+      inactiveAgents: [],
+    }),
+  } as unknown as AIConsensusAnalyzer;
+}
 
 describe('DebateEngine', () => {
   let engine: DebateEngine;
   let mockToolkit: AgentToolkit;
+  let mockAIConsensusAnalyzer: AIConsensusAnalyzer;
 
   beforeEach(() => {
     // Create mock toolkit
@@ -27,9 +52,13 @@ describe('DebateEngine', () => {
       setContext: () => {},
     };
 
-    // Create engine
+    // Create mock AI consensus analyzer
+    mockAIConsensusAnalyzer = createMockAIConsensusAnalyzer();
+
+    // Create engine with mock analyzer
     engine = new DebateEngine({
       toolkit: mockToolkit,
+      aiConsensusAnalyzer: mockAIConsensusAnalyzer,
     });
   });
 
@@ -233,120 +262,6 @@ describe('DebateEngine', () => {
       await engine.executeRounds(agents, session, 1, 'What about safety?');
 
       expect(mockStrategy.executeRound).toHaveBeenCalled();
-    });
-  });
-
-  describe('analyzeConsensus', () => {
-    it('should handle empty responses', () => {
-      const result = engine.analyzeConsensus([]);
-
-      expect(result.agreementLevel).toBe(0);
-      expect(result.commonGround).toEqual([]);
-      expect(result.disagreementPoints).toEqual([]);
-      expect(result.summary).toBe('No responses to analyze');
-    });
-
-    it('should analyze identical positions as high agreement', () => {
-      const responses = [
-        {
-          agentId: '1',
-          agentName: 'Agent 1',
-          position: 'same position',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-        {
-          agentId: '2',
-          agentName: 'Agent 2',
-          position: 'same position',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-      ];
-
-      const result = engine.analyzeConsensus(responses);
-
-      expect(result.agreementLevel).toBe(1);
-      expect(result.disagreementPoints).toHaveLength(0);
-    });
-
-    it('should analyze different positions as lower agreement', () => {
-      const responses = [
-        {
-          agentId: '1',
-          agentName: 'Agent 1',
-          position: 'position A is correct',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-        {
-          agentId: '2',
-          agentName: 'Agent 2',
-          position: 'position B is better',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-      ];
-
-      const result = engine.analyzeConsensus(responses);
-
-      expect(result.agreementLevel).toBeLessThan(1);
-      expect(result.disagreementPoints.length).toBeGreaterThan(0);
-    });
-
-    it('should find common words across positions', () => {
-      const responses = [
-        {
-          agentId: '1',
-          agentName: 'Agent 1',
-          position: 'AI safety is important for development',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-        {
-          agentId: '2',
-          agentName: 'Agent 2',
-          position: 'AI safety should be prioritized in development',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-      ];
-
-      const result = engine.analyzeConsensus(responses);
-
-      expect(result.commonGround).toContain('safety');
-      expect(result.commonGround).toContain('development');
-    });
-
-    it('should generate summary with agent count', () => {
-      const responses = [
-        {
-          agentId: '1',
-          agentName: 'Agent 1',
-          position: 'position',
-          reasoning: 'reasoning',
-          confidence: 0.8,
-          timestamp: new Date(),
-        },
-        {
-          agentId: '2',
-          agentName: 'Agent 2',
-          position: 'position',
-          reasoning: 'reasoning',
-          confidence: 0.9,
-          timestamp: new Date(),
-        },
-      ];
-
-      const result = engine.analyzeConsensus(responses);
-
-      expect(result.summary).toContain('2 agents');
     });
   });
 

@@ -48,6 +48,17 @@ const START_ROUNDTABLE_TOOL: Tool = {
         minimum: 1,
         maximum: 10,
       },
+      parallel: {
+        type: 'string',
+        enum: ['none', 'last-only', 'full'],
+        description:
+          'Parallelization level for agent execution. none: sequential (agents see each other\'s responses), last-only: parallel except last agent responds sequentially (default, best balance), full: all agents respond in parallel',
+      },
+      exitOnConsensus: {
+        type: 'boolean',
+        description:
+          'Exit early when consensus is reached. When true, the debate ends if agents reach sufficient agreement before all rounds complete.',
+      },
     },
     required: ['topic'],
   },

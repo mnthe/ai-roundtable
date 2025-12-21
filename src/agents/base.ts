@@ -54,6 +54,7 @@ export interface ProviderApiResult {
 interface SubmitResponseOutput {
   success?: boolean;
   data?: {
+    stance?: 'YES' | 'NO' | 'NEUTRAL';
     position?: string;
     reasoning?: string;
     confidence?: number;
@@ -67,6 +68,7 @@ interface ParsedAgentOutput {
   position: string;
   reasoning: string;
   confidence: number;
+  stance?: 'YES' | 'NO' | 'NEUTRAL';
 }
 
 /**
@@ -570,6 +572,7 @@ ${stanceInstruction}  "position": "Your clear position statement",
           position: toolOutput.data.position ?? 'Unable to determine position',
           reasoning: toolOutput.data.reasoning ?? 'Unable to determine reasoning',
           confidence: Math.min(1, Math.max(0, toolOutput.data.confidence ?? 0.5)),
+          stance: toolOutput.data.stance,
         };
       }
     }
@@ -580,6 +583,7 @@ ${stanceInstruction}  "position": "Your clear position statement",
       position: parsed.position || 'Unable to determine position',
       reasoning: parsed.reasoning || rawText || 'Unable to determine reasoning',
       confidence: parsed.confidence ?? 0.5,
+      stance: parsed.stance,
     };
   }
 
@@ -599,6 +603,7 @@ ${stanceInstruction}  "position": "Your clear position statement",
     return {
       agentId: this.id,
       agentName: this.name,
+      stance: parsed.stance,
       position,
       reasoning,
       confidence: parsed.confidence,

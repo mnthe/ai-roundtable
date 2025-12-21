@@ -2,6 +2,11 @@
  * Core type definitions for AI Roundtable
  */
 
+import type { FeatureFlags } from '../config/feature-flags.js';
+
+// Re-export for convenience
+export type { FeatureFlags };
+
 // ============================================
 // Provider Types
 // ============================================
@@ -85,6 +90,8 @@ export interface DebateConfig {
   agents: string[]; // Agent IDs
   rounds?: number;
   focusQuestion?: string;
+  /** Session-level feature flag overrides */
+  flags?: Partial<FeatureFlags>;
 }
 
 export interface DebateContext {
@@ -97,6 +104,8 @@ export interface DebateContext {
   focusQuestion?: string;
   /** Mode-specific prompt additions (set by the mode strategy) */
   modePrompt?: string;
+  /** Session-level feature flag overrides (merged with defaults at runtime) */
+  flags?: Partial<FeatureFlags>;
 }
 
 // ============================================
@@ -115,6 +124,8 @@ export interface Session {
   totalRounds: number;
   responses: AgentResponse[];
   consensus?: ConsensusResult;
+  /** Session-level feature flag overrides */
+  flags?: Partial<FeatureFlags>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -149,6 +160,8 @@ export interface ConsensusResult {
   commonGround: string[];
   disagreementPoints: string[];
   summary: string;
+  /** Groupthink warning if detected */
+  groupthinkWarning?: GroupthinkWarning;
 }
 
 /**

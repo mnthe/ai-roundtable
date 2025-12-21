@@ -160,7 +160,7 @@ export class DelphiMode extends BaseModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    return this.executeParallel(agents, context, toolkit);
+    return this.executeWithFlags(agents, context, toolkit, 'parallel');
   }
 
   /**

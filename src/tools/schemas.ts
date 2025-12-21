@@ -20,6 +20,11 @@ export const GetContextInputSchema = z.object({}).strict();
  * Schema for submit_response tool input
  */
 export const SubmitResponseInputSchema = z.object({
+  stance: z
+    .enum(['YES', 'NO', 'NEUTRAL'], {
+      error: 'stance must be one of: YES, NO, NEUTRAL',
+    })
+    .optional(),
   position: z.string().min(1, 'Position is required and must be a non-empty string'),
   reasoning: z.string().min(1, 'Reasoning is required and must be a non-empty string'),
   confidence: z

@@ -61,6 +61,7 @@ export interface StoredResponse {
   round_number: number;
   agent_id: string;
   agent_name: string;
+  stance: string | null; // 'YES' | 'NO' | 'NEUTRAL' | null
   position: string;
   reasoning: string;
   confidence: number;
@@ -139,6 +140,7 @@ export class SQLiteStorage implements Storage {
         round_number INTEGER NOT NULL DEFAULT 1,
         agent_id TEXT NOT NULL,
         agent_name TEXT NOT NULL,
+        stance TEXT,
         position TEXT NOT NULL,
         reasoning TEXT NOT NULL,
         confidence REAL NOT NULL,
@@ -395,14 +397,15 @@ export class SQLiteStorage implements Storage {
     const id = `${sessionId}-${response.agentId}-${response.timestamp.getTime()}-${randomSuffix}`;
 
     db.run(
-      `INSERT INTO responses (id, session_id, round_number, agent_id, agent_name, position, reasoning, confidence, citations, tool_calls, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO responses (id, session_id, round_number, agent_id, agent_name, stance, position, reasoning, confidence, citations, tool_calls, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         sessionId,
         roundNumber,
         response.agentId,
         response.agentName,
+        response.stance ?? null,
         response.position,
         response.reasoning,
         response.confidence,
@@ -577,9 +580,16 @@ export class SQLiteStorage implements Storage {
       }
     }
 
+    // Parse stance (validate it's one of the allowed values)
+    const validStances = ['YES', 'NO', 'NEUTRAL'] as const;
+    const stance = stored.stance && validStances.includes(stored.stance as (typeof validStances)[number])
+      ? (stored.stance as 'YES' | 'NO' | 'NEUTRAL')
+      : undefined;
+
     return {
       agentId: stored.agent_id,
       agentName: stored.agent_name,
+      stance,
       position: stored.position,
       reasoning: stored.reasoning,
       confidence: stored.confidence,

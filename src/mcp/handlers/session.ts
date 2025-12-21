@@ -7,7 +7,7 @@ import type { DebateEngine } from '../../core/debate-engine.js';
 import type { SessionManager } from '../../core/session-manager.js';
 import type { KeyPointsExtractor } from '../../core/key-points-extractor.js';
 import type { AgentRegistry } from '../../agents/registry.js';
-import type { DebateConfig, Session } from '../../types/index.js';
+import type { DebateConfig, Session, FeatureFlags } from '../../types/index.js';
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
@@ -47,12 +47,16 @@ export async function handleStartRoundtable(
       }
     }
 
+    // Build session-level feature flag overrides from input params
+    const flags: Partial<FeatureFlags> | undefined = buildSessionFlags(input);
+
     // Create debate config
     const config: DebateConfig = {
       topic: input.topic,
       mode: input.mode || 'collaborative',
       agents: agentIds,
       rounds: input.rounds || 3,
+      flags,
     };
 
     // Create session
@@ -277,4 +281,42 @@ export async function handleListSessions(sessionManager: SessionManager): Promis
   } catch (error) {
     return createErrorResponse(error as Error);
   }
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Build session-level feature flag overrides from MCP tool input params
+ *
+ * Converts user-friendly params (parallel, exitOnConsensus) into FeatureFlags structure
+ */
+function buildSessionFlags(input: {
+  parallel?: 'none' | 'last-only' | 'full';
+  exitOnConsensus?: boolean;
+}): Partial<FeatureFlags> | undefined {
+  // Return undefined if no flag overrides specified
+  if (input.parallel === undefined && input.exitOnConsensus === undefined) {
+    return undefined;
+  }
+
+  const flags: Partial<FeatureFlags> = {};
+
+  // Map parallel param to sequentialParallelization
+  if (input.parallel !== undefined) {
+    flags.sequentialParallelization = {
+      enabled: input.parallel !== 'none',
+      level: input.parallel,
+    };
+  }
+
+  // Map exitOnConsensus param to exitCriteria
+  if (input.exitOnConsensus !== undefined) {
+    flags.exitCriteria = {
+      enabled: input.exitOnConsensus,
+    };
+  }
+
+  return flags;
 }

@@ -114,6 +114,62 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
     context: DebateContext
   ): string | undefined;
 
+  // ============================================
+  // Flag-Aware Execution Helper
+  // ============================================
+
+  /**
+   * Execute with flag-aware pattern selection
+   *
+   * Uses context.flags.sequentialParallelization to determine execution pattern:
+   * - 'none': Use the mode's default execution (falls back to defaultPattern)
+   * - 'last-only': Use executeLastOnly (parallelizes all but last agent)
+   * - 'full': Use executeParallel (all agents in parallel)
+   *
+   * @param agents - Array of agents to execute
+   * @param context - Current debate context (with flags)
+   * @param toolkit - Toolkit providing tools to agents
+   * @param defaultPattern - Pattern to use when flags are not set ('parallel' or 'sequential')
+   * @returns Array of responses from all agents
+   */
+  protected async executeWithFlags(
+    agents: BaseAgent[],
+    context: DebateContext,
+    toolkit: AgentToolkit,
+    defaultPattern: 'parallel' | 'sequential'
+  ): Promise<AgentResponse[]> {
+    const flags = context.flags?.sequentialParallelization;
+
+    // If parallelization is disabled or not configured, use default
+    if (!flags?.enabled) {
+      return defaultPattern === 'parallel'
+        ? this.executeParallel(agents, context, toolkit)
+        : this.executeSequential(agents, context, toolkit);
+    }
+
+    // Select execution based on parallelization level
+    switch (flags.level) {
+      case 'full':
+        logger.debug({ mode: this.name }, 'Using full parallelization (flag override)');
+        return this.executeParallel(agents, context, toolkit);
+
+      case 'last-only':
+        logger.debug({ mode: this.name }, 'Using last-only parallelization (flag override)');
+        return this.executeLastOnly(agents, context, toolkit);
+
+      case 'none':
+      default:
+        // Use mode's default pattern
+        return defaultPattern === 'parallel'
+          ? this.executeParallel(agents, context, toolkit)
+          : this.executeSequential(agents, context, toolkit);
+    }
+  }
+
+  // ============================================
+  // Core Execution Methods
+  // ============================================
+
   /**
    * Execute all agents in parallel
    *

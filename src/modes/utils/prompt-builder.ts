@@ -5,8 +5,8 @@
  * Implements the 4-layer prompt structure used across all debate modes.
  */
 
-import type { DebateContext, AgentResponse, DebateMode } from '../../types/index.js';
-import { getToolGuidanceForMode, isSequentialMode } from '../tool-policy.js';
+import type { DebateContext, AgentResponse, DebateMode, FeatureFlags } from '../../types/index.js';
+import { getToolGuidanceForMode, getToolPolicy, isSequentialMode } from '../tool-policy.js';
 
 /**
  * Configuration for the Role Anchor layer (Layer 1)
@@ -202,10 +202,12 @@ ${config.additionalContext}
  *
  * @param config - Behavioral contract configuration
  * @param mode - Optional debate mode for mode-aware tool guidance
+ * @param flags - Optional feature flags for tool enforcement limits
  */
 export function buildBehavioralContract(
   config: BehavioralContractConfig,
-  mode?: DebateMode
+  mode?: DebateMode,
+  flags?: Partial<FeatureFlags>
 ): string {
   // Combine mode-specific behaviors with tool usage requirements (unless disabled)
   const includeToolUsage = config.includeToolUsageRequirements !== false;
@@ -247,6 +249,17 @@ ${priorities}
   prompt += `
 ⛔ FAILURE MODE: ${config.failureMode}
 `;
+
+  // Add tool enforcement limits if enabled
+  if (mode && flags?.toolEnforcement?.enabled !== false) {
+    const toolPolicy = getToolPolicy(mode, flags);
+    prompt += `
+📊 TOOL USAGE LIMITS:
+- Minimum tool calls: ${toolPolicy.minCalls}
+- Maximum tool calls: ${toolPolicy.maxCalls}
+- ${toolPolicy.guidance}
+`;
+  }
 
   // Add sequential mode tool guidance if applicable
   if (mode && isSequentialMode(mode)) {
@@ -377,7 +390,7 @@ Mode: ${config.modeName}
 `;
 
   prompt += buildRoleAnchor(config.roleAnchor);
-  prompt += buildBehavioralContract(config.behavioralContract, context.mode);
+  prompt += buildBehavioralContract(config.behavioralContract, context.mode, context.flags);
   prompt += buildStructuralEnforcement(config.structuralEnforcement, context);
   prompt += buildVerificationLoop(config.verificationLoop, context.mode);
   prompt += buildFocusQuestionSection(context, config.focusQuestion);

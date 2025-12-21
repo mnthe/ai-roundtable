@@ -2,15 +2,38 @@
  * Tests for MCP tools
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SessionManager } from '../../../src/core/session-manager.js';
 import { AgentRegistry } from '../../../src/agents/registry.js';
 import { DebateEngine } from '../../../src/core/debate-engine.js';
 import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
-import type { AgentConfig } from '../../../src/types/index.js';
+import type { AgentConfig, ConsensusResult } from '../../../src/types/index.js';
+import type { AIConsensusAnalyzer } from '../../../src/core/ai-consensus-analyzer.js';
 import { TOOLS, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
+
+/**
+ * Create a mock AIConsensusAnalyzer for testing
+ */
+function createMockAIConsensusAnalyzer(): AIConsensusAnalyzer {
+  return {
+    analyzeConsensus: vi.fn().mockResolvedValue({
+      agreementLevel: 0.75,
+      commonGround: ['Test common ground'],
+      disagreementPoints: [],
+      summary: 'Mock consensus analysis',
+    } as ConsensusResult),
+    getDiagnostics: vi.fn().mockReturnValue({
+      available: true,
+      registeredProviders: 1,
+      providerNames: ['anthropic'],
+      totalAgents: 1,
+      activeAgents: 1,
+      inactiveAgents: [],
+    }),
+  } as unknown as AIConsensusAnalyzer;
+}
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
@@ -851,7 +874,8 @@ describe('MCP Tools', () => {
       sessionManager = new SessionManager({ storage });
       agentRegistry = new AgentRegistry();
       const toolkit = new DefaultAgentToolkit();
-      debateEngine = new DebateEngine({ toolkit });
+      const mockAIConsensusAnalyzer = createMockAIConsensusAnalyzer();
+      debateEngine = new DebateEngine({ toolkit, aiConsensusAnalyzer: mockAIConsensusAnalyzer });
 
       // Register mock agents
       agentRegistry.registerProvider(
@@ -988,8 +1012,8 @@ describe('MCP Tools', () => {
       const agents = agentRegistry.getAgents(['agent-1', 'agent-2']);
       const results = await debateEngine.executeRounds(agents, session, 1);
 
-      // Analyze consensus
-      const consensus = debateEngine.analyzeConsensus(results[0].responses);
+      // Consensus is now included in round results
+      const consensus = results[0].consensus;
 
       expect(consensus).toHaveProperty('agreementLevel');
       expect(consensus).toHaveProperty('commonGround');
@@ -1033,15 +1057,15 @@ describe('MCP Tools', () => {
       const round2Responses = await sessionManager.getResponsesForRound(session.id, 2);
       expect(round2Responses).toHaveLength(2); // 2 agents
 
-      // Verify that round-specific consensus analysis uses only that round's responses
-      const round1Consensus = debateEngine.analyzeConsensus(round1Responses);
-      const round2Consensus = debateEngine.analyzeConsensus(round2Responses);
+      // Consensus is now included in round results
+      const round1Consensus = results[0].consensus;
+      const round2Consensus = results[1].consensus;
 
       // Each round should analyze only 2 responses
       expect(round1Responses).toHaveLength(2);
       expect(round2Responses).toHaveLength(2);
 
-      // Both should have valid consensus
+      // Both should have valid consensus (from mock analyzer)
       expect(round1Consensus.agreementLevel).toBeGreaterThanOrEqual(0);
       expect(round2Consensus.agreementLevel).toBeGreaterThanOrEqual(0);
     });

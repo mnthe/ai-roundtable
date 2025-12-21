@@ -35,6 +35,21 @@ const createMockAgent = (id: string, provider: 'anthropic' | 'openai' | 'google'
     confidence: 0.8,
     timestamp: new Date(),
   }),
+  generateRawCompletion: vi.fn().mockResolvedValue(
+    JSON.stringify({
+      agreementLevel: 0.75,
+      clusters: [{ theme: 'Agreement', agentIds: ['agent-1', 'agent-2'], summary: 'Both agree' }],
+      commonGround: ['Point A', 'Point B'],
+      disagreementPoints: ['Difference 1'],
+      nuances: {
+        partialAgreements: ['Partial agreement on X'],
+        conditionalPositions: [],
+        uncertainties: [],
+      },
+      summary: 'Test summary',
+      reasoning: 'Test reasoning',
+    })
+  ),
   healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
 });
 
@@ -66,8 +81,7 @@ describe('AIConsensusAnalyzer', () => {
     registry = new AgentRegistry();
     analyzer = new AIConsensusAnalyzer({
       registry,
-      fallbackToRuleBased: true,
-    });
+          });
   });
 
   describe('Constructor', () => {
@@ -107,23 +121,21 @@ describe('AIConsensusAnalyzer', () => {
       });
     });
 
-    describe('Fallback behavior', () => {
-      it('should use basic analysis when no agents available', async () => {
+    describe('Error behavior when no agents available', () => {
+      it('should throw error when no agents available', async () => {
         const responses = createSampleResponses();
-        const result = await analyzer.analyzeConsensus(responses, 'AI Development');
 
-        // Should get a valid result from fallback
-        expect(result.agreementLevel).toBeGreaterThanOrEqual(0);
-        expect(result.agreementLevel).toBeLessThanOrEqual(1);
-        expect(result.summary).toBeDefined();
+        await expect(analyzer.analyzeConsensus(responses, 'AI Development')).rejects.toThrow(
+          'AI consensus analysis unavailable'
+        );
       });
 
-      it('should include fallback reasoning when AI unavailable', async () => {
+      it('should include diagnostic hint in error message', async () => {
         const responses = createSampleResponses();
-        const result = await analyzer.analyzeConsensus(responses, 'Test topic');
 
-        // Fallback analysis should indicate AI was unavailable
-        expect(result.reasoning).toContain('AI unavailable');
+        await expect(analyzer.analyzeConsensus(responses, 'Test topic')).rejects.toThrow(
+          'No providers registered'
+        );
       });
     });
 
@@ -151,9 +163,7 @@ describe('AIConsensusAnalyzer', () => {
         expect(result).toBeDefined();
         expect(typeof result.agreementLevel).toBe('number');
       });
-    });
 
-    describe('Result structure', () => {
       it('should return ConsensusResult compatible structure', async () => {
         const responses = createSampleResponses();
         const result = await analyzer.analyzeConsensus(responses, 'Test topic');
@@ -181,19 +191,13 @@ describe('AIConsensusAnalyzer', () => {
     });
   });
 
-  describe('Fallback disabled', () => {
-    it('should return empty result when fallback disabled and no agents', async () => {
-      const analyzerNoFallback = new AIConsensusAnalyzer({
-        registry,
-        fallbackToRuleBased: false,
-      });
-
+  describe('Error handling', () => {
+    it('should throw error with diagnostic info when no agents available', async () => {
       const responses = createSampleResponses();
-      const result = await analyzerNoFallback.analyzeConsensus(responses, 'Test topic');
 
-      // Should contain diagnostic info about why AI is unavailable
-      expect(result.summary).toContain('fallback disabled');
-      expect(result.summary).toContain('No providers registered');
+      await expect(analyzer.analyzeConsensus(responses, 'Test topic')).rejects.toThrow(
+        /AI consensus analysis unavailable.*No providers registered/
+      );
     });
   });
 
@@ -292,13 +296,13 @@ describe('AIConsensusAnalyzer', () => {
     });
   });
 
-  describe('Diagnostic information in fallback reasoning', () => {
+  describe('Diagnostic information in error messages', () => {
     it('should include hint about missing API keys when no agents', async () => {
       const responses = createSampleResponses();
-      const result = await analyzer.analyzeConsensus(responses, 'Test topic');
 
-      expect(result.reasoning).toContain('No agents registered');
-      expect(result.reasoning).toContain('API keys');
+      await expect(analyzer.analyzeConsensus(responses, 'Test topic')).rejects.toThrow(
+        /No agents registered.*API keys/
+      );
     });
 
     it('should include health check errors when all agents failed', async () => {
@@ -316,10 +320,10 @@ describe('AIConsensusAnalyzer', () => {
       registry.deactivateAgent('test-agent', 'Connection refused');
 
       const responses = createSampleResponses();
-      const result = await analyzer.analyzeConsensus(responses, 'Test topic');
 
-      expect(result.reasoning).toContain('health checks');
-      expect(result.reasoning).toContain('Connection refused');
+      await expect(analyzer.analyzeConsensus(responses, 'Test topic')).rejects.toThrow(
+        /health checks.*Connection refused/
+      );
     });
   });
 });
@@ -332,8 +336,7 @@ describe('JSON parsing strategies', () => {
     registry = new AgentRegistry();
     analyzer = new AIConsensusAnalyzer({
       registry,
-      fallbackToRuleBased: true,
-    });
+          });
   });
 
   // Access private methods for testing via any

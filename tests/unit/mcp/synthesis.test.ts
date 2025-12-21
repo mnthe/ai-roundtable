@@ -2,16 +2,39 @@
  * Tests for synthesize_debate tool
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SessionManager } from '../../../src/core/session-manager.js';
 import { AgentRegistry } from '../../../src/agents/registry.js';
 import { DebateEngine } from '../../../src/core/debate-engine.js';
 import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 import { MockAgent } from '../../../src/agents/base.js';
 import { SQLiteStorage } from '../../../src/storage/sqlite.js';
-import type { AgentConfig, AgentResponse } from '../../../src/types/index.js';
+import type { AgentConfig, AgentResponse, ConsensusResult } from '../../../src/types/index.js';
+import type { AIConsensusAnalyzer } from '../../../src/core/ai-consensus-analyzer.js';
 import { TOOLS, createSuccessResponse, createErrorResponse } from '../../../src/mcp/tools.js';
 import { SynthesizeDebateInputSchema } from '../../../src/types/schemas.js';
+
+/**
+ * Create a mock AIConsensusAnalyzer for testing
+ */
+function createMockAIConsensusAnalyzer(): AIConsensusAnalyzer {
+  return {
+    analyzeConsensus: vi.fn().mockResolvedValue({
+      agreementLevel: 0.75,
+      commonGround: ['Test common ground'],
+      disagreementPoints: [],
+      summary: 'Mock consensus analysis',
+    } as ConsensusResult),
+    getDiagnostics: vi.fn().mockReturnValue({
+      available: true,
+      registeredProviders: 1,
+      providerNames: ['anthropic'],
+      totalAgents: 1,
+      activeAgents: 1,
+      inactiveAgents: [],
+    }),
+  } as unknown as AIConsensusAnalyzer;
+}
 
 describe('Synthesize Debate Tool', () => {
   let storage: SQLiteStorage;
@@ -25,7 +48,8 @@ describe('Synthesize Debate Tool', () => {
     sessionManager = new SessionManager({ storage });
     agentRegistry = new AgentRegistry();
     const toolkit = new DefaultAgentToolkit();
-    debateEngine = new DebateEngine({ toolkit });
+    const mockAIConsensusAnalyzer = createMockAIConsensusAnalyzer();
+    debateEngine = new DebateEngine({ toolkit, aiConsensusAnalyzer: mockAIConsensusAnalyzer });
 
     // Register mock agents
     agentRegistry.registerProvider('anthropic', (config) => new MockAgent(config), 'claude-3-opus');
