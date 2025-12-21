@@ -226,6 +226,12 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
   private currentAgentIndex = 0;
 
   /**
+   * Total number of agents in the current round.
+   * Used for balanced role distribution.
+   */
+  private totalAgentsInRound = 3;
+
+  /**
    * Execute a devil's advocate round
    *
    * Always uses sequential execution to ensure role compliance.
@@ -239,30 +245,69 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    // Reset agent index tracker for this round
+    // Reset trackers for this round
     this.currentAgentIndex = 0;
+    this.totalAgentsInRound = agents.length;
 
     // Always use sequential execution for devils-advocate mode
     return this.executeWithFlags(agents, context, toolkit, 'sequential');
   }
 
   /**
+   * Calculate balanced role distribution for a given number of agents.
+   *
+   * Distribution pattern:
+   * - 3 agents: 1 PRIMARY, 1 OPPOSITION, 1 EVALUATOR
+   * - 4 agents: 1 PRIMARY, 1 OPPOSITION, 2 EVALUATOR
+   * - 5 agents: 2 PRIMARY, 2 OPPOSITION, 1 EVALUATOR
+   * - 6 agents: 2 PRIMARY, 2 OPPOSITION, 2 EVALUATOR
+   * - 7 agents: 3 PRIMARY, 3 OPPOSITION, 1 EVALUATOR
+   * - 8 agents: 3 PRIMARY, 3 OPPOSITION, 2 EVALUATOR
+   * ...
+   *
+   * Formula:
+   * - evaluatorCount = 1 if odd, 2 if even (for n >= 3)
+   * - primaryCount = oppositionCount = (n - evaluatorCount) / 2
+   */
+  private getRoleDistribution(totalAgents: number): {
+    primaryCount: number;
+    oppositionCount: number;
+    evaluatorCount: number;
+  } {
+    if (totalAgents < 2) {
+      return { primaryCount: 1, oppositionCount: 0, evaluatorCount: 0 };
+    }
+    if (totalAgents === 2) {
+      return { primaryCount: 1, oppositionCount: 1, evaluatorCount: 0 };
+    }
+
+    // For 3+ agents: balance PRIMARY and OPPOSITION, with 1-2 EVALUATORs
+    const evaluatorCount = totalAgents % 2 === 0 ? 2 : 1;
+    const debaterCount = totalAgents - evaluatorCount;
+    const primaryCount = debaterCount / 2;
+    const oppositionCount = debaterCount / 2;
+
+    return { primaryCount, oppositionCount, evaluatorCount };
+  }
+
+  /**
    * Get the role for an agent based on their index.
    * Hook implementation for BaseModeStrategy.
    *
-   * Role assignment:
-   * - Index 0: PRIMARY (Affirmative)
-   * - Index 1: OPPOSITION (Devil's Advocate)
-   * - Index 2+: EVALUATOR
+   * Role assignment (balanced distribution):
+   * - First half of debaters: PRIMARY (Affirmative)
+   * - Second half of debaters: OPPOSITION (Devil's Advocate)
+   * - Remaining 1-2 agents: EVALUATOR
+   *
+   * Example for 6 agents: P, P, O, O, E, E
+   * Example for 5 agents: P, P, O, O, E
    */
   protected override getAgentRole(
     _agent: BaseAgent,
     index: number,
     _context: DebateContext
   ): DevilsAdvocateRole {
-    if (index === 0) return 'PRIMARY';
-    if (index === 1) return 'OPPOSITION';
-    return 'EVALUATOR';
+    return this.getRoleForIndex(index, this.totalAgentsInRound);
   }
 
   /**
@@ -297,7 +342,7 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     context: DebateContext
   ): AgentResponse {
     // Get the role for the current agent
-    const role = this.getRoleForIndex(this.currentAgentIndex);
+    const role = this.getRoleForIndex(this.currentAgentIndex, this.totalAgentsInRound);
     const expectedStance = ROLE_TO_STANCE[role];
     const roleName = ROLE_DISPLAY_NAMES[role];
 
@@ -338,11 +383,21 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
   }
 
   /**
-   * Get the role for a given index.
+   * Get the role for a given index based on balanced distribution.
+   *
+   * @param index - The agent's index (0-based)
+   * @param totalAgents - Total number of agents in the round
+   * @returns The role for this agent
    */
-  private getRoleForIndex(index: number): DevilsAdvocateRole {
-    if (index === 0) return 'PRIMARY';
-    if (index === 1) return 'OPPOSITION';
+  private getRoleForIndex(index: number, totalAgents: number): DevilsAdvocateRole {
+    const { primaryCount, oppositionCount } = this.getRoleDistribution(totalAgents);
+
+    if (index < primaryCount) {
+      return 'PRIMARY';
+    }
+    if (index < primaryCount + oppositionCount) {
+      return 'OPPOSITION';
+    }
     return 'EVALUATOR';
   }
 
@@ -373,13 +428,15 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    */
   private buildAgentPromptForIndex(context: DebateContext, agentIndex: number): string {
     const isFirstRound = context.currentRound === 1;
+    const role = this.getRoleForIndex(agentIndex, this.totalAgentsInRound);
 
-    if (agentIndex === 0) {
-      return this.buildPrimaryPrompt(context, isFirstRound);
-    } else if (agentIndex === 1) {
-      return this.buildOppositionPrompt(context, isFirstRound);
-    } else {
-      return this.buildEvaluatorPrompt(context, isFirstRound);
+    switch (role) {
+      case 'PRIMARY':
+        return this.buildPrimaryPrompt(context, isFirstRound);
+      case 'OPPOSITION':
+        return this.buildOppositionPrompt(context, isFirstRound);
+      case 'EVALUATOR':
+        return this.buildEvaluatorPrompt(context, isFirstRound);
     }
   }
 
