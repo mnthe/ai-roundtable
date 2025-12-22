@@ -21,7 +21,7 @@ import {
   buildModePrompt,
   createOutputSections,
   type ModePromptConfig,
-} from './utils/prompt-builder.js';
+} from './utils/index.js';
 
 /**
  * My Custom Mode
@@ -166,7 +166,8 @@ Create `tests/unit/modes/my-mode.test.ts`:
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MyMode } from '../../../src/modes/my-mode.js';
-import type { DebateContext, AgentToolkit } from '../../../src/types/index.js';
+import type { DebateContext } from '../../../src/types/index.js';
+import type { AgentToolkit } from '../../../src/agents/base.js';
 
 describe('MyMode', () => {
   let mode: MyMode;
@@ -296,12 +297,13 @@ All modes should use the 4-layer prompt structure via `modes/utils/prompt-builde
 **Prompt Builder Utilities:**
 - `buildModePrompt(config, context)` - Build complete 4-layer prompt
 - `buildRoleAnchor(config)` - Layer 1 only
-- `buildBehavioralContract(config)` - Layer 2 only
-- `buildStructuralEnforcement(config, context)` - Layer 3 only
-- `buildVerificationLoop(config)` - Layer 4 only
+- `buildBehavioralContract(config, mode?)` - Layer 2 only (mode optional for tool guidance)
+- `buildVerificationLoop(config, mode?)` - Layer 4 only (mode optional for mode-specific checks)
 - `buildFocusQuestionSection(context, config)` - Optional focus question
-- `buildRoundContext(context)` - Build round context section
 - `createOutputSections([...])` - Helper to create section arrays
+- `PROMPT_SEPARATOR` - Constant for section separators
+
+**Note:** Layer 3 (Structural Enforcement) is built internally by `buildModePrompt()` using the `structuralEnforcement` config.
 
 ## Execution Patterns
 

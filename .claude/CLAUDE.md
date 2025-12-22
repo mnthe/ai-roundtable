@@ -26,34 +26,34 @@ AI Roundtable is an MCP server that enables structured debates between multiple 
 │                        Core Layer                               │
 │  DebateEngine ←→ SessionManager ←→ AIConsensusAnalyzer          │
 │                         ↓                                       │
-│              ExitCriteriaChecker (automatic termination)        │
+│              exit-criteria.ts (automatic termination)           │
 │              KeyPointsExtractor (for 4-layer responses)         │
 ├─────────────────────────────────────────────────────────────────┤
-│       Agents Layer              │        Modes Layer             │
-│  BaseAgent (Template Method)    │   BaseModeStrategy (Hooks)     │
+│       Agents Layer             │        Modes Layer             │
+│  BaseAgent (Template Method)   │   BaseModeStrategy (Hooks)     │
 │  ├── ClaudeAgent (web_search)  │   ├── CollaborativeMode        │
 │  ├── ChatGPTAgent (Responses)  │   ├── AdversarialMode          │
 │  ├── GeminiAgent (grounding)   │   ├── SocraticMode             │
 │  └── PerplexityAgent (builtin) │   ├── ExpertPanelMode          │
-│                                 │   ├── DevilsAdvocateMode       │
-│  agents/utils/                  │   ├── DelphiMode               │
-│  ├── openai-responses.ts       │   └── RedTeamBlueTeamMode       │
-│  ├── error-converter.ts        │                                 │
-│  ├── tool-converters.ts        │   Mode Extensions:              │
-│  └── light-model-factory.ts    │   ├── processors/ (context)     │
-│                                 │   ├── validators/ (response)    │
-│                                 │   └── tool-policy.ts            │
+│                                │   ├── DevilsAdvocateMode       │
+│  agents/utils/                 │   ├── DelphiMode               │
+│  ├── error-converter.ts        │   └── RedTeamBlueTeamMode      │
+│  ├── light-model-factory.ts    │                                │
+│  └── light-agent-selector.ts   │   Mode Extensions:             │
+│                                │   ├── processors/ (context)    │
+│                                │   ├── validators/ (response)   │
+│                                │   └── tool-policy.ts           │
 ├─────────────────────────────────────────────────────────────────┤
-│       Tools Layer              │       Storage Layer             │
-│  DefaultAgentToolkit           │   SQLiteStorage                 │
-│  ├── fact_check                │   (sql.js WebAssembly)          │
-│  └── request_context           │                                 │
-│                                 │   Tables: sessions, responses   │
-│  Native Web Search (per-agent) │                                 │
-│  ├── Claude: web_search tool   │                                 │
-│  ├── ChatGPT: Responses API    │                                 │
-│  ├── Gemini: Google grounding  │                                 │
-│  └── Perplexity: built-in      │                                 │
+│       Tools Layer              │       Storage Layer            │
+│  DefaultAgentToolkit           │   SQLiteStorage                │
+│  ├── fact_check                │   (sql.js WebAssembly)         │
+│  └── request_context           │                                │
+│                                │   Tables: sessions, responses  │
+│  Native Web Search (per-agent) │                                │
+│  ├── Claude: web_search tool   │                                │
+│  ├── ChatGPT: Responses API    │                                │
+│  ├── Gemini: Google grounding  │                                │
+│  └── Perplexity: built-in      │                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -85,7 +85,7 @@ src/
 │   ├── openai/       # ChatGPT agent (Responses API)
 │   ├── google/       # Gemini agent (Google grounding)
 │   ├── perplexity/   # Perplexity agent (built-in search)
-│   └── utils/        # Shared utilities (error converter, tool converters)
+│   └── utils/        # Shared utilities (error converter, light model factory)
 ├── benchmark/        # Benchmark framework for debate performance metrics
 ├── config/           # Configuration (exit criteria settings)
 ├── core/             # Core logic (DebateEngine, SessionManager, AIConsensusAnalyzer)
@@ -122,11 +122,9 @@ interface AgentResponse {
   position: string;
   reasoning: string;
   confidence: number;        // 0.0-1.0
-  stance?: 'YES' | 'NO' | 'NEUTRAL';  // For devils-advocate mode
+  stance?: 'YES' | 'NO' | 'NEUTRAL';  // For structured debate modes
   citations?: Citation[];
   toolCalls?: ToolCallRecord[];
-  images?: ImageResult[];    // Perplexity search images
-  relatedQuestions?: string[]; // Perplexity related questions
   timestamp: Date;
 }
 
@@ -218,10 +216,10 @@ ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS=2
 
 ### Toolkit Tools (All Agents)
 
-| Tool              | Description                                     |
-| ----------------- | ----------------------------------------------- |
-| `fact_check`      | Verify claims with debate history               |
-| `request_context` | Request additional context from caller (SOTA AI)|
+| Tool              | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `fact_check`      | Verify claims with debate history                |
+| `request_context` | Request additional context from caller (SOTA AI) |
 
 Note: `get_context` and `submit_response` were removed as redundant:
 - Context is already in system prompt via `buildSystemPrompt()` and `buildUserMessage()`
@@ -231,12 +229,12 @@ Note: `get_context` and `submit_response` were removed as redundant:
 
 Each agent uses its provider's native web search capability for evidence gathering:
 
-| Agent      | Web Search Method              | Citation Format     |
-| ---------- | ------------------------------ | ------------------- |
-| Claude     | Anthropic `web_search` tool    | URL citations       |
-| ChatGPT    | OpenAI Responses API           | URL annotations     |
-| Gemini     | Google Search grounding        | Grounding metadata  |
-| Perplexity | Built-in search (always on)    | search_results      |
+| Agent      | Web Search Method           | Citation Format    |
+| ---------- | --------------------------- | ------------------ |
+| Claude     | Anthropic `web_search` tool | URL citations      |
+| ChatGPT    | OpenAI Responses API        | URL annotations    |
+| Gemini     | Google Search grounding     | Grounding metadata |
+| Perplexity | Built-in search (always on) | search_results     |
 
 This architecture ensures each agent uses its provider's optimized search capabilities,
 resulting in more accurate citations and better search results.
