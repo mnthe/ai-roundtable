@@ -23,6 +23,10 @@ describe('DevilsAdvocateMode', () => {
       getTools: () => [],
       executeTool: vi.fn(),
       setContext: vi.fn(),
+      setCurrentAgentId: vi.fn(),
+      getPendingContextRequests: () => [],
+      clearPendingRequests: vi.fn(),
+      hasPendingRequests: () => false,
     };
   });
 

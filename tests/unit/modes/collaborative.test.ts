@@ -9,6 +9,10 @@ describe('CollaborativeMode', () => {
     getTools: () => [];
     executeTool: () => Promise<object>;
     setContext: (context: DebateContext) => void;
+    setCurrentAgentId: (agentId: string) => void;
+    getPendingContextRequests: () => [];
+    clearPendingRequests: () => void;
+    hasPendingRequests: () => boolean;
   };
 
   beforeEach(() => {
@@ -17,6 +21,10 @@ describe('CollaborativeMode', () => {
       getTools: () => [],
       executeTool: async () => ({}),
       setContext: () => {},
+      setCurrentAgentId: () => {},
+      getPendingContextRequests: () => [],
+      clearPendingRequests: () => {},
+      hasPendingRequests: () => false,
     };
   });
 

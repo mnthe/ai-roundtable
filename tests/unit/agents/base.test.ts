@@ -824,3 +824,155 @@ describe('buildAgentResponse', () => {
     expect(result.reasoning).toBe('Unable to determine reasoning');
   });
 });
+
+describe('buildUserMessage', () => {
+  const defaultConfig: AgentConfig = {
+    id: 'test-agent',
+    name: 'Test Agent',
+    provider: 'anthropic',
+    model: 'test-model',
+  };
+
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'Test Topic',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  // Expose protected method for testing
+  class TestableAgent extends MockAgent {
+    public testBuildUserMessage(context: DebateContext): string {
+      return this.buildUserMessage(context);
+    }
+  }
+
+  it('should include contextResults when provided', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const contextWithResults: DebateContext = {
+      ...defaultContext,
+      contextResults: [
+        {
+          requestId: 'ctx-123',
+          success: true,
+          result: 'Here is the information about AI regulations in the EU.',
+        },
+        {
+          requestId: 'ctx-456',
+          success: true,
+          result: 'The latest statistics show 85% adoption rate.',
+        },
+      ],
+    };
+
+    const message = agent.testBuildUserMessage(contextWithResults);
+
+    expect(message).toContain('=== PROVIDED CONTEXT ===');
+    expect(message).toContain('=== END PROVIDED CONTEXT ===');
+    expect(message).toContain('[Request ID: ctx-123]');
+    expect(message).toContain('Here is the information about AI regulations in the EU.');
+    expect(message).toContain('[Request ID: ctx-456]');
+    expect(message).toContain('The latest statistics show 85% adoption rate.');
+  });
+
+  it('should include error messages for failed context results', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const contextWithFailedResults: DebateContext = {
+      ...defaultContext,
+      contextResults: [
+        {
+          requestId: 'ctx-789',
+          success: false,
+          error: 'Unable to find the requested information.',
+        },
+      ],
+    };
+
+    const message = agent.testBuildUserMessage(contextWithFailedResults);
+
+    expect(message).toContain('=== PROVIDED CONTEXT ===');
+    expect(message).toContain('[Request ID: ctx-789]');
+    expect(message).toContain('[Error: Unable to find the requested information.]');
+  });
+
+  it('should not include context section when contextResults is empty', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const contextWithEmptyResults: DebateContext = {
+      ...defaultContext,
+      contextResults: [],
+    };
+
+    const message = agent.testBuildUserMessage(contextWithEmptyResults);
+
+    expect(message).not.toContain('=== PROVIDED CONTEXT ===');
+    expect(message).not.toContain('=== END PROVIDED CONTEXT ===');
+  });
+
+  it('should not include context section when contextResults is undefined', () => {
+    const agent = new TestableAgent(defaultConfig);
+
+    const message = agent.testBuildUserMessage(defaultContext);
+
+    expect(message).not.toContain('=== PROVIDED CONTEXT ===');
+    expect(message).not.toContain('=== END PROVIDED CONTEXT ===');
+  });
+
+  it('should handle mix of successful and failed context results', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const contextWithMixedResults: DebateContext = {
+      ...defaultContext,
+      contextResults: [
+        {
+          requestId: 'ctx-success',
+          success: true,
+          result: 'Successfully retrieved data.',
+        },
+        {
+          requestId: 'ctx-error',
+          success: false,
+          error: 'Service temporarily unavailable.',
+        },
+      ],
+    };
+
+    const message = agent.testBuildUserMessage(contextWithMixedResults);
+
+    expect(message).toContain('[Request ID: ctx-success]');
+    expect(message).toContain('Successfully retrieved data.');
+    expect(message).toContain('[Request ID: ctx-error]');
+    expect(message).toContain('[Error: Service temporarily unavailable.]');
+  });
+
+  it('should place context results before previous responses', () => {
+    const agent = new TestableAgent(defaultConfig);
+    const contextWithBoth: DebateContext = {
+      ...defaultContext,
+      contextResults: [
+        {
+          requestId: 'ctx-1',
+          success: true,
+          result: 'Context information here.',
+        },
+      ],
+      previousResponses: [
+        {
+          agentId: 'agent-1',
+          agentName: 'Agent One',
+          position: 'Previous position',
+          reasoning: 'Previous reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        },
+      ],
+    };
+
+    const message = agent.testBuildUserMessage(contextWithBoth);
+
+    const contextIndex = message.indexOf('=== PROVIDED CONTEXT ===');
+    const responsesIndex = message.indexOf('Previous responses');
+
+    expect(contextIndex).toBeLessThan(responsesIndex);
+  });
+});
