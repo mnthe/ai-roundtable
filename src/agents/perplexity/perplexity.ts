@@ -320,15 +320,14 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
-   * Execute a simple completion without tools
-   * Centralizes common API call pattern for synthesis and raw completion
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer and synthesis features
    */
-  private async executeSimpleCompletion(
-    systemPrompt: string,
-    userMessage: string,
-    operation: string
-  ): Promise<string> {
-    logger.debug({ agentId: this.id }, `Executing ${operation}`);
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const effectiveSystemPrompt =
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
 
     try {
       const response = await withRetry(
@@ -337,8 +336,8 @@ export class PerplexityAgent extends BaseAgent {
             model: this.model,
             max_tokens: this.maxTokens,
             messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userMessage },
+              { role: 'system', content: effectiveSystemPrompt },
+              { role: 'user', content: prompt },
             ],
             temperature: this.temperature,
           }),
@@ -348,25 +347,9 @@ export class PerplexityAgent extends BaseAgent {
       return this.extractContentText(response.choices[0]?.message);
     } catch (error) {
       const convertedError = this.convertError(error);
-      logger.error({ err: convertedError, agentId: this.id }, `Failed to execute ${operation}`);
+      logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
       throw convertedError;
     }
-  }
-
-  /**
-   * Perform synthesis by calling Perplexity API directly with synthesis-specific prompts
-   */
-  protected override async performSynthesis(systemPrompt: string, userMessage: string): Promise<string> {
-    return this.executeSimpleCompletion(systemPrompt, userMessage, 'synthesis');
-  }
-
-  /**
-   * Generate a raw text completion without parsing into structured format
-   */
-  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    const effectiveSystemPrompt =
-      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
-    return this.executeSimpleCompletion(effectiveSystemPrompt, prompt, 'raw completion');
   }
 
   /**

@@ -25,10 +25,9 @@
  * This ensures equal tool access across all agents despite the API constraint.
  */
 
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import type {
   Chat,
-  FunctionDeclaration,
   GroundingMetadata,
   GroundingChunk,
 } from '@google/genai';
@@ -39,6 +38,7 @@ import { convertSDKError } from '../utils/error-converter.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import { LIGHT_MODELS } from '../setup.js';
 import type { GoogleSearchConfig, GeminiAgentOptions } from './types.js';
+import { buildGeminiTools } from './utils.js';
 
 const logger = createLogger('GeminiAgent');
 
@@ -179,7 +179,7 @@ export class GeminiAgent extends BaseAgent {
           systemInstruction: systemPrompt,
           temperature: this.temperature,
           maxOutputTokens: this.maxTokens,
-          tools: [{ functionDeclarations: this.buildGeminiTools() }],
+          tools: [{ functionDeclarations: buildGeminiTools(this.toolkit) }],
         },
         history: [],
       });
@@ -286,24 +286,23 @@ Please provide your final response. You have access to additional tools (request
   }
 
   /**
-   * Execute a simple completion request to Gemini API
-   * Shared logic for performSynthesis and generateRawCompletion
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer and synthesis features
    */
-  private async executeSimpleCompletion(
-    systemPrompt: string,
-    userMessage: string,
-    operation: string
-  ): Promise<string> {
-    logger.debug({ agentId: this.id }, operation);
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const effectiveSystemPrompt =
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
 
     try {
       const response = await withRetry(
         () =>
           this.client.models.generateContent({
             model: this.model,
-            contents: userMessage,
+            contents: prompt,
             config: {
-              systemInstruction: systemPrompt,
+              systemInstruction: effectiveSystemPrompt,
               temperature: this.temperature,
               maxOutputTokens: this.maxTokens,
             },
@@ -314,32 +313,9 @@ Please provide your final response. You have access to additional tools (request
       return response.text ?? '';
     } catch (error) {
       const convertedError = this.convertError(error);
-      logger.error({ err: convertedError, agentId: this.id }, `Failed to ${operation}`);
+      logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
       throw convertedError;
     }
-  }
-
-  /**
-   * Perform synthesis by calling Gemini API directly with synthesis-specific prompts
-   * This bypasses the standard debate prompt building to use synthesis format
-   */
-  protected override async performSynthesis(
-    systemPrompt: string,
-    userMessage: string
-  ): Promise<string> {
-    return this.executeSimpleCompletion(systemPrompt, userMessage, 'perform synthesis');
-  }
-
-  /**
-   * Generate a raw text completion without parsing into structured format
-   * Used by AIConsensusAnalyzer to get raw JSON responses
-   */
-  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    return this.executeSimpleCompletion(
-      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-      prompt,
-      'generate raw completion'
-    );
   }
 
   /**
@@ -366,34 +342,6 @@ Please provide your final response. You have access to additional tools (request
     if (response.text === undefined) {
       throw new Error('No response text');
     }
-  }
-
-  /**
-   * Build Gemini-format tool definitions from toolkit
-   * Uses the new @google/genai SDK format with parametersJsonSchema
-   */
-  private buildGeminiTools(): FunctionDeclaration[] {
-    if (!this.toolkit) {
-      return [];
-    }
-
-    return this.toolkit.getTools().map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: {
-        type: Type.OBJECT,
-        properties: Object.fromEntries(
-          Object.entries(tool.parameters).map(([key, value]) => [
-            key,
-            {
-              type: Type.STRING,
-              description: (value as { description?: string }).description ?? '',
-            },
-          ])
-        ),
-        required: Object.keys(tool.parameters),
-      },
-    }));
   }
 
   /**

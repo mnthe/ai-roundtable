@@ -5,7 +5,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   MessageParam,
-  Tool,
   ToolUseBlock,
   TextBlock,
   ServerToolUseBlock,
@@ -24,6 +23,7 @@ import type {
   Citation,
 } from '../../types/index.js';
 import type { WebSearchConfig, ClaudeAgentOptions } from './types.js';
+import { buildAnthropicTools } from './utils.js';
 
 const logger = createLogger('ClaudeAgent');
 
@@ -227,38 +227,6 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Execute a simple completion without tool support
-   * Shared logic for performSynthesis and generateRawCompletion
-   */
-  private async executeSimpleCompletion(
-    systemPrompt: string,
-    userMessage: string,
-    operation: string
-  ): Promise<string> {
-    logger.debug({ agentId: this.id }, operation);
-
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: userMessage }],
-            temperature: this.temperature,
-          }),
-        { maxRetries: 3 }
-      );
-
-      return this.extractTextFromResponse(response);
-    } catch (error) {
-      const convertedError = this.convertError(error);
-      logger.error({ err: convertedError, agentId: this.id }, `Failed to ${operation}`);
-      throw convertedError;
-    }
-  }
-
-  /**
    * Extract text content from Anthropic message response
    */
   private extractTextFromResponse(response: Anthropic.Message): string {
@@ -269,26 +237,34 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Perform synthesis by calling Claude API directly with synthesis-specific prompts
-   * This bypasses the standard debate prompt building to use synthesis format
-   */
-  protected override async performSynthesis(
-    systemPrompt: string,
-    userMessage: string
-  ): Promise<string> {
-    return this.executeSimpleCompletion(systemPrompt, userMessage, 'Performing synthesis');
-  }
-
-  /**
    * Generate a raw text completion without parsing into structured format
-   * Used by AIConsensusAnalyzer to get raw JSON responses
+   * Used by AIConsensusAnalyzer and synthesis features
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    return this.executeSimpleCompletion(
-      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-      prompt,
-      'Generating raw completion'
-    );
+    const effectiveSystemPrompt =
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
+
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            system: effectiveSystemPrompt,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3 }
+      );
+
+      return this.extractTextFromResponse(response);
+    } catch (error) {
+      const convertedError = this.convertError(error);
+      logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
+      throw convertedError;
+    }
   }
 
   /**
@@ -314,7 +290,7 @@ export class ClaudeAgent extends BaseAgent {
 
     // Add toolkit tools
     if (this.toolkit) {
-      tools.push(...this.buildAnthropicTools());
+      tools.push(...buildAnthropicTools(this.toolkit));
     }
 
     // Add native web search if enabled
@@ -325,24 +301,6 @@ export class ClaudeAgent extends BaseAgent {
     return tools;
   }
 
-  /**
-   * Build Anthropic-format tool definitions from toolkit
-   */
-  private buildAnthropicTools(): Tool[] {
-    if (!this.toolkit) {
-      return [];
-    }
-
-    return this.toolkit.getTools().map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: {
-        type: 'object' as const,
-        properties: tool.parameters,
-        required: Object.keys(tool.parameters),
-      },
-    }));
-  }
 
   /**
    * Build the native web search tool configuration

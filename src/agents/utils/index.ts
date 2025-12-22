@@ -1,7 +1,9 @@
 /**
  * Agent Utilities - Shared utilities for AI agents
  *
- * Note: Provider-specific tool converters have been moved to their respective folders:
+ * Note: Provider-specific tool converters are in their respective folders:
+ * - Anthropic: agents/anthropic/utils.ts (buildAnthropicTools)
+ * - Google: agents/google/utils.ts (buildGeminiTools)
  * - OpenAI: agents/openai/utils.ts (buildResponsesFunctionTools)
  * - Perplexity: agents/perplexity/utils.ts (buildPerplexityTools)
  */

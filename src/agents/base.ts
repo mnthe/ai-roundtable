@@ -323,29 +323,15 @@ export abstract class BaseAgent {
   /**
    * Perform provider-specific synthesis API call
    *
-   * Subclasses should override this method to make direct API calls.
-   * Default implementation falls back to generateResponse.
+   * Default implementation calls generateRawCompletion with the synthesis prompts.
+   * Subclasses can override this if they need different behavior for synthesis.
    *
    * @param systemPrompt - System prompt for synthesis
    * @param userMessage - User message containing the synthesis prompt
    * @returns Raw synthesis response text
    */
   protected async performSynthesis(systemPrompt: string, userMessage: string): Promise<string> {
-    // Default fallback: Use generateResponse with a context that includes synthesis instructions
-    // This is not ideal but provides basic functionality
-    const context: DebateContext = {
-      sessionId: 'synthesis',
-      topic: userMessage, // The full synthesis prompt
-      mode: 'collaborative',
-      currentRound: 1,
-      totalRounds: 1,
-      previousResponses: [],
-      modePrompt: systemPrompt,
-    };
-
-    const response = await this.generateResponse(context);
-    // Return the reasoning field which should contain the synthesis JSON
-    return response.reasoning;
+    return this.generateRawCompletion(userMessage, systemPrompt);
   }
 
   /**
