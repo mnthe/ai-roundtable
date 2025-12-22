@@ -58,8 +58,34 @@ const START_ROUNDTABLE_TOOL: Tool = {
  */
 const CONTINUE_ROUNDTABLE_TOOL: Tool = {
   name: 'continue_roundtable',
-  description:
-    'Continue an existing debate roundtable with additional rounds. You can optionally provide a new focus question to guide the discussion. If the previous round returned status "needs_context" with contextRequests, provide the gathered information via contextResults.',
+  description: `Continue an existing debate roundtable with additional rounds.
+
+## CRITICAL: Handling contextRequests (READ THIS FIRST)
+
+When the previous response has status "needs_context" with contextRequests array, you MUST:
+
+1. **STOP** - Do not call continue_roundtable immediately
+2. **FULFILL** each contextRequest using your own tools:
+   - Use web search for factual/research queries
+   - Use file read for code/document queries
+   - Use any appropriate tool based on the query
+3. **CALL** continue_roundtable with contextResults:
+
+Example workflow:
+\`\`\`
+Previous response: { status: "needs_context", contextRequests: [{ id: "ctx-123", query: "Find research on X" }] }
+
+Your action:
+1. WebSearch("research on X") → found results
+2. continue_roundtable({ sessionId, contextResults: [{ requestId: "ctx-123", success: true, result: "Found: ..." }] })
+\`\`\`
+
+If priority is "required", the debate CANNOT proceed without this information.
+Ignoring contextRequests will result in degraded debate quality.
+
+## Optional Parameters
+- focusQuestion: Guide the next round's discussion topic
+- rounds: Number of additional rounds (default: 1)`,
   inputSchema: toMcpJsonSchema(ContinueRoundtableInputSchema),
 };
 
