@@ -265,27 +265,26 @@ describe('ChatGPTAgent', () => {
     });
   });
 
-  describe('selective function tools', () => {
-    // ChatGPT agent passes selective function tools to the Responses API:
-    // - EXCLUDED: get_context (context in prompt, causes model to skip web search)
-    // - EXCLUDED: submit_response (handled by BaseAgent validation)
-    // - INCLUDED: fact_check and other tools that complement web search
+  describe('toolkit function tools', () => {
+    // ChatGPT agent passes all toolkit tools to the Responses API
+    // The toolkit now only contains: fact_check, request_context
+    // Note: get_context and submit_response were removed as redundant
 
-    it('should pass fact_check tool but exclude get_context', async () => {
+    it('should pass all toolkit tools to Responses API', async () => {
       const mockClient = createMockResponsesClient(
         createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
       const mockToolkit: AgentToolkit = createMockToolkit({
         tools: [
           {
-            name: 'get_context',
-            description: 'Get debate context',
-            parameters: {},
-          },
-          {
             name: 'fact_check',
             description: 'Verify claims',
             parameters: { claim: { type: 'string', description: 'Claim to verify' } },
+          },
+          {
+            name: 'request_context',
+            description: 'Request additional context',
+            parameters: { query: { type: 'string', description: 'Query' } },
           },
         ],
       });
@@ -300,45 +299,31 @@ describe('ChatGPTAgent', () => {
       const call = mockClient.responses.create.mock.calls[0]?.[0];
       const tools = call?.tools ?? [];
 
-      // Should have web_search + fact_check (get_context excluded)
-      expect(tools).toHaveLength(2);
+      // Should have web_search + fact_check + request_context
+      expect(tools).toHaveLength(3);
       expect(tools.some((t: { type: string }) => t.type === 'web_search')).toBe(true);
       expect(tools.some((t: { type: string; name?: string }) => t.name === 'fact_check')).toBe(
         true
       );
-      expect(tools.some((t: { type: string; name?: string }) => t.name === 'get_context')).toBe(
-        false
+      expect(tools.some((t: { type: string; name?: string }) => t.name === 'request_context')).toBe(
+        true
       );
     });
 
-    it('should only include web_search when toolkit only has excluded tools', async () => {
+    it('should only include web_search when no toolkit is set', async () => {
       const mockClient = createMockResponsesClient(
         createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
-      const mockToolkit: AgentToolkit = createMockToolkit({
-        tools: [
-          {
-            name: 'get_context',
-            description: 'Get debate context',
-            parameters: {},
-          },
-          {
-            name: 'submit_response',
-            description: 'Submit response',
-            parameters: {},
-          },
-        ],
-      });
 
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
-      agent.setToolkit(mockToolkit);
+      // No toolkit set
 
       await agent.generateResponse(defaultContext);
 
       const call = mockClient.responses.create.mock.calls[0]?.[0];
-      // Should only have web_search tool (all toolkit tools are excluded)
+      // Should only have web_search tool when no toolkit
       expect(call?.tools).toHaveLength(1);
       expect(call?.tools?.[0]?.type).toBe('web_search');
     });

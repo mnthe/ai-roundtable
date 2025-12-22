@@ -16,12 +16,10 @@ export {
 export {
   validateToolInput,
   TOOL_INPUT_SCHEMAS,
-  GetContextInputSchema,
-  SubmitResponseInputSchema,
   FactCheckInputSchema,
-  type GetContextInput,
-  type SubmitResponseInput,
+  RequestContextInputSchema,
   type FactCheckInput,
+  type RequestContextInput,
 } from './schemas.js';
 
 // Export providers

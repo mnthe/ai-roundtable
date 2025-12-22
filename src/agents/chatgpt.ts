@@ -117,26 +117,16 @@ export class ChatGPTAgent extends BaseAgent {
   /**
    * Build function tools for Responses API, excluding tools that interfere with web search
    *
-   * Excluded tools:
-   * - get_context: Redundant (context in prompt), causes model to skip web search
-   * - submit_response: Handled by BaseAgent validation after response parsing
-   *
    * Included tools:
    * - fact_check: Complements web search for claim verification
-   * - Any future tools that don't duplicate prompt context
+   * - request_context: Request additional context from caller
+   *
+   * Note: get_context and submit_response were removed as redundant:
+   * - Context is already in prompt via buildSystemPrompt()/buildUserMessage()
+   * - Response parsing is handled by BaseAgent.extractResponseFromToolCallsOrText()
    */
   private buildSelectiveFunctionTools() {
-    if (!this.toolkit) {
-      return [];
-    }
-
-    const excludedTools = new Set(['get_context', 'submit_response']);
-    const filteredToolkit = {
-      getTools: () => this.toolkit!.getTools().filter((t) => !excludedTools.has(t.name)),
-      executeTool: this.toolkit.executeTool.bind(this.toolkit),
-    };
-
-    return buildResponsesFunctionTools(filteredToolkit);
+    return buildResponsesFunctionTools(this.toolkit);
   }
 
   /**
