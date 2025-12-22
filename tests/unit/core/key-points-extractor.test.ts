@@ -11,28 +11,41 @@ import type { AgentResponse } from '../../../src/types/index.js';
 const createMockAgent = (
   id: string,
   provider: 'anthropic' | 'openai' | 'google' | 'perplexity',
-  mockResponse?: Partial<AgentResponse>
-) => ({
-  getInfo: () => ({
-    id,
-    name: `Test ${provider}`,
-    provider,
-    model: 'test-model',
-  }),
-  generateResponse: vi.fn().mockResolvedValue({
-    agentId: id,
-    agentName: `Test ${provider}`,
-    position: JSON.stringify({
-      keyPoints: ['Key point 1', 'Key point 2', 'Key point 3'],
+  mockResponse?: Partial<AgentResponse> | { rawCompletion?: string }
+) => {
+  // Support rawCompletion for generateRawCompletion tests
+  const rawCompletionValue = (mockResponse as { rawCompletion?: string })?.rawCompletion;
+  const responseValue = mockResponse as Partial<AgentResponse>;
+
+  // Extract position for generateRawCompletion (if rawCompletion not provided, use position)
+  const rawCompletion =
+    rawCompletionValue ??
+    responseValue?.position ??
+    JSON.stringify({ keyPoints: ['Key point 1', 'Key point 2', 'Key point 3'] });
+
+  return {
+    getInfo: () => ({
+      id,
+      name: `Test ${provider}`,
+      provider,
+      model: 'test-model',
     }),
-    reasoning: 'Analysis complete',
-    confidence: 0.8,
-    timestamp: new Date(),
-    ...mockResponse,
-  }),
-  healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
-  setToolkit: vi.fn(),
-});
+    generateResponse: vi.fn().mockResolvedValue({
+      agentId: id,
+      agentName: `Test ${provider}`,
+      position: JSON.stringify({
+        keyPoints: ['Key point 1', 'Key point 2', 'Key point 3'],
+      }),
+      reasoning: 'Analysis complete',
+      confidence: 0.8,
+      timestamp: new Date(),
+      ...responseValue,
+    }),
+    generateRawCompletion: vi.fn().mockResolvedValue(rawCompletion),
+    healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
+    setToolkit: vi.fn(),
+  };
+};
 
 // Mock agent that throws an error
 const createErrorAgent = (
@@ -47,6 +60,7 @@ const createErrorAgent = (
     model: 'test-model',
   }),
   generateResponse: vi.fn().mockRejectedValue(new Error(errorMessage)),
+  generateRawCompletion: vi.fn().mockRejectedValue(new Error(errorMessage)),
   healthCheck: vi.fn().mockResolvedValue({ healthy: true }),
   setToolkit: vi.fn(),
 });
@@ -136,14 +150,10 @@ describe('KeyPointsExtractor', () => {
       it('should fall back to original reasoning when AI returns no JSON', async () => {
         // Override mock to return non-JSON response
         const mockAgent = createMockAgent('fallback-agent', 'anthropic');
-        (mockAgent.generateResponse as ReturnType<typeof vi.fn>).mockResolvedValue({
-          agentId: 'fallback-agent',
-          agentName: 'Test',
-          position: 'No JSON here',
-          reasoning: 'No JSON in reasoning either',
-          confidence: 0.5,
-          timestamp: new Date(),
-        });
+        // Mock generateRawCompletion to return no JSON
+        (mockAgent.generateRawCompletion as ReturnType<typeof vi.fn>).mockResolvedValue(
+          'No JSON here, just plain text response'
+        );
 
         registry.registerProvider('anthropic', () => mockAgent as any, 'test-model');
         registry.createAgent({
@@ -169,14 +179,10 @@ describe('KeyPointsExtractor', () => {
       it('should fall back to original reasoning when AI returns empty keyPoints', async () => {
         // Override mock to return empty keyPoints array
         const mockAgent = createMockAgent('empty-agent', 'anthropic');
-        (mockAgent.generateResponse as ReturnType<typeof vi.fn>).mockResolvedValue({
-          agentId: 'empty-agent',
-          agentName: 'Test',
-          position: JSON.stringify({ keyPoints: [] }),
-          reasoning: 'Empty array',
-          confidence: 0.5,
-          timestamp: new Date(),
-        });
+        // Mock generateRawCompletion to return empty keyPoints array
+        (mockAgent.generateRawCompletion as ReturnType<typeof vi.fn>).mockResolvedValue(
+          JSON.stringify({ keyPoints: [] })
+        );
 
         registry.registerProvider('anthropic', () => mockAgent as any, 'test-model');
         registry.createAgent({
@@ -393,35 +399,35 @@ describe('KeyPointsExtractor', () => {
       expect(keyPoints!.some((kp) => kp.includes('original'))).toBe(true);
     });
 
-    it('should extract JSON from reasoning field when position has no JSON', async () => {
+    it('should extract JSON embedded in raw completion response', async () => {
       // Create a fresh registry and extractor for this test
       const freshRegistry = new AgentRegistry();
-      const reasoningJsonExtractor = new KeyPointsExtractor({
+      const embeddedJsonExtractor = new KeyPointsExtractor({
         registry: freshRegistry,
         fallbackToRuleBased: true,
       });
 
-      const reasoningJsonAgent = createMockAgent('reasoning-json', 'anthropic', {
-        position: 'Plain text position with no JSON',
-        reasoning: 'Some text then {"keyPoints": ["Point from reasoning"]} more text',
+      // Create mock agent that returns raw completion with embedded JSON
+      const embeddedJsonAgent = createMockAgent('embedded-json', 'anthropic', {
+        rawCompletion: 'Some text then {"keyPoints": ["Embedded key point"]} more text',
       });
-      freshRegistry.registerProvider('anthropic', () => reasoningJsonAgent as any, 'test-model');
+      freshRegistry.registerProvider('anthropic', () => embeddedJsonAgent as any, 'test-model');
       freshRegistry.createAgent({
-        id: 'reasoning-json',
-        name: 'Reasoning JSON Agent',
+        id: 'embedded-json',
+        name: 'Embedded JSON Agent',
         provider: 'anthropic',
         model: 'test-model',
       });
 
       const response = createSampleResponse('1. Original point for fallback.');
 
-      const result = await reasoningJsonExtractor.extractKeyPointsBatch([response]);
+      const result = await embeddedJsonExtractor.extractKeyPointsBatch([response]);
       const keyPoints = result.get('test-agent');
 
       expect(keyPoints).toBeDefined();
       expect(keyPoints!.length).toBeGreaterThan(0);
-      // Should extract from reasoning field's JSON
-      expect(keyPoints!.some((kp) => kp.includes('Point from reasoning'))).toBe(true);
+      // Should extract from embedded JSON in raw completion
+      expect(keyPoints!.some((kp) => kp.includes('Embedded key point'))).toBe(true);
     });
   });
 

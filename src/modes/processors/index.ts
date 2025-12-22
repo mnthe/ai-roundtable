@@ -154,7 +154,9 @@ export class StatisticsProcessor implements ContextProcessor {
     const totalStances =
       stats.stanceDistribution.YES + stats.stanceDistribution.NO + stats.stanceDistribution.NEUTRAL;
     if (totalStances > 0) {
-      lines.push(`- Stance Distribution: YES=${stats.stanceDistribution.YES}, NO=${stats.stanceDistribution.NO}, NEUTRAL=${stats.stanceDistribution.NEUTRAL}`);
+      lines.push(
+        `- Stance Distribution: YES=${stats.stanceDistribution.YES}, NO=${stats.stanceDistribution.NO}, NEUTRAL=${stats.stanceDistribution.NEUTRAL}`
+      );
     }
 
     // Show position distribution
@@ -200,10 +202,7 @@ export class ProcessorChain implements ContextProcessor {
   constructor(private processors: ContextProcessor[]) {}
 
   process(context: DebateContext, agent?: BaseAgent): DebateContext {
-    return this.processors.reduce(
-      (ctx, processor) => processor.process(ctx, agent),
-      context
-    );
+    return this.processors.reduce((ctx, processor) => processor.process(ctx, agent), context);
   }
 
   /**

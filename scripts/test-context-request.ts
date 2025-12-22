@@ -14,7 +14,13 @@ import { ModeRegistry } from '../src/modes/registry.js';
 import { DefaultAgentToolkit } from '../src/tools/toolkit.js';
 import { SQLiteStorage } from '../src/storage/sqlite.js';
 import { MockAgent } from '../src/agents/base.js';
-import type { DebateContext, ContextRequest, ContextResult, ConsensusResult, AgentResponse } from '../src/types/index.js';
+import type {
+  DebateContext,
+  ContextRequest,
+  ContextResult,
+  ConsensusResult,
+  AgentResponse,
+} from '../src/types/index.js';
 
 // Mock AI Consensus Analyzer for testing
 class MockAIConsensusAnalyzer {
@@ -87,7 +93,10 @@ async function runContextRequestTest() {
     // Check if context was received
     if (context.contextResults && context.contextResults.length > 0) {
       receivedContextResults = context.contextResults;
-      console.log('  [Agent] Received contextResults:', JSON.stringify(context.contextResults, null, 2));
+      console.log(
+        '  [Agent] Received contextResults:',
+        JSON.stringify(context.contextResults, null, 2)
+      );
     }
 
     return originalGenerateResponse(context);
@@ -120,7 +129,8 @@ async function runContextRequestTest() {
     const contextResults: ContextResult[] = pendingRequests.map((req: ContextRequest) => ({
       requestId: req.id,
       success: true,
-      result: 'The EU AI Act was passed in March 2024. It establishes a risk-based framework for AI regulation with requirements varying based on risk level.',
+      result:
+        'The EU AI Act was passed in March 2024. It establishes a risk-based framework for AI regulation with requirements varying based on risk level.',
     }));
 
     console.log('\n[4] Providing context results for round 2...');
@@ -129,7 +139,13 @@ async function runContextRequestTest() {
     session.currentRound = 1;
 
     // Run second round with context results
-    const round2Results = await engine.executeRounds([mockAgent], session, 1, undefined, contextResults);
+    const round2Results = await engine.executeRounds(
+      [mockAgent],
+      session,
+      1,
+      undefined,
+      contextResults
+    );
     console.log('\n[5] Round 2 completed');
     console.log('  - Responses:', round2Results.length);
 
@@ -138,12 +154,17 @@ async function runContextRequestTest() {
       console.log('\n[SUCCESS] Agent received context results!');
       console.log('  - Request ID:', receivedContextResults[0]?.requestId);
       console.log('  - Success:', receivedContextResults[0]?.success);
-      console.log('  - Result preview:', receivedContextResults[0]?.result?.substring(0, 100) + '...');
+      console.log(
+        '  - Result preview:',
+        receivedContextResults[0]?.result?.substring(0, 100) + '...'
+      );
     } else {
       console.log('\n[FAILURE] Agent did not receive context results');
     }
   } else {
-    console.log('\n[INFO] No pending context requests (agent may not have used request_context tool)');
+    console.log(
+      '\n[INFO] No pending context requests (agent may not have used request_context tool)'
+    );
   }
 
   console.log('\n' + '='.repeat(60));

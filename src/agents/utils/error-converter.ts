@@ -43,7 +43,9 @@ function getErrorCode(error: unknown): number | undefined {
   if (error && typeof error === 'object') {
     const anyError = error as { status?: number; code?: number | string; statusCode?: number };
     return (
-      anyError.status ?? anyError.statusCode ?? (typeof anyError.code === 'number' ? anyError.code : undefined)
+      anyError.status ??
+      anyError.statusCode ??
+      (typeof anyError.code === 'number' ? anyError.code : undefined)
     );
   }
   return undefined;

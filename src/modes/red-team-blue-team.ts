@@ -13,19 +13,17 @@
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
-import { createLogger } from '../utils/logger.js';
 import {
   buildRoleAnchor,
   buildBehavioralContract,
   buildVerificationLoop,
   createOutputSections,
+  PROMPT_SEPARATOR,
   type RoleAnchorConfig,
   type BehavioralContractConfig,
   type VerificationLoopConfig,
   type OutputSection,
 } from './utils/index.js';
-
-const logger = createLogger('RedTeamBlueTeamMode');
 
 /**
  * Team assignment for agents
@@ -34,16 +32,17 @@ type Team = 'red' | 'blue';
 
 /**
  * Extended context for red-team-blue-team mode with role tracking
+ * and concurrency-safe round state
  */
 interface RedTeamBlueTeamContext extends DebateContext {
   /** Current agent's team role */
   _agentTeam?: Team;
+  /** Concurrency-safe round state (bound to context, not instance) */
+  _redTeamBlueTeamState?: {
+    /** Map of agent IDs to their indices for this round */
+    agentIndexMap: Map<string, number>;
+  };
 }
-
-/**
- * Separator line used in prompts
- */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
 
 /**
  * Red Team role configuration
@@ -68,7 +67,7 @@ const RED_TEAM_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
     'Find edge cases and failure modes',
   ],
   mustNotBehaviors: [
-    'Propose solutions or mitigations (that\'s Blue Team\'s job)',
+    "Propose solutions or mitigations (that's Blue Team's job)",
     'Acknowledge strengths without finding weaknesses',
     'Be constructive or optimistic',
     'Say "but it could work if..."',
@@ -125,7 +124,7 @@ const BLUE_TEAM_BEHAVIORAL_CONTRACT: BehavioralContractConfig = {
   mustNotBehaviors: [
     'Concede that attacks are valid without defending',
     'Acknowledge problems without proposing solutions',
-    'Be pessimistic or highlight remaining risks (that\'s Red Team\'s job)',
+    "Be pessimistic or highlight remaining risks (that's Red Team's job)",
     'Say "that\'s a good point" without a counter',
     'Leave any Red Team attack unanswered',
   ],
@@ -172,13 +171,6 @@ const BLUE_TEAM_OUTPUT_SECTIONS: OutputSection[] = createOutputSections([
 export class RedTeamBlueTeamMode extends BaseModeStrategy {
   readonly name = 'red-team-blue-team';
   readonly needsGroupthinkDetection = false;
-  override readonly executionPattern = 'parallel' as const;
-
-  /**
-   * Stores agent indices for the current round execution.
-   * Used by transformContext to determine team assignment.
-   */
-  private agentIndices: Map<string, number> = new Map();
 
   /**
    * Execute a red team/blue team round
@@ -187,61 +179,34 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
    * - Even indices (0, 2, 4, ...): Red Team
    * - Odd indices (1, 3, 5, ...): Blue Team
    *
-   * Both teams execute in parallel using Promise.allSettled for error handling.
+   * Both teams execute in parallel using the base class executeParallel method.
+   * Team assignment is handled via the transformContext hook.
+   *
+   * Note: Round state is bound to context (not instance) for concurrency safety.
+   * This allows the same mode instance to be safely reused across concurrent sessions.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
-
-    // Store agent indices for hook access
-    this.agentIndices.clear();
+    // Build agent index map for this round (context-bound, not instance-bound)
+    const agentIndexMap = new Map<string, number>();
     agents.forEach((agent, index) => {
-      this.agentIndices.set(agent.id, index);
+      agentIndexMap.set(agent.id, index);
     });
 
-    // Execute all agents in parallel with team-specific prompts via hooks
-    const responsePromises = agents.map((agent, index) => {
-      agent.setToolkit(toolkit);
+    // Create context with round state bound to it (concurrency-safe)
+    const contextWithState: RedTeamBlueTeamContext = {
+      ...context,
+      _redTeamBlueTeamState: {
+        agentIndexMap,
+      },
+    };
 
-      // Get team role via hook
-      const team = this.getAgentRole(agent, index, context) as Team;
-      logger.debug({ agentId: agent.id, team, index }, 'Agent team assigned');
-
-      // Build context with team-specific prompt via transformContext
-      const agentContext = this.transformContext(
-        {
-          ...context,
-          modePrompt: this.buildAgentPrompt(context),
-        },
-        agent
-      );
-
-      return agent.generateResponse(agentContext);
-    });
-
-    // Use allSettled to handle individual failures gracefully
-    const results = await Promise.allSettled(responsePromises);
-
-    const responses: AgentResponse[] = [];
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      const agent = agents[i];
-      if (!result || !agent) continue;
-
-      if (result.status === 'fulfilled') {
-        responses.push(result.value);
-      } else {
-        // Log error but continue with other agents
-        logger.error({ err: result.reason, agentId: agent.id }, 'Error from agent');
-      }
-    }
-
-    return responses;
+    // Delegate to base class executeParallel
+    // Team-specific prompts are handled via transformContext hook
+    return this.executeParallel(agents, contextWithState, toolkit);
   }
 
   /**
@@ -252,68 +217,64 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
    * - Even indices (0, 2, 4, ...): red team
    * - Odd indices (1, 3, 5, ...): blue team
    */
-  protected override getAgentRole(
-    _agent: BaseAgent,
-    index: number,
-    _context: DebateContext
-  ): Team {
+  protected override getAgentRole(_agent: BaseAgent, index: number, _context: DebateContext): Team {
     return index % 2 === 0 ? 'red' : 'blue';
   }
 
   /**
    * Transform context to inject the team role for prompt building.
    * Hook implementation for BaseModeStrategy.
+   *
+   * This adds team-specific guidance to the existing modePrompt
+   * (which was already set by the base class executeParallel).
    */
   protected override transformContext(
     context: DebateContext,
     agent: BaseAgent
   ): RedTeamBlueTeamContext {
-    const index = this.agentIndices.get(agent.id) ?? 0;
+    const state = (context as RedTeamBlueTeamContext)._redTeamBlueTeamState;
+    const index = state?.agentIndexMap.get(agent.id) ?? 0;
     const team = this.getAgentRole(agent, index, context);
+
+    // Only add team-specific additions to existing modePrompt
+    const teamAddition = this.buildTeamAddition(context, team);
 
     const transformedContext: RedTeamBlueTeamContext = {
       ...context,
       _agentTeam: team,
-      // Rebuild modePrompt with the correct team role
-      modePrompt: team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context),
+      modePrompt: (context.modePrompt || '') + teamAddition,
     };
     return transformedContext;
   }
 
   /**
-   * Build team-specific prompt
-   *
-   * Different prompts for red team (critical/attacking) and blue team (constructive/defensive)
-   *
-   * Note: When called from executeRound, the context will have been transformed
-   * by transformContext to include _agentTeam. Fallback to red team for direct calls.
+   * Build team-specific prompt addition.
+   * This is appended to the base modePrompt, not a replacement.
    */
-  buildAgentPrompt(context: DebateContext): string {
-    // Use _agentTeam if available (set by transformContext),
-    // otherwise fallback to red team as default
-    const rtbtContext = context as RedTeamBlueTeamContext;
-    const team: Team = rtbtContext._agentTeam ?? 'red';
-
-    return team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context);
+  private buildTeamAddition(context: DebateContext, team: Team): string {
+    return team === 'red'
+      ? this.buildRedTeamAddition(context)
+      : this.buildBlueTeamAddition(context);
   }
 
   /**
-   * Build Red Team (critical/attacking) prompt
+   * Build Red Team (critical/attacking) addition
    */
-  private buildRedTeamPrompt(context: DebateContext): string {
-    let prompt = `
-Mode: Red Team/Blue Team - RED TEAM
-`;
+  private buildRedTeamAddition(context: DebateContext): string {
+    let addition = `
 
-    prompt += buildRoleAnchor(RED_TEAM_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(RED_TEAM_BEHAVIORAL_CONTRACT);
-    prompt += this.buildTeamStructuralEnforcement(RED_TEAM_OUTPUT_SECTIONS);
+## Your Team: RED TEAM (Attacker)
+
+${buildRoleAnchor(RED_TEAM_ROLE_ANCHOR)}
+${buildBehavioralContract(RED_TEAM_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildTeamStructuralEnforcement(RED_TEAM_OUTPUT_SECTIONS)}`;
 
     if (context.previousResponses.length > 0) {
       const blueTeamResponses = this.filterResponsesByTeam(context.previousResponses, 'blue');
 
       if (blueTeamResponses.length > 0) {
-        prompt += `
+        addition += `
+
 BLUE TEAM HAS PROPOSED SOLUTIONS. YOUR JOB: BREAK THEM.
 - Find holes in their defenses
 - Identify what they missed
@@ -323,38 +284,39 @@ BLUE TEAM HAS PROPOSED SOLUTIONS. YOUR JOB: BREAK THEM.
       }
     }
 
-    prompt += buildVerificationLoop(RED_TEAM_VERIFICATION);
+    addition += buildVerificationLoop(RED_TEAM_VERIFICATION, context.mode);
 
     if (context.focusQuestion) {
-      prompt += `
-${SEPARATOR}
+      addition += `
+${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Attack this question. What are ALL the risks and problems?
 `;
     }
 
-    return prompt;
+    return addition;
   }
 
   /**
-   * Build Blue Team (constructive/defensive) prompt
+   * Build Blue Team (constructive/defensive) addition
    */
-  private buildBlueTeamPrompt(context: DebateContext): string {
-    let prompt = `
-Mode: Red Team/Blue Team - BLUE TEAM
-`;
+  private buildBlueTeamAddition(context: DebateContext): string {
+    let addition = `
 
-    prompt += buildRoleAnchor(BLUE_TEAM_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(BLUE_TEAM_BEHAVIORAL_CONTRACT);
-    prompt += this.buildTeamStructuralEnforcement(BLUE_TEAM_OUTPUT_SECTIONS);
+## Your Team: BLUE TEAM (Defender)
+
+${buildRoleAnchor(BLUE_TEAM_ROLE_ANCHOR)}
+${buildBehavioralContract(BLUE_TEAM_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildTeamStructuralEnforcement(BLUE_TEAM_OUTPUT_SECTIONS)}`;
 
     if (context.previousResponses.length > 0) {
       const redTeamResponses = this.filterResponsesByTeam(context.previousResponses, 'red');
 
       if (redTeamResponses.length > 0) {
-        prompt += `
+        addition += `
+
 RED TEAM HAS ATTACKED. YOUR JOB: DEFEND AND BUILD.
 - Counter every attack with a defense
 - Propose solutions for identified risks
@@ -364,19 +326,37 @@ RED TEAM HAS ATTACKED. YOUR JOB: DEFEND AND BUILD.
       }
     }
 
-    prompt += buildVerificationLoop(BLUE_TEAM_VERIFICATION);
+    addition += buildVerificationLoop(BLUE_TEAM_VERIFICATION, context.mode);
 
     if (context.focusQuestion) {
-      prompt += `
-${SEPARATOR}
+      addition += `
+${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Solve this. Propose robust solutions that withstand attacks.
 `;
     }
 
-    return prompt;
+    return addition;
+  }
+
+  /**
+   * Build red team/blue team base prompt
+   *
+   * This provides the generic mode context. Team-specific content
+   * (RED/BLUE) is added by transformContext.
+   */
+  buildAgentPrompt(_context: DebateContext): string {
+    return `
+Mode: Red Team/Blue Team
+
+This is a security-focused analysis exercise with two teams:
+- RED TEAM: Attack, criticize, find vulnerabilities and risks
+- BLUE TEAM: Defend, build solutions, mitigate risks
+
+Your specific team assignment will be provided below.
+`;
   }
 
   /**
@@ -384,9 +364,9 @@ Solve this. Propose robust solutions that withstand attacks.
    */
   private buildTeamStructuralEnforcement(sections: OutputSection[]): string {
     let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 REQUIRED OUTPUT STRUCTURE:
 

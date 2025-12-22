@@ -57,8 +57,6 @@ export class SessionManagerAdapter implements SessionDataProvider {
 /**
  * Create a SessionManagerAdapter from a SessionManager instance
  */
-export function createSessionManagerAdapter(
-  sessionManager: SessionManager
-): SessionDataProvider {
+export function createSessionManagerAdapter(sessionManager: SessionManager): SessionDataProvider {
   return new SessionManagerAdapter(sessionManager);
 }

@@ -19,6 +19,7 @@ import {
   buildVerificationLoop,
   buildFocusQuestionSection,
   createOutputSections,
+  PROMPT_SEPARATOR,
   type RoleAnchorConfig,
   type BehavioralContractConfig,
   type VerificationLoopConfig,
@@ -31,11 +32,6 @@ import {
   createStatisticsProcessor,
   type ContextProcessor,
 } from './processors/index.js';
-
-/**
- * Separator line used in prompts
- */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
 
 /**
  * Delphi mode role anchor configuration
@@ -96,7 +92,8 @@ const DELPHI_VERIFICATION_LOOP: VerificationLoopConfig = {
  * Delphi mode focus question configuration
  */
 const DELPHI_FOCUS_QUESTION: FocusQuestionConfig = {
-  instructions: 'Provide your independent expert opinion on this specific question.\nBe honest - anonymity protects you.',
+  instructions:
+    'Provide your independent expert opinion on this specific question.\nBe honest - anonymity protects you.',
 };
 
 /**
@@ -115,9 +112,15 @@ const FIRST_ROUND_SECTIONS: OutputSection[] = createOutputSections([
 const SUBSEQUENT_ROUND_SECTIONS: OutputSection[] = createOutputSections([
   ['[MY POSITION]', 'Clear, unambiguous statement of your view'],
   ['[CONFIDENCE LEVEL]', 'Explicit percentage 0-100% with brief justification'],
-  ['[RESPONSE TO GROUP]', 'How you\'ve considered group statistics - agreement or disagreement with reasoning'],
+  [
+    '[RESPONSE TO GROUP]',
+    "How you've considered group statistics - agreement or disagreement with reasoning",
+  ],
   ['[REASONING & EVIDENCE]', 'Support for your position'],
-  ['[POSITION CHANGE JUSTIFICATION] (if applicable)', 'If you changed your position, explain what genuinely persuaded you'],
+  [
+    '[POSITION CHANGE JUSTIFICATION] (if applicable)',
+    'If you changed your position, explain what genuinely persuaded you',
+  ],
 ]);
 
 /**
@@ -192,13 +195,13 @@ Mode: Delphi Method
     prompt += buildRoleAnchor(DELPHI_ROLE_ANCHOR);
 
     // Layer 2: Behavioral Contract
-    prompt += buildBehavioralContract(DELPHI_BEHAVIORAL_CONTRACT);
+    prompt += buildBehavioralContract(DELPHI_BEHAVIORAL_CONTRACT, context.mode);
 
     // Layer 3: Structural Enforcement (custom for Delphi due to statistics)
     prompt += this.buildStructuralEnforcementWithStats(context);
 
     // Layer 4: Verification Loop
-    prompt += buildVerificationLoop(DELPHI_VERIFICATION_LOOP);
+    prompt += buildVerificationLoop(DELPHI_VERIFICATION_LOOP, context.mode);
 
     // Focus Question (if present)
     prompt += buildFocusQuestionSection(context, DELPHI_FOCUS_QUESTION);
@@ -214,9 +217,9 @@ Mode: Delphi Method
    */
   private buildStructuralEnforcementWithStats(context: DebateContext): string {
     let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 `;
 

@@ -10,6 +10,13 @@ import type { AgentResponse, SynthesisResult, SynthesisContext } from '../../typ
 import { ExportSessionInputSchema, SynthesizeDebateInputSchema } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
 import { createLogger } from '../../utils/logger.js';
+import {
+  getSessionOrError,
+  isSessionError,
+  groupResponsesByRound,
+  wrapError,
+} from './utils/index.js';
+import { ERROR_MESSAGES } from './constants.js';
 
 const logger = createLogger('ExportHandlers');
 
@@ -26,10 +33,11 @@ export async function handleExportSession(
     const input = ExportSessionInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Get all responses
     const responses = await sessionManager.getResponses(input.sessionId);
@@ -99,18 +107,10 @@ export async function handleExportSession(
       lines.push('');
 
       // Responses by round
-      const responsesByRound: Record<number, typeof responses> = {};
-      for (const response of responses) {
-        const roundIndex = responses.indexOf(response);
-        const round = Math.floor(roundIndex / session.agentIds.length) + 1;
-        if (!responsesByRound[round]) {
-          responsesByRound[round] = [];
-        }
-        responsesByRound[round].push(response);
-      }
+      const responsesByRound = groupResponsesByRound(responses, session.agentIds.length);
 
-      for (const [round, roundResponses] of Object.entries(responsesByRound).sort(
-        ([a], [b]) => Number(a) - Number(b)
+      for (const [round, roundResponses] of Array.from(responsesByRound.entries()).sort(
+        ([a], [b]) => a - b
       )) {
         lines.push(`## Round ${round}`);
         lines.push('');
@@ -182,7 +182,7 @@ export async function handleExportSession(
       });
     }
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -199,17 +199,16 @@ export async function handleSynthesizeDebate(
     const input = SynthesizeDebateInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Get all responses
     const responses = await sessionManager.getResponses(input.sessionId);
     if (responses.length === 0) {
-      return createErrorResponse(
-        'No responses found in this session. Cannot synthesize an empty debate.'
-      );
+      return createErrorResponse(ERROR_MESSAGES.SESSION_NO_RESPONSES);
     }
 
     // Determine synthesizer agent
@@ -218,7 +217,7 @@ export async function handleSynthesizeDebate(
       // Use first active agent as default
       const activeAgentIds = agentRegistry.getActiveAgentIds();
       if (activeAgentIds.length === 0) {
-        return createErrorResponse('No active agents available for synthesis');
+        return createErrorResponse(ERROR_MESSAGES.NO_ACTIVE_AGENTS);
       }
       synthesizerId = activeAgentIds[0]!;
     }
@@ -226,7 +225,7 @@ export async function handleSynthesizeDebate(
     // Verify synthesizer exists
     const synthesizerAgent = agentRegistry.getAgent(synthesizerId);
     if (!synthesizerAgent) {
-      return createErrorResponse(`Synthesizer agent "${synthesizerId}" not found`);
+      return createErrorResponse(ERROR_MESSAGES.SYNTHESIZER_NOT_FOUND(synthesizerId));
     }
 
     // Build synthesis prompt
@@ -254,7 +253,7 @@ export async function handleSynthesizeDebate(
       synthesis: synthesis,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -269,21 +268,11 @@ function buildSynthesisPrompt(topic: string, responses: AgentResponse[], mode: s
   parts.push('');
 
   // Group responses by round
-  const responsesByRound: Record<number, typeof responses> = {};
   const agentsInSession = new Set(responses.map((r) => r.agentId));
   const agentsPerRound = agentsInSession.size;
+  const responsesByRound = groupResponsesByRound(responses, agentsPerRound);
 
-  for (let i = 0; i < responses.length; i++) {
-    const response = responses[i];
-    if (!response) continue;
-    const round = Math.floor(i / agentsPerRound) + 1;
-    if (!responsesByRound[round]) {
-      responsesByRound[round] = [];
-    }
-    responsesByRound[round].push(response);
-  }
-
-  const totalRounds = Object.keys(responsesByRound).length;
+  const totalRounds = responsesByRound.size;
   parts.push(
     `The debate had ${totalRounds} rounds with the following participants: ${Array.from(agentsInSession).join(', ')}`
   );
@@ -293,8 +282,8 @@ function buildSynthesisPrompt(topic: string, responses: AgentResponse[], mode: s
   parts.push('Here are all the positions and reasoning from each round:');
   parts.push('');
 
-  for (const [round, roundResponses] of Object.entries(responsesByRound).sort(
-    ([a], [b]) => Number(a) - Number(b)
+  for (const [round, roundResponses] of Array.from(responsesByRound.entries()).sort(
+    ([a], [b]) => a - b
   )) {
     parts.push(`--- Round ${round} ---`);
     for (const response of roundResponses) {
@@ -379,4 +368,21 @@ function parseSynthesisResponse(responseText: string, synthesizerId: string): Sy
     synthesizerId,
     timestamp: new Date(),
   };
+}
+
+// --- Handler Registration ---
+
+import type { HandlerRegistry } from '../handler-registry.js';
+
+/**
+ * Register export handlers with the registry
+ */
+export function registerExportHandlers(registry: HandlerRegistry): void {
+  registry.register('export_session', (args, ctx) =>
+    handleExportSession(args, ctx.sessionManager, ctx.agentRegistry)
+  );
+
+  registry.register('synthesize_debate', (args, ctx) =>
+    handleSynthesizeDebate(args, ctx.sessionManager, ctx.agentRegistry)
+  );
 }

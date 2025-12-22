@@ -41,10 +41,6 @@ export interface AgentResponse {
   confidence: number;
   citations?: Citation[];
   toolCalls?: ToolCallRecord[];
-  /** Images from search results (Perplexity) */
-  images?: ImageResult[];
-  /** Related questions from search (Perplexity) */
-  relatedQuestions?: string[];
   timestamp: Date;
   /**
    * Role violation metadata (set by StanceValidator when stance doesn't match expected).
@@ -60,11 +56,6 @@ export interface Citation {
   title: string;
   url: string;
   snippet?: string;
-}
-
-export interface ImageResult {
-  url: string;
-  description?: string;
 }
 
 export interface ToolCallRecord {
@@ -408,41 +399,8 @@ export interface RoundtableResponse {
 // Exit Criteria Types
 // ============================================
 
-/**
- * Exit criteria configuration for automatic debate termination
- */
-export interface ExitCriteria {
-  /** Consensus agreement level threshold (default: 0.9) */
-  consensusThreshold?: number;
-
-  /** Number of rounds with stable positions to trigger convergence exit (default: 2) */
-  convergenceRounds?: number;
-
-  /** Minimum confidence level for all agents to trigger exit (default: 0.85) */
-  confidenceThreshold?: number;
-
-  /** Maximum rounds (required, existing behavior) */
-  maxRounds: number;
-}
-
-/**
- * Exit reason types for automatic debate termination
- */
-export type ExitReason = 'consensus' | 'convergence' | 'confidence' | 'max_rounds';
-
-/**
- * Result of checking exit criteria
- */
-export interface ExitResult {
-  /** Whether the debate should exit */
-  shouldExit: boolean;
-
-  /** Reason for exit (null if shouldExit is false) */
-  reason: ExitReason | null;
-
-  /** Human-readable explanation */
-  details: string;
-}
+// Re-export from core/exit-criteria to avoid duplicate definitions
+export type { ExitCriteria, ExitReason, ExitResult } from '../core/exit-criteria.js';
 
 // ============================================
 // Context Request Types (External Context Integration)

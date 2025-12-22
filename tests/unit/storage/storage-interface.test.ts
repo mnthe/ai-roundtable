@@ -52,7 +52,11 @@ class MockStorage implements Storage {
     }));
   }
 
-  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
+  async addResponse(
+    sessionId: string,
+    response: AgentResponse,
+    roundNumber: number
+  ): Promise<void> {
     const responses = this.responses.get(sessionId);
     if (!responses) throw new Error(`Session ${sessionId} not found`);
 
@@ -252,9 +256,9 @@ describe('Storage Interface', () => {
         timestamp: new Date(),
       };
 
-      await expect(
-        sessionManager.addResponse('non-existent', response, 1)
-      ).rejects.toThrow('Session non-existent not found');
+      await expect(sessionManager.addResponse('non-existent', response, 1)).rejects.toThrow(
+        'Session non-existent not found'
+      );
     });
   });
 

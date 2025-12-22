@@ -15,6 +15,15 @@ import {
   GetThoughtsInputSchema,
 } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
+import {
+  getSessionOrError,
+  isSessionError,
+  groupResponsesByRound,
+  wrapError,
+  mapResponseForOutput,
+  mapResponseWithAgentForOutput,
+} from './utils/index.js';
+import { ERROR_MESSAGES } from './constants.js';
 
 /**
  * Get whether groupthink detection is needed for a given mode
@@ -38,10 +47,11 @@ export async function handleGetConsensus(
     const input = GetConsensusInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Determine which round to analyze
     // If roundNumber is specified, use it; otherwise use the latest round
@@ -49,25 +59,23 @@ export async function handleGetConsensus(
 
     // Validate round number
     if (roundToAnalyze < 1) {
-      return createErrorResponse('No rounds have been executed yet');
+      return createErrorResponse(ERROR_MESSAGES.NO_ROUNDS_EXECUTED);
     }
     if (roundToAnalyze > session.currentRound) {
       return createErrorResponse(
-        `Round ${roundToAnalyze} does not exist. Current round is ${session.currentRound}`
+        ERROR_MESSAGES.ROUND_NOT_EXIST(roundToAnalyze, session.currentRound)
       );
     }
 
     // Get responses for the specific round only
     const responses = await sessionManager.getResponsesForRound(input.sessionId, roundToAnalyze);
     if (responses.length === 0) {
-      return createErrorResponse(`No responses found for round ${roundToAnalyze}`);
+      return createErrorResponse(ERROR_MESSAGES.NO_RESPONSES_FOR_ROUND(roundToAnalyze));
     }
 
     // Analyze consensus using AI (required)
     if (!aiConsensusAnalyzer) {
-      return createErrorResponse(
-        'AI consensus analyzer not available. Ensure API keys are configured.'
-      );
+      return createErrorResponse(ERROR_MESSAGES.AI_ANALYZER_NOT_AVAILABLE);
     }
     const includeGroupthink = needsGroupthinkDetection(session.mode);
     const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
@@ -82,7 +90,7 @@ export async function handleGetConsensus(
       totalRounds: session.currentRound,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -99,15 +107,16 @@ export async function handleGetRoundDetails(
     const input = GetRoundDetailsInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Validate round number
     if (input.roundNumber > session.currentRound) {
       return createErrorResponse(
-        `Round ${input.roundNumber} has not been executed yet. Current round: ${session.currentRound}`
+        ERROR_MESSAGES.ROUND_NOT_EXECUTED(input.roundNumber, session.currentRound)
       );
     }
 
@@ -115,14 +124,12 @@ export async function handleGetRoundDetails(
     const responses = await sessionManager.getResponsesForRound(input.sessionId, input.roundNumber);
 
     if (responses.length === 0) {
-      return createErrorResponse(`No responses found for round ${input.roundNumber}`);
+      return createErrorResponse(ERROR_MESSAGES.NO_RESPONSES_FOR_ROUND(input.roundNumber));
     }
 
     // Analyze consensus using AI (required)
     if (!aiConsensusAnalyzer) {
-      return createErrorResponse(
-        'AI consensus analyzer not available. Ensure API keys are configured.'
-      );
+      return createErrorResponse(ERROR_MESSAGES.AI_ANALYZER_NOT_AVAILABLE);
     }
     const includeGroupthink = needsGroupthinkDetection(session.mode);
     const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
@@ -132,23 +139,11 @@ export async function handleGetRoundDetails(
     return createSuccessResponse({
       sessionId: input.sessionId,
       roundNumber: input.roundNumber,
-      responses: responses.map((r) => ({
-        agentId: r.agentId,
-        agentName: r.agentName,
-        position: r.position,
-        reasoning: r.reasoning,
-        confidence: r.confidence,
-        citations: r.citations,
-        toolCalls: r.toolCalls?.map((tc) => ({
-          toolName: tc.toolName,
-          timestamp: tc.timestamp,
-        })),
-        timestamp: r.timestamp,
-      })),
+      responses: responses.map(mapResponseWithAgentForOutput),
       consensus,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -164,15 +159,16 @@ export async function handleGetResponseDetail(
     const input = GetResponseDetailInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
       return createErrorResponse(
-        `Agent "${input.agentId}" did not participate in session "${input.sessionId}"`
+        ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId)
       );
     }
 
@@ -181,7 +177,7 @@ export async function handleGetResponseDetail(
     let agentResponses = allResponses.filter((r) => r.agentId === input.agentId);
 
     if (agentResponses.length === 0) {
-      return createErrorResponse(`No responses found for agent "${input.agentId}" in this session`);
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
     }
 
     // Filter by round if specified
@@ -194,7 +190,7 @@ export async function handleGetResponseDetail(
 
       if (agentResponses.length === 0) {
         return createErrorResponse(
-          `No responses found for agent "${input.agentId}" in round ${input.roundNumber}`
+          ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_ROUND(input.agentId, input.roundNumber)
         );
       }
     }
@@ -204,20 +200,10 @@ export async function handleGetResponseDetail(
       agentId: input.agentId,
       agentName: agentResponses[0]!.agentName,
       roundNumber: input.roundNumber,
-      responses: agentResponses.map((r) => ({
-        position: r.position,
-        reasoning: r.reasoning,
-        confidence: r.confidence,
-        citations: r.citations,
-        toolCalls: r.toolCalls?.map((tc) => ({
-          toolName: tc.toolName,
-          timestamp: tc.timestamp,
-        })),
-        timestamp: r.timestamp,
-      })),
+      responses: agentResponses.map(mapResponseForOutput),
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -233,10 +219,11 @@ export async function handleGetCitations(
     const input = GetCitationsInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session: _session } = sessionResult;
 
     // Get responses based on filters
     let responses = await sessionManager.getResponses(input.sessionId);
@@ -284,7 +271,7 @@ export async function handleGetCitations(
       totalCitations: uniqueCitations.length,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -300,15 +287,16 @@ export async function handleGetThoughts(
     const input = GetThoughtsInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
       return createErrorResponse(
-        `Agent "${input.agentId}" did not participate in session "${input.sessionId}"`
+        ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId)
       );
     }
 
@@ -317,44 +305,50 @@ export async function handleGetThoughts(
     const agentResponses = allResponses.filter((r) => r.agentId === input.agentId);
 
     if (agentResponses.length === 0) {
-      return createErrorResponse(`No responses found for agent "${input.agentId}" in this session`);
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
     }
 
     // Group responses by round
-    const responsesByRound: Record<number, typeof agentResponses> = {};
-    for (const response of agentResponses) {
-      // Find round number from timestamp order
-      const roundIndex = allResponses.indexOf(response);
-      const round = Math.floor(roundIndex / session.agentIds.length) + 1;
-      if (!responsesByRound[round]) {
-        responsesByRound[round] = [];
-      }
-      responsesByRound[round].push(response);
-    }
+    const responsesByRound = groupResponsesByRound(agentResponses, session.agentIds.length);
 
     return createSuccessResponse({
       sessionId: input.sessionId,
       agentId: input.agentId,
       agentName: agentResponses[0]!.agentName,
       totalResponses: agentResponses.length,
-      rounds: Object.keys(responsesByRound).length,
-      responses: agentResponses.map((r) => ({
-        position: r.position,
-        reasoning: r.reasoning,
-        confidence: r.confidence,
-        citations: r.citations,
-        toolCalls: r.toolCalls?.map((tc) => ({
-          toolName: tc.toolName,
-          timestamp: tc.timestamp,
-        })),
-        timestamp: r.timestamp,
-      })),
+      rounds: responsesByRound.size,
+      responses: agentResponses.map(mapResponseForOutput),
       confidenceEvolution: agentResponses.map((r, idx) => ({
         round: idx + 1,
         confidence: r.confidence,
       })),
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
+}
+
+// --- Handler Registration ---
+
+import type { HandlerRegistry } from '../handler-registry.js';
+
+/**
+ * Register query handlers with the registry
+ */
+export function registerQueryHandlers(registry: HandlerRegistry): void {
+  registry.register('get_consensus', (args, ctx) =>
+    handleGetConsensus(args, ctx.sessionManager, ctx.aiConsensusAnalyzer)
+  );
+
+  registry.register('get_round_details', (args, ctx) =>
+    handleGetRoundDetails(args, ctx.sessionManager, ctx.aiConsensusAnalyzer)
+  );
+
+  registry.register('get_response_detail', (args, ctx) =>
+    handleGetResponseDetail(args, ctx.sessionManager)
+  );
+
+  registry.register('get_citations', (args, ctx) => handleGetCitations(args, ctx.sessionManager));
+
+  registry.register('get_thoughts', (args, ctx) => handleGetThoughts(args, ctx.sessionManager));
 }

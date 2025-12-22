@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiAgent, createGeminiAgent } from '../../../src/agents/gemini.js';
+import { GeminiAgent, createGeminiAgent } from '../../../src/agents/google/gemini.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {
@@ -319,7 +319,9 @@ describe('GeminiAgent', () => {
                 if (phase2CallCount === 1) {
                   return Promise.resolve({
                     text: '',
-                    functionCalls: [{ id: 'call-1', name: 'failing_tool', args: { input: 'test' } }],
+                    functionCalls: [
+                      { id: 'call-1', name: 'failing_tool', args: { input: 'test' } },
+                    ],
                   });
                 }
                 return Promise.resolve({

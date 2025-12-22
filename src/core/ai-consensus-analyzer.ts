@@ -5,21 +5,18 @@
  * replacing rule-based keyword matching with true language understanding.
  */
 
-import { jsonrepair } from 'jsonrepair';
-import { parse as parsePartialJson, Allow } from 'partial-json';
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
-import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
+import { ConfigurationError } from '../errors/index.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
+import { parseAIConsensusResponse } from './utils/json-parser.js';
+import { selectPreferredAgent, createLightAgentFromBase } from '../agents/utils/light-agent-selector.js';
 
 const logger = createLogger('AIConsensusAnalyzer');
 
-/**
- * Allowed partial JSON parsing flags for LLM responses
- * Allows incomplete strings, arrays, and objects
- */
-const PARTIAL_JSON_ALLOW = Allow.STR | Allow.ARR | Allow.OBJ;
+/** Constant for self-analysis identifier when only one response is provided */
+const SELF_ANALYZER_ID = 'self';
 
 /**
  * Configuration for AIConsensusAnalyzer
@@ -185,7 +182,7 @@ export class AIConsensusAnalyzer {
             summary: response.position,
           },
         ],
-        analyzerId: 'self',
+        analyzerId: SELF_ANALYZER_ID,
       };
     }
 
@@ -203,7 +200,9 @@ export class AIConsensusAnalyzer {
         },
         'No AI agent available for consensus analysis'
       );
-      throw new Error(errorMessage);
+      throw new ConfigurationError(errorMessage, {
+        code: 'AI_ANALYSIS_UNAVAILABLE',
+      });
     }
 
     logger.debug(
@@ -250,8 +249,9 @@ export class AIConsensusAnalyzer {
   }> {
     const diagnostics = this.getDiagnostics();
 
-    const activeAgents = this.registry.getActiveAgents();
-    if (activeAgents.length === 0) {
+    // Use shared utility for agent selection
+    const baseAgent = selectPreferredAgent(this.registry, this.preferredProvider);
+    if (!baseAgent) {
       logger.warn(
         {
           totalAgents: diagnostics.totalAgents,
@@ -263,44 +263,36 @@ export class AIConsensusAnalyzer {
       return { agent: null, diagnostics };
     }
 
-    // Try preferred provider first
-    if (this.preferredProvider) {
-      const preferred = activeAgents.find((a) => a.getInfo().provider === this.preferredProvider);
-      if (preferred) {
-        logger.debug(
-          { provider: this.preferredProvider, agentId: preferred.getInfo().id },
-          'Using preferred provider for analysis'
-        );
-        const lightAgent = createLightModelAgent(preferred, this.registry, {
-          idSuffix: 'consensus',
-          maxTokens: 8192, // Higher limit for detailed analysis
-        });
-        return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
-      }
+    const info = baseAgent.getInfo();
+    const isPreferred = this.preferredProvider && info.provider === this.preferredProvider;
+
+    if (isPreferred) {
+      logger.debug(
+        { provider: this.preferredProvider, agentId: info.id },
+        'Using preferred provider for analysis'
+      );
+    } else if (this.preferredProvider) {
       logger.debug(
         {
           preferredProvider: this.preferredProvider,
-          availableProviders: activeAgents.map((a) => a.getInfo().provider),
+          actualProvider: info.provider,
         },
         'Preferred provider not available, using alternative'
       );
-    }
-
-    // Use first available agent
-    const firstAgent = activeAgents[0];
-    if (firstAgent) {
+    } else {
       logger.debug(
-        { provider: firstAgent.getInfo().provider, agentId: firstAgent.getInfo().id },
+        { provider: info.provider, agentId: info.id },
         'Using first available agent for analysis'
       );
-      const lightAgent = createLightModelAgent(firstAgent, this.registry, {
-        idSuffix: 'consensus',
-        maxTokens: 8192, // Higher limit for detailed analysis
-      });
-      return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
     }
 
-    return { agent: null, diagnostics };
+    // Create light model agent using shared utility
+    const lightAgent = createLightAgentFromBase(baseAgent, this.registry, {
+      idSuffix: 'consensus',
+      maxTokens: 8192, // Higher limit for detailed analysis
+    });
+
+    return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
   }
 
   /**
@@ -347,7 +339,7 @@ export class AIConsensusAnalyzer {
     );
 
     // Parse the raw JSON response (includes AI-based groupthink detection)
-    const result = this.parseRawAIResponse(rawResponse, agent.getInfo().id);
+    const result = parseAIConsensusResponse(rawResponse, { analyzerId: agent.getInfo().id });
 
     // Log if groupthink was detected
     if (result.groupthinkWarning?.detected) {
@@ -358,310 +350,6 @@ export class AIConsensusAnalyzer {
     }
 
     return result;
-  }
-
-  /**
-   * Parse raw AI response string into AIConsensusResult
-   * Uses multiple strategies to handle various LLM output formats:
-   * 1. Strip markdown code fences (complete or incomplete)
-   * 2. Try jsonrepair for malformed JSON
-   * 3. Try partial-json for truncated responses
-   * 4. Extract key fields even from partial data
-   */
-  private parseRawAIResponse(rawResponse: string, analyzerId: string): AIConsensusResult {
-    const cleanedResponse = this.cleanLLMResponse(rawResponse);
-
-    // Strategy 1: Try standard JSON parsing with jsonrepair
-    try {
-      const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return this.parseJsonToResult(jsonMatch[0], analyzerId);
-      }
-    } catch (error) {
-      logger.debug(
-        { err: error, strategy: 'jsonrepair' },
-        'jsonrepair failed, trying partial-json'
-      );
-    }
-
-    // Strategy 2: Try partial-json for truncated responses
-    try {
-      const partialResult = this.parsePartialJsonResponse(cleanedResponse, analyzerId);
-      if (partialResult) {
-        logger.info(
-          { analyzerId, agreementLevel: partialResult.agreementLevel },
-          'Successfully parsed partial JSON response'
-        );
-        return partialResult;
-      }
-    } catch (error) {
-      logger.debug({ err: error, strategy: 'partial-json' }, 'partial-json failed, using fallback');
-    }
-
-    // Strategy 3: Extract agreementLevel with regex as last resort
-    const extractedLevel = this.extractAgreementLevelFromText(cleanedResponse);
-    const extractedSummary = this.extractSummaryFromText(cleanedResponse);
-
-    logger.warn(
-      {
-        responseLength: rawResponse.length,
-        responsePreview: rawResponse.slice(0, 500), // Preview for log readability
-        extractedLevel,
-        hasExtractedSummary: !!extractedSummary,
-      },
-      'All JSON parsing strategies failed, using extracted/fallback values'
-    );
-
-    // Log full raw response at debug level for investigation
-    logger.debug(
-      {
-        rawResponse, // Full response preserved at debug level
-        analyzerId,
-      },
-      'Full raw response after parsing failure'
-    );
-
-    return {
-      agreementLevel: extractedLevel ?? 0.5,
-      commonGround: extractedLevel !== null ? [] : ['Unable to determine common ground'],
-      disagreementPoints: [],
-      // Use extracted summary or full raw response (not truncated)
-      summary: extractedSummary || rawResponse || 'Analysis failed',
-      analyzerId,
-      reasoning: 'Parsed from partial/malformed response',
-    };
-  }
-
-  /**
-   * Clean LLM response by removing markdown formatting and extracting JSON content
-   */
-  private cleanLLMResponse(rawResponse: string): string {
-    let cleaned = rawResponse.trim();
-
-    // Handle complete markdown code fences: ```json ... ```
-    const completeCodeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (completeCodeBlock && completeCodeBlock[1]) {
-      return completeCodeBlock[1].trim();
-    }
-
-    // Handle incomplete markdown code fences (truncated response): ```json ...
-    const incompleteCodeBlock = cleaned.match(/```(?:json)?\s*([\s\S]*)/);
-    if (incompleteCodeBlock && incompleteCodeBlock[1] && !cleaned.endsWith('```')) {
-      cleaned = incompleteCodeBlock[1].trim();
-    }
-
-    // Remove any leading/trailing markdown or text before JSON
-    const jsonStartIndex = cleaned.indexOf('{');
-    if (jsonStartIndex > 0) {
-      cleaned = cleaned.slice(jsonStartIndex);
-    }
-
-    return cleaned;
-  }
-
-  /**
-   * Parse truncated/partial JSON using partial-json library
-   */
-  private parsePartialJsonResponse(json: string, analyzerId: string): AIConsensusResult | null {
-    // Find the start of JSON object
-    const jsonStart = json.indexOf('{');
-    if (jsonStart === -1) {
-      return null;
-    }
-
-    const jsonContent = json.slice(jsonStart);
-
-    // Use partial-json to parse incomplete JSON
-    const parsed = parsePartialJson(jsonContent, PARTIAL_JSON_ALLOW);
-
-    if (typeof parsed !== 'object' || parsed === null) {
-      return null;
-    }
-
-    // Check if we got at least agreementLevel (the most important field)
-    const agreementLevel = this.extractNumber(parsed.agreementLevel);
-    if (agreementLevel === null) {
-      return null;
-    }
-
-    return {
-      agreementLevel: Math.max(0, Math.min(1, agreementLevel)),
-      commonGround: this.extractStringArray(parsed.commonGround),
-      disagreementPoints: this.extractStringArray(parsed.disagreementPoints),
-      summary: String(parsed.summary || 'Partial analysis'),
-      clusters: this.extractClusters(parsed.clusters),
-      nuances: this.extractNuances(parsed.nuances),
-      groupthinkWarning: this.extractGroupthinkWarning(parsed.groupthinkWarning),
-      reasoning: String(parsed.reasoning || 'Parsed from partial response'),
-      analyzerId,
-    };
-  }
-
-  /**
-   * Extract agreementLevel from text using regex (last resort)
-   */
-  private extractAgreementLevelFromText(text: string): number | null {
-    // Look for "agreementLevel": 0.XX pattern
-    const match = text.match(/"agreementLevel"\s*:\s*([\d.]+)/);
-    if (match && match[1]) {
-      const value = parseFloat(match[1]);
-      if (!isNaN(value) && value >= 0 && value <= 1) {
-        return value;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Extract summary text from partial response
-   */
-  private extractSummaryFromText(text: string): string | null {
-    // Look for "summary": "..." pattern
-    const match = text.match(/"summary"\s*:\s*"([^"]+)/);
-    return match?.[1] || null;
-  }
-
-  /**
-   * Safely extract a number from potentially partial data
-   */
-  private extractNumber(value: unknown): number | null {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return value;
-    }
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value);
-      if (!isNaN(parsed)) {
-        return parsed;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Safely extract string array from potentially partial data
-   */
-  private extractStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return value
-      .filter((item): item is string => typeof item === 'string' && item.length > 0)
-      .slice(0, 20); // Limit to prevent huge arrays
-  }
-
-  /**
-   * Safely extract clusters from potentially partial data
-   */
-  private extractClusters(
-    value: unknown
-  ): Array<{ theme: string; agentIds: string[]; summary: string }> | undefined {
-    if (!Array.isArray(value)) {
-      return undefined;
-    }
-    const clusters = value
-      .filter(
-        (item): item is { theme?: string; agentIds?: unknown; summary?: string } =>
-          typeof item === 'object' && item !== null
-      )
-      .map((item) => ({
-        theme: String(item.theme || 'Unknown'),
-        agentIds: this.extractStringArray(item.agentIds),
-        summary: String(item.summary || ''),
-      }))
-      .filter((c) => c.agentIds.length > 0);
-
-    return clusters.length > 0 ? clusters : undefined;
-  }
-
-  /**
-   * Safely extract nuances from potentially partial data
-   */
-  private extractNuances(value: unknown): AIConsensusResult['nuances'] {
-    if (typeof value !== 'object' || value === null) {
-      return undefined;
-    }
-    const v = value as Record<string, unknown>;
-    const nuances = {
-      partialAgreements: this.extractStringArray(v.partialAgreements),
-      conditionalPositions: this.extractStringArray(v.conditionalPositions),
-      uncertainties: this.extractStringArray(v.uncertainties),
-    };
-
-    // Only return if at least one field has content
-    if (
-      nuances.partialAgreements.length > 0 ||
-      nuances.conditionalPositions.length > 0 ||
-      nuances.uncertainties.length > 0
-    ) {
-      return nuances;
-    }
-    return undefined;
-  }
-
-  /**
-   * Parse JSON string into AIConsensusResult
-   * Uses jsonrepair to handle malformed JSON from AI models
-   */
-  private parseJsonToResult(json: string, analyzerId: string): AIConsensusResult {
-    // Clean up common issues before repair
-    let cleanedJson = json
-      // Remove trailing commas before closing brackets
-      .replace(/,(\s*[}\]])/g, '$1')
-      // Remove any BOM or zero-width characters
-      .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
-
-    // Use jsonrepair to fix remaining JSON issues
-    const repairedJson = jsonrepair(cleanedJson);
-    const parsed = JSON.parse(repairedJson);
-
-    return {
-      agreementLevel: Math.max(0, Math.min(1, Number(parsed.agreementLevel) || 0.5)),
-      commonGround: Array.isArray(parsed.commonGround) ? parsed.commonGround : [],
-      disagreementPoints: Array.isArray(parsed.disagreementPoints) ? parsed.disagreementPoints : [],
-      summary: String(parsed.summary || 'Analysis complete'),
-      clusters: Array.isArray(parsed.clusters) ? parsed.clusters : undefined,
-      nuances: parsed.nuances
-        ? {
-            partialAgreements: Array.isArray(parsed.nuances.partialAgreements)
-              ? parsed.nuances.partialAgreements
-              : [],
-            conditionalPositions: Array.isArray(parsed.nuances.conditionalPositions)
-              ? parsed.nuances.conditionalPositions
-              : [],
-            uncertainties: Array.isArray(parsed.nuances.uncertainties)
-              ? parsed.nuances.uncertainties
-              : [],
-          }
-        : undefined,
-      groupthinkWarning: this.extractGroupthinkWarning(parsed.groupthinkWarning),
-      reasoning: String(parsed.reasoning || ''),
-      analyzerId,
-    };
-  }
-
-  /**
-   * Safely extract groupthink warning from AI response
-   */
-  private extractGroupthinkWarning(
-    value: unknown
-  ): { detected: boolean; indicators: string[]; recommendation: string } | undefined {
-    if (typeof value !== 'object' || value === null) {
-      return undefined;
-    }
-    const v = value as Record<string, unknown>;
-
-    // Only include if detected is explicitly true
-    if (v.detected !== true) {
-      return undefined;
-    }
-
-    return {
-      detected: true,
-      indicators: Array.isArray(v.indicators)
-        ? v.indicators.filter((i): i is string => typeof i === 'string')
-        : [],
-      recommendation: typeof v.recommendation === 'string' ? v.recommendation : '',
-    };
   }
 
   /**

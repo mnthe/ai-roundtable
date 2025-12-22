@@ -60,11 +60,7 @@ export class AgentRegistry {
    * @example
    * registry.registerProvider('anthropic', (config) => new ClaudeAgent(config), 'claude-3-opus');
    */
-  registerProvider(
-    provider: AIProvider,
-    factory: AgentFactory,
-    defaultModel: string
-  ): void {
+  registerProvider(provider: AIProvider, factory: AgentFactory, defaultModel: string): void {
     this.providers.set(provider, { provider, factory, defaultModel });
   }
 

@@ -12,6 +12,8 @@
  * @param description - Human-readable description for error messages
  * @throws Error if the environment variable is not set
  *
+ * @deprecated Not currently used in production. Consider using getEnvOptional() instead.
+ *
  * @example
  * const apiKey = getEnvOrThrow('ANTHROPIC_API_KEY', 'Anthropic API key');
  */
@@ -29,6 +31,9 @@ export function getEnvOrThrow(key: string, description?: string): string {
  *
  * @param key - Environment variable name
  * @param defaultValue - Default value if not set or empty
+ *
+ * @deprecated Not currently used in production. Consider using getEnvBoolean() or getEnvNumber()
+ * for typed access with defaults.
  *
  * @example
  * const logLevel = getEnvWithDefault('LOG_LEVEL', 'info');
@@ -58,6 +63,9 @@ export function getEnvOptional(key: string): string | undefined {
  * Check if an environment variable is set (non-empty)
  *
  * @param key - Environment variable name
+ *
+ * @deprecated Not currently used in production. Consider using getEnvOptional()
+ * with a truthiness check instead.
  *
  * @example
  * if (hasEnv('ANTHROPIC_API_KEY')) {

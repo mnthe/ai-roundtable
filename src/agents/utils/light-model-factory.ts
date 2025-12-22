@@ -7,7 +7,7 @@
 
 import type { BaseAgent } from '../base.js';
 import type { AgentRegistry } from '../registry.js';
-import { LIGHT_MODELS } from '../setup.js';
+import { LIGHT_MODELS } from '../../config/index.js';
 
 /**
  * Options for creating a light model agent

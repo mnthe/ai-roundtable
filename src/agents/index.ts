@@ -9,31 +9,35 @@ export {
   resetGlobalRegistry,
   type AgentFactory,
 } from './registry.js';
+
+// Provider-specific agents (organized by provider directory)
 export {
   ClaudeAgent,
   createClaudeAgent,
   type ClaudeAgentOptions,
   type WebSearchConfig,
-} from './claude.js';
+} from './anthropic/index.js';
 export {
   ChatGPTAgent,
   createChatGPTAgent,
   type ChatGPTAgentOptions,
   type ChatGPTWebSearchConfig,
-} from './chatgpt.js';
+} from './openai/index.js';
 export {
   GeminiAgent,
   createGeminiAgent,
   type GeminiAgentOptions,
   type GoogleSearchConfig,
-} from './gemini.js';
+} from './google/index.js';
 export {
   PerplexityAgent,
   createPerplexityAgent,
   type PerplexityAgentOptions,
   type PerplexitySearchOptions,
   type SearchRecencyFilter,
-} from './perplexity.js';
+} from './perplexity/index.js';
+
+// Setup and utilities
 export {
   setupAgents,
   setupProviders,

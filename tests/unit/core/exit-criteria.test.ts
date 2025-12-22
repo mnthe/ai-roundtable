@@ -120,12 +120,7 @@ describe('checkExitCriteria', () => {
       const round2 = [createResponse('1', { position, confidence: 0.75 })];
       const round3 = [createResponse('1', { position, confidence: 0.78 })];
 
-      const result = checkExitCriteria(
-        round3,
-        [round1, round2],
-        defaultCriteria,
-        3
-      );
+      const result = checkExitCriteria(round3, [round1, round2], defaultCriteria, 3);
 
       expect(result.shouldExit).toBe(true);
       expect(result.reason).toBe('convergence');
@@ -134,16 +129,26 @@ describe('checkExitCriteria', () => {
 
     it('should not exit when positions are still changing', () => {
       // Use completely different positions to avoid similarity matching
-      const round1 = [createResponse('1', { position: 'Nuclear power is the best energy source for sustainable development', confidence: 0.5 })];
-      const round2 = [createResponse('1', { position: 'Solar panels provide the most eco-friendly electricity generation', confidence: 0.6 })];
-      const round3 = [createResponse('1', { position: 'Wind turbines offer efficient renewable power production', confidence: 0.7 })];
+      const round1 = [
+        createResponse('1', {
+          position: 'Nuclear power is the best energy source for sustainable development',
+          confidence: 0.5,
+        }),
+      ];
+      const round2 = [
+        createResponse('1', {
+          position: 'Solar panels provide the most eco-friendly electricity generation',
+          confidence: 0.6,
+        }),
+      ];
+      const round3 = [
+        createResponse('1', {
+          position: 'Wind turbines offer efficient renewable power production',
+          confidence: 0.7,
+        }),
+      ];
 
-      const result = checkExitCriteria(
-        round3,
-        [round1, round2],
-        defaultCriteria,
-        3
-      );
+      const result = checkExitCriteria(round3, [round1, round2], defaultCriteria, 3);
 
       // Should not exit for convergence
       expect(result.reason).not.toBe('convergence');
@@ -174,12 +179,7 @@ describe('checkExitCriteria', () => {
         createResponse('2', { position: position2 }),
       ];
 
-      const result = checkExitCriteria(
-        round3,
-        [round1, round2],
-        defaultCriteria,
-        3
-      );
+      const result = checkExitCriteria(round3, [round1, round2], defaultCriteria, 3);
 
       expect(result.shouldExit).toBe(true);
       expect(result.reason).toBe('convergence');
@@ -201,12 +201,7 @@ describe('checkExitCriteria', () => {
         createResponse('2', { position: 'Third view', confidence: 0.5 }),
       ];
 
-      const result = checkExitCriteria(
-        round3,
-        [round1, round2],
-        defaultCriteria,
-        3
-      );
+      const result = checkExitCriteria(round3, [round1, round2], defaultCriteria, 3);
 
       // Should not converge because agent 2 keeps changing
       expect(result.reason).not.toBe('convergence');
@@ -216,7 +211,7 @@ describe('checkExitCriteria', () => {
   describe('confidence threshold', () => {
     it('should exit when all agents are confident', () => {
       const responses = [
-        createResponse('1', { confidence: 0.90 }),
+        createResponse('1', { confidence: 0.9 }),
         createResponse('2', { confidence: 0.88 }),
         createResponse('3', { confidence: 0.92 }),
       ];
@@ -243,8 +238,8 @@ describe('checkExitCriteria', () => {
 
     it('should not exit when one agent below threshold', () => {
       const responses = [
-        createResponse('1', { confidence: 0.90 }),
-        createResponse('2', { confidence: 0.80 }), // Below 0.85
+        createResponse('1', { confidence: 0.9 }),
+        createResponse('2', { confidence: 0.8 }), // Below 0.85
         createResponse('3', { confidence: 0.88 }),
       ];
 
@@ -255,7 +250,7 @@ describe('checkExitCriteria', () => {
 
     it('should report average confidence in details', () => {
       const responses = [
-        createResponse('1', { confidence: 0.90 }),
+        createResponse('1', { confidence: 0.9 }),
         createResponse('2', { confidence: 0.86 }),
       ];
 
@@ -306,13 +301,7 @@ describe('checkExitCriteria', () => {
       const round3 = [createResponse('1', { position })];
       const consensus = createConsensus(0.95);
 
-      const result = checkExitCriteria(
-        round3,
-        [round1, round2],
-        defaultCriteria,
-        3,
-        consensus
-      );
+      const result = checkExitCriteria(round3, [round1, round2], defaultCriteria, 3, consensus);
 
       expect(result.shouldExit).toBe(true);
       expect(result.reason).toBe('consensus');
@@ -320,16 +309,11 @@ describe('checkExitCriteria', () => {
 
     it('should prioritize convergence over confidence', () => {
       const position = 'Stable position across all rounds';
-      const round1 = [createResponse('1', { position, confidence: 0.90 })];
-      const round2 = [createResponse('1', { position, confidence: 0.90 })];
-      const round3 = [createResponse('1', { position, confidence: 0.90 })];
+      const round1 = [createResponse('1', { position, confidence: 0.9 })];
+      const round2 = [createResponse('1', { position, confidence: 0.9 })];
+      const round3 = [createResponse('1', { position, confidence: 0.9 })];
 
-      const result = checkExitCriteria(
-        round3,
-        [round1, round2],
-        defaultCriteria,
-        3
-      );
+      const result = checkExitCriteria(round3, [round1, round2], defaultCriteria, 3);
 
       // Both convergence and confidence would trigger, but convergence comes first
       expect(result.shouldExit).toBe(true);
@@ -337,7 +321,7 @@ describe('checkExitCriteria', () => {
     });
 
     it('should prioritize confidence over max_rounds', () => {
-      const responses = [createResponse('1', { confidence: 0.90 })];
+      const responses = [createResponse('1', { confidence: 0.9 })];
 
       const result = checkExitCriteria(responses, [], defaultCriteria, 5);
 
@@ -388,12 +372,7 @@ describe('checkExitCriteria', () => {
       const round3 = [createResponse('1', { position, confidence: 0.5 })];
       const round4 = [createResponse('1', { position, confidence: 0.5 })];
 
-      const result = checkExitCriteria(
-        round4,
-        [round1, round2, round3],
-        customCriteria,
-        4
-      );
+      const result = checkExitCriteria(round4, [round1, round2, round3], customCriteria, 4);
 
       // Should not converge with only 2 stable rounds (need 3)
       expect(result.reason).not.toBe('convergence');
@@ -668,18 +647,15 @@ describe('real-world scenarios', () => {
     ];
     const round2Consensus = createConsensus(0.7);
 
-    result = checkExitCriteria(
-      round2Responses,
-      [round1Responses],
-      criteria,
-      2,
-      round2Consensus
-    );
+    result = checkExitCriteria(round2Responses, [round1Responses], criteria, 2, round2Consensus);
     expect(result.shouldExit).toBe(false);
 
     // Round 3: High consensus reached
     const round3Responses = [
-      createResponse('claude', { position: 'AI augments developer productivity', confidence: 0.85 }),
+      createResponse('claude', {
+        position: 'AI augments developer productivity',
+        confidence: 0.85,
+      }),
       createResponse('gpt', { position: 'AI augments developer capabilities', confidence: 0.87 }),
     ];
     const round3Consensus = createConsensus(0.9);
@@ -736,13 +712,7 @@ describe('real-world scenarios', () => {
     ];
     const consensus = createConsensus(0.5);
 
-    const result = checkExitCriteria(
-      round3,
-      [round1, round2],
-      criteria,
-      3,
-      consensus
-    );
+    const result = checkExitCriteria(round3, [round1, round2], criteria, 3, consensus);
 
     expect(result.shouldExit).toBe(true);
     expect(result.reason).toBe('max_rounds');

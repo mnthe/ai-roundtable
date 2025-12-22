@@ -137,7 +137,9 @@ describe('Setup Module', () => {
       expect(registry.hasProvider('perplexity')).toBe(false);
       expect(result.warnings).toContain('ChatGPT agent not available: OPENAI_API_KEY not set');
       expect(result.warnings).toContain('Gemini agent not available: GOOGLE_API_KEY not set');
-      expect(result.warnings).toContain('Perplexity agent not available: PERPLEXITY_API_KEY not set');
+      expect(result.warnings).toContain(
+        'Perplexity agent not available: PERPLEXITY_API_KEY not set'
+      );
     });
 
     it('should register all providers when all keys are available', () => {
@@ -357,7 +359,11 @@ describe('Setup Module', () => {
           { provider: 'anthropic' as const, available: true },
           { provider: 'openai' as const, available: false, reason: 'OPENAI_API_KEY not set' },
           { provider: 'google' as const, available: true },
-          { provider: 'perplexity' as const, available: false, reason: 'PERPLEXITY_API_KEY not set' },
+          {
+            provider: 'perplexity' as const,
+            available: false,
+            reason: 'PERPLEXITY_API_KEY not set',
+          },
         ],
         agents: [
           {
@@ -388,9 +394,7 @@ describe('Setup Module', () => {
 
     it('should handle empty agents list', () => {
       const result = {
-        providers: [
-          { provider: 'anthropic' as const, available: false, reason: 'No key' },
-        ],
+        providers: [{ provider: 'anthropic' as const, available: false, reason: 'No key' }],
         agents: [],
         warnings: [],
       };

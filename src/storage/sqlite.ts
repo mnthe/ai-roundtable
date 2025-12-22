@@ -27,20 +27,32 @@ import type { Storage } from './index.js';
 
 const logger = createLogger('SQLiteStorage');
 
-export interface SQLiteStorageOptions {
-  filename?: string; // Use ':memory:' for in-memory database (default)
+/**
+ * Escape special characters in LIKE patterns to prevent SQL injection
+ * Characters: % (wildcard), _ (single char), \ (escape char)
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, '\\$&');
 }
+
+/**
+ * Options for SQLiteStorage constructor.
+ * Currently empty as SQLiteStorage always uses in-memory database.
+ * Kept for future extensibility (e.g., file-based persistence).
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface SQLiteStorageOptions {}
 
 /**
  * Session filter options for search
  */
 export interface SessionFilter {
-  topic?: string;           // Search by topic keyword
-  mode?: DebateMode;        // Filter by debate mode
-  status?: SessionStatus;   // Filter by session status
-  fromDate?: Date;          // Filter sessions created after this date
-  toDate?: Date;            // Filter sessions created before this date
-  limit?: number;           // Maximum number of results
+  topic?: string; // Search by topic keyword
+  mode?: DebateMode; // Filter by debate mode
+  status?: SessionStatus; // Filter by session status
+  fromDate?: Date; // Filter sessions created after this date
+  toDate?: Date; // Filter sessions created before this date
+  limit?: number; // Maximum number of results
 }
 
 export interface StoredSession {
@@ -153,7 +165,9 @@ export class SQLiteStorage implements Storage {
 
     db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON responses(timestamp)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_round ON responses(session_id, round_number)`);
+    db.run(
+      `CREATE INDEX IF NOT EXISTS idx_responses_session_round ON responses(session_id, round_number)`
+    );
   }
 
   /**
@@ -212,13 +226,12 @@ export class SQLiteStorage implements Storage {
 
     try {
       const row = StoredSessionRowSchema.parse(rawRow) as StoredSession;
-      return this.mapStoredSessionToSession(row);
+      // Load responses for single session
+      const responses = await this.getResponses(sessionId);
+      return this.mapStoredSessionToSession(row, responses);
     } catch (error) {
       if (error instanceof ZodError) {
-        logger.error(
-          { sessionId, error: error.issues },
-          'Invalid session data in database'
-        );
+        logger.error({ sessionId, error: error.issues }, 'Invalid session data in database');
         throw new StorageError(`Invalid session data for ${sessionId}: ${error.message}`, {
           code: 'INVALID_SESSION_DATA',
           cause: error,
@@ -235,10 +248,7 @@ export class SQLiteStorage implements Storage {
     await this.ensureInitialized();
     const db = this.getDb();
 
-    logger.debug(
-      { sessionId, updates: Object.keys(updates) },
-      'Updating session in database'
-    );
+    logger.debug({ sessionId, updates: Object.keys(updates) }, 'Updating session in database');
 
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -288,14 +298,29 @@ export class SQLiteStorage implements Storage {
 
   /**
    * Delete a session and its responses
+   * Uses transaction to prevent orphaned data
    */
   async deleteSession(sessionId: string): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
 
-    // Delete responses first (manual cascade for sql.js)
-    db.run('DELETE FROM responses WHERE session_id = ?', [sessionId]);
-    db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+    logger.debug({ sessionId }, 'Deleting session from database');
+
+    db.run('BEGIN TRANSACTION');
+    try {
+      // Delete responses first (manual cascade for sql.js)
+      db.run('DELETE FROM responses WHERE session_id = ?', [sessionId]);
+      db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+      db.run('COMMIT');
+      logger.debug({ sessionId }, 'Session deleted successfully');
+    } catch (error) {
+      db.run('ROLLBACK');
+      logger.error({ sessionId, err: error }, 'Failed to delete session, rolling back');
+      throw new StorageError(`Failed to delete session ${sessionId}`, {
+        code: 'DELETE_SESSION_FAILED',
+        cause: error instanceof Error ? error : undefined,
+      });
+    }
   }
 
   /**
@@ -312,8 +337,8 @@ export class SQLiteStorage implements Storage {
     const params: (string | number)[] = [];
 
     if (filters?.topic) {
-      conditions.push('topic LIKE ?');
-      params.push(`%${filters.topic}%`);
+      conditions.push("topic LIKE ? ESCAPE '\\'");
+      params.push(`%${escapeLikePattern(filters.topic)}%`);
     }
 
     if (filters?.mode) {
@@ -347,7 +372,8 @@ export class SQLiteStorage implements Storage {
       params.push(filters.limit);
     }
 
-    const results: Session[] = [];
+    // First, collect all valid stored sessions
+    const storedSessions: StoredSession[] = [];
     const stmt = db.prepare(sql);
     if (params.length > 0) {
       stmt.bind(params);
@@ -357,7 +383,7 @@ export class SQLiteStorage implements Storage {
       const rawRow = stmt.getAsObject();
       try {
         const row = StoredSessionRowSchema.parse(rawRow) as StoredSession;
-        results.push(await this.mapStoredSessionToSession(row));
+        storedSessions.push(row);
       } catch (error) {
         if (error instanceof ZodError) {
           logger.warn(
@@ -371,13 +397,28 @@ export class SQLiteStorage implements Storage {
     }
     stmt.free();
 
+    // Batch load all responses for these sessions (single query instead of N queries)
+    const sessionIds = storedSessions.map((s) => s.id);
+    const responseMap = this.getResponsesForSessionIds(sessionIds);
+
+    // Map stored sessions to Session type with pre-loaded responses
+    const results: Session[] = [];
+    for (const stored of storedSessions) {
+      const responses = responseMap.get(stored.id) ?? [];
+      results.push(this.mapStoredSessionToSession(stored, responses));
+    }
+
     return results;
   }
 
   /**
    * Add a response to a session
    */
-  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
+  async addResponse(
+    sessionId: string,
+    response: AgentResponse,
+    roundNumber: number
+  ): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
 
@@ -495,10 +536,63 @@ export class SQLiteStorage implements Storage {
   }
 
   /**
-   * Map stored session to Session type
+   * Batch load responses for multiple session IDs
+   * Returns a Map of sessionId -> AgentResponse[]
    */
-  private async mapStoredSessionToSession(stored: StoredSession): Promise<Session> {
-    const responses = await this.getResponses(stored.id);
+  private getResponsesForSessionIds(sessionIds: string[]): Map<string, AgentResponse[]> {
+    const responseMap = new Map<string, AgentResponse[]>();
+
+    if (sessionIds.length === 0) {
+      return responseMap;
+    }
+
+    // Initialize empty arrays for all session IDs
+    for (const id of sessionIds) {
+      responseMap.set(id, []);
+    }
+
+    const db = this.getDb();
+    const placeholders = sessionIds.map(() => '?').join(', ');
+    const stmt = db.prepare(
+      `SELECT * FROM responses WHERE session_id IN (${placeholders}) ORDER BY timestamp ASC`
+    );
+    stmt.bind(sessionIds);
+
+    while (stmt.step()) {
+      const rawRow = stmt.getAsObject();
+      try {
+        const row = StoredResponseRowSchema.parse(rawRow) as StoredResponse;
+        const response = this.mapStoredResponseToAgentResponse(row);
+        const sessionResponses = responseMap.get(row.session_id);
+        if (sessionResponses) {
+          sessionResponses.push(response);
+        }
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { rawRow, error: error.issues },
+            'Skipping invalid response row in batch load'
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+    stmt.free();
+
+    return responseMap;
+  }
+
+  /**
+   * Map stored session to Session type
+   * @param stored The stored session row
+   * @param preloadedResponses Optional pre-loaded responses (for batch optimization)
+   */
+  private mapStoredSessionToSession(
+    stored: StoredSession,
+    preloadedResponses?: AgentResponse[]
+  ): Session {
+    const responses = preloadedResponses ?? [];
 
     // Parse and validate agent_ids JSON
     let agentIds: string[];
@@ -565,7 +659,8 @@ export class SQLiteStorage implements Storage {
         // Convert timestamp to Date if needed
         toolCalls = validated.map((tc) => ({
           ...tc,
-          timestamp: tc.timestamp instanceof Date ? tc.timestamp : new Date(tc.timestamp as string | number),
+          timestamp:
+            tc.timestamp instanceof Date ? tc.timestamp : new Date(tc.timestamp as string | number),
         }));
       } catch (error) {
         if (error instanceof ZodError) {
@@ -582,9 +677,10 @@ export class SQLiteStorage implements Storage {
 
     // Parse stance (validate it's one of the allowed values)
     const validStances = ['YES', 'NO', 'NEUTRAL'] as const;
-    const stance = stored.stance && validStances.includes(stored.stance as (typeof validStances)[number])
-      ? (stored.stance as 'YES' | 'NO' | 'NEUTRAL')
-      : undefined;
+    const stance =
+      stored.stance && validStances.includes(stored.stance as (typeof validStances)[number])
+        ? (stored.stance as 'YES' | 'NO' | 'NEUTRAL')
+        : undefined;
 
     return {
       agentId: stored.agent_id,

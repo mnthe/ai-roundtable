@@ -3,7 +3,7 @@
  */
 
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
-import { EXIT_CRITERIA_CONFIG } from '../config/exit-criteria.js';
+import { EXIT_CRITERIA_CONFIG, type ExitCriteriaConfig } from '../config/exit-criteria.js';
 import { ConfigurationError } from '../errors/index.js';
 import type { DebateModeStrategy } from '../modes/base.js';
 import { getGlobalModeRegistry } from '../modes/registry.js';
@@ -23,6 +23,7 @@ const logger = createLogger('DebateEngine');
 export interface DebateEngineOptions {
   toolkit?: AgentToolkit;
   aiConsensusAnalyzer?: AIConsensusAnalyzer;
+  exitCriteriaConfig?: ExitCriteriaConfig;
 }
 
 /**
@@ -38,6 +39,7 @@ export class DebateEngine {
   private toolkit: AgentToolkit;
   private modeStrategies: Map<string, DebateModeStrategy> = new Map();
   private aiConsensusAnalyzer?: AIConsensusAnalyzer;
+  private exitCriteriaConfig: ExitCriteriaConfig;
 
   constructor(options: DebateEngineOptions = {}) {
     // Toolkit must be provided as it's an interface
@@ -48,6 +50,7 @@ export class DebateEngine {
     }
     this.toolkit = options.toolkit;
     this.aiConsensusAnalyzer = options.aiConsensusAnalyzer;
+    this.exitCriteriaConfig = options.exitCriteriaConfig ?? EXIT_CRITERIA_CONFIG;
   }
 
   /**
@@ -118,10 +121,16 @@ export class DebateEngine {
   /**
    * Execute multiple debate rounds
    *
+   * NOTE: This method intentionally mutates the session object for caller convenience.
+   * After each round, session.responses is updated with new responses and
+   * session.currentRound is incremented. This allows the caller to access the
+   * updated session state without additional bookkeeping.
+   *
    * @param agents - Array of agents participating
-   * @param session - Current session state
+   * @param session - Current session state (mutated: responses and currentRound updated)
    * @param numRounds - Number of rounds to execute
    * @param focusQuestion - Optional focus question for the rounds
+   * @param contextResults - Optional context results from previous batch
    * @returns Array of round results
    */
   async executeRounds(
@@ -175,11 +184,11 @@ export class DebateEngine {
       responsesByRound.push(result.responses);
 
       // Check exit criteria if enabled (and not on the last planned round)
-      if (EXIT_CRITERIA_CONFIG.enabled && i < numRounds - 1) {
+      if (this.exitCriteriaConfig.enabled && i < numRounds - 1) {
         const exitCriteria: ExitCriteria = {
           maxRounds: session.totalRounds,
-          consensusThreshold: EXIT_CRITERIA_CONFIG.consensusThreshold,
-          convergenceRounds: EXIT_CRITERIA_CONFIG.convergenceRounds,
+          consensusThreshold: this.exitCriteriaConfig.consensusThreshold,
+          convergenceRounds: this.exitCriteriaConfig.convergenceRounds,
         };
 
         const previousRounds = responsesByRound.slice(0, -1);
@@ -247,7 +256,10 @@ export class DebateEngine {
     options?: { includeGroupthinkDetection?: boolean }
   ): Promise<ConsensusResult> {
     if (!this.aiConsensusAnalyzer) {
-      throw new Error('AI consensus analyzer not available. Configure aiConsensusAnalyzer in DebateEngineOptions.');
+      throw new ConfigurationError(
+        'AI consensus analyzer not available. Configure aiConsensusAnalyzer in DebateEngineOptions.',
+        { code: 'MISSING_CONSENSUS_ANALYZER' }
+      );
     }
 
     return this.aiConsensusAnalyzer.analyzeConsensus(responses, topic, options);

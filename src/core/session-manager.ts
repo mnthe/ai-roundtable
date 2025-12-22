@@ -10,8 +10,6 @@ import type { Session, AgentResponse, SessionStatus, DebateConfig } from '../typ
 export interface SessionManagerOptions {
   /** Provide a custom storage implementation */
   storage?: Storage;
-  /** Filename for SQLite storage (ignored if storage is provided) */
-  storageFilename?: string;
 }
 
 export class SessionManager {
@@ -23,7 +21,7 @@ export class SessionManager {
       this.storage = options.storage;
       this.ownsStorage = false;
     } else {
-      this.storage = new SQLiteStorage({ filename: options.storageFilename });
+      this.storage = new SQLiteStorage();
       this.ownsStorage = true;
     }
   }
@@ -75,7 +73,11 @@ export class SessionManager {
    * Add a response to a session
    * @param roundNumber - The round number this response belongs to
    */
-  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
+  async addResponse(
+    sessionId: string,
+    response: AgentResponse,
+    roundNumber: number
+  ): Promise<void> {
     const session = await this.getSession(sessionId);
     if (!session) {
       throw new SessionError(`Session ${sessionId} not found`, {

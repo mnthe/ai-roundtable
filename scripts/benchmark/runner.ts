@@ -14,7 +14,13 @@ import { DefaultAgentToolkit } from '../../src/tools/toolkit.js';
 import { createLogger } from '../../src/utils/logger.js';
 import { ConfigLoader, generateMatrix } from './config.js';
 import { DataCollector } from './collector.js';
-import type { DebateMode, Session, AgentResponse, ConsensusResult, DebateConfig } from '../../src/types/index.js';
+import type {
+  DebateMode,
+  Session,
+  AgentResponse,
+  ConsensusResult,
+  DebateConfig,
+} from '../../src/types/index.js';
 import type {
   ExperimentConfig,
   ExperimentRun,

@@ -128,9 +128,7 @@ describe('createSessionManagerAdapter', () => {
       getResponses: vi.fn(),
     };
 
-    const adapter = createSessionManagerAdapter(
-      mockSessionManager as unknown as SessionManager
-    );
+    const adapter = createSessionManagerAdapter(mockSessionManager as unknown as SessionManager);
 
     expect(adapter).toBeInstanceOf(SessionManagerAdapter);
   });
@@ -140,9 +138,7 @@ describe('createSessionManagerAdapter', () => {
       getResponses: vi.fn().mockResolvedValue([]),
     };
 
-    const provider = createSessionManagerAdapter(
-      mockSessionManager as unknown as SessionManager
-    );
+    const provider = createSessionManagerAdapter(mockSessionManager as unknown as SessionManager);
 
     // Should have getDebateEvidence method
     expect(typeof provider.getDebateEvidence).toBe('function');

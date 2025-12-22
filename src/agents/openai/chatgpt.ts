@@ -12,38 +12,13 @@
  */
 
 import OpenAI from 'openai';
-import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
-import { withRetry } from '../utils/retry.js';
-import {
-  convertSDKError,
-  executeResponsesCompletion,
-  executeSimpleResponsesCompletion,
-  buildResponsesFunctionTools,
-  type ResponsesWebSearchConfig,
-} from './utils/index.js';
-import type { AgentConfig, DebateContext } from '../types/index.js';
-
-/**
- * Web search configuration for ChatGPT Agent
- */
-export interface ChatGPTWebSearchConfig {
-  /** Enable web search (default: true) */
-  enabled?: boolean;
-  /** Context window space for search: 'low' | 'medium' | 'high' (default: 'medium') */
-  searchContextSize?: 'low' | 'medium' | 'high';
-}
-
-/**
- * Configuration options for ChatGPT Agent
- */
-export interface ChatGPTAgentOptions {
-  /** OpenAI API key (defaults to OPENAI_API_KEY env var) */
-  apiKey?: string;
-  /** Custom OpenAI client instance (for testing) */
-  client?: OpenAI;
-  /** Web search configuration (default: enabled) */
-  webSearch?: ChatGPTWebSearchConfig;
-}
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
+import { withRetry } from '../../utils/retry.js';
+import { convertSDKError } from '../utils/index.js';
+import { buildResponsesFunctionTools } from './utils.js';
+import { executeResponsesCompletion, executeSimpleResponsesCompletion } from './responses.js';
+import type { AgentConfig, DebateContext } from '../../types/index.js';
+import type { ChatGPTAgentOptions, ResponsesWebSearchConfig } from './types.js';
 
 /**
  * ChatGPT Agent using OpenAI's Responses API
@@ -107,10 +82,12 @@ export class ChatGPTAgent extends BaseAgent {
       input: userMessage,
       functionTools,
       webSearch: this.webSearchConfig,
-      executeTool: functionTools.length > 0 ? (name, input) => this.executeTool(name, input) : undefined,
-      extractToolCitations: functionTools.length > 0
-        ? (name, result) => this.extractCitationsFromToolResult(name, result)
-        : undefined,
+      executeTool:
+        functionTools.length > 0 ? (name, input) => this.executeTool(name, input) : undefined,
+      extractToolCitations:
+        functionTools.length > 0
+          ? (name, result) => this.extractCitationsFromToolResult(name, result)
+          : undefined,
     });
   }
 
@@ -167,7 +144,8 @@ export class ChatGPTAgent extends BaseAgent {
       model: this.model,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
-      instructions: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      instructions:
+        systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
       input: prompt,
       agentId: this.id,
       convertError: (error) => this.convertError(error),

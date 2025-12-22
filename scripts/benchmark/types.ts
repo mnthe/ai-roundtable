@@ -2,7 +2,12 @@
  * Benchmark Script Type Definitions
  */
 
-import type { DebateMode, AgentResponse, ConsensusResult, ContextRequest } from '../../src/types/index.js';
+import type {
+  DebateMode,
+  AgentResponse,
+  ConsensusResult,
+  ContextRequest,
+} from '../../src/types/index.js';
 
 // ============================================================================
 // Configuration Types

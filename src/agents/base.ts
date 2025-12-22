@@ -12,7 +12,6 @@ import type {
   SynthesisContext,
   Citation,
   ToolCallRecord,
-  ImageResult,
 } from '../types/index.js';
 import type { AgentToolkit } from '../tools/types.js';
 
@@ -42,10 +41,6 @@ export interface ProviderApiResult {
   toolCalls: ToolCallRecord[];
   /** Citations extracted from tool results */
   citations: Citation[];
-  /** Optional images (Perplexity only) */
-  images?: ImageResult[];
-  /** Optional related questions (Perplexity only) */
-  relatedQuestions?: string[];
 }
 
 /**
@@ -79,8 +74,6 @@ interface AgentResponseParams {
   rawText: string;
   citations: Citation[];
   toolCalls: ToolCallRecord[];
-  images?: ImageResult[];
-  relatedQuestions?: string[];
 }
 
 /**
@@ -173,8 +166,6 @@ export abstract class BaseAgent {
         rawText: apiResult.rawText,
         citations: apiResult.citations,
         toolCalls: apiResult.toolCalls,
-        images: apiResult.images,
-        relatedQuestions: apiResult.relatedQuestions,
       });
 
       const durationMs = Date.now() - startTime;
@@ -256,11 +247,17 @@ export abstract class BaseAgent {
    * Subclasses should implement performHealthCheck() for provider-specific API calls.
    */
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    logger.debug({ agentId: this.id, agentName: this.name, provider: this.provider }, 'Starting health check');
+    logger.debug(
+      { agentId: this.id, agentName: this.name, provider: this.provider },
+      'Starting health check'
+    );
 
     try {
       await this.performHealthCheck();
-      logger.info({ agentId: this.id, agentName: this.name, provider: this.provider }, 'Health check passed');
+      logger.info(
+        { agentId: this.id, agentName: this.name, provider: this.provider },
+        'Health check passed'
+      );
       return { healthy: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -312,7 +309,10 @@ export abstract class BaseAgent {
    * @param userMessage - User message containing the synthesis prompt
    * @returns Raw synthesis response text
    */
-  protected async generateSynthesisInternal(systemPrompt: string, userMessage: string): Promise<string> {
+  protected async generateSynthesisInternal(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
     logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
 
     try {
@@ -332,29 +332,15 @@ export abstract class BaseAgent {
   /**
    * Perform provider-specific synthesis API call
    *
-   * Subclasses should override this method to make direct API calls.
-   * Default implementation falls back to generateResponse.
+   * Default implementation calls generateRawCompletion with the synthesis prompts.
+   * Subclasses can override this if they need different behavior for synthesis.
    *
    * @param systemPrompt - System prompt for synthesis
    * @param userMessage - User message containing the synthesis prompt
    * @returns Raw synthesis response text
    */
   protected async performSynthesis(systemPrompt: string, userMessage: string): Promise<string> {
-    // Default fallback: Use generateResponse with a context that includes synthesis instructions
-    // This is not ideal but provides basic functionality
-    const context: DebateContext = {
-      sessionId: 'synthesis',
-      topic: userMessage, // The full synthesis prompt
-      mode: 'collaborative',
-      currentRound: 1,
-      totalRounds: 1,
-      previousResponses: [],
-      modePrompt: systemPrompt,
-    };
-
-    const response = await this.generateResponse(context);
-    // Return the reasoning field which should contain the synthesis JSON
-    return response.reasoning;
+    return this.generateRawCompletion(userMessage, systemPrompt);
   }
 
   /**
@@ -411,7 +397,9 @@ Be respectful of other participants' views while clearly articulating your own p
     // Include provided context results if available (responses to previous context requests)
     if (context.contextResults && context.contextResults.length > 0) {
       parts.push('=== PROVIDED CONTEXT ===');
-      parts.push('The following information was provided in response to your previous context requests:\n');
+      parts.push(
+        'The following information was provided in response to your previous context requests:\n'
+      );
       for (const result of context.contextResults) {
         parts.push(`[Request ID: ${result.requestId}]`);
         if (result.success && result.result) {
@@ -610,7 +598,7 @@ ${stanceInstruction}  "position": "Your clear position statement",
    * @returns Complete AgentResponse object
    */
   protected buildAgentResponse(params: AgentResponseParams): AgentResponse {
-    const { parsed, rawText, citations, toolCalls, images, relatedQuestions } = params;
+    const { parsed, rawText, citations, toolCalls } = params;
 
     // Validate response has content - use || to catch empty strings
     const position = parsed.position || 'Unable to determine position';
@@ -625,8 +613,6 @@ ${stanceInstruction}  "position": "Your clear position statement",
       confidence: parsed.confidence,
       citations: citations.length > 0 ? citations : undefined,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      images: images && images.length > 0 ? images : undefined,
-      relatedQuestions: relatedQuestions && relatedQuestions.length > 0 ? relatedQuestions : undefined,
       timestamp: new Date(),
     };
   }

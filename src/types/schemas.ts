@@ -37,9 +37,12 @@ const ToolCallRecordSchema = z.object({
   timestamp: z.coerce.date(),
 });
 
+const StanceSchema = z.enum(['YES', 'NO', 'NEUTRAL']);
+
 export const AgentResponseSchema = z.object({
   agentId: z.string().min(1),
   agentName: z.string().min(1),
+  stance: StanceSchema.optional(),
   position: z.string().min(1),
   reasoning: z.string().min(1),
   confidence: z.number().min(0).max(1),
@@ -76,11 +79,18 @@ export const DebateConfigSchema = z.object({
 
 export const SessionStatusSchema = z.enum(['active', 'paused', 'completed', 'error']);
 
+const GroupthinkWarningSchema = z.object({
+  detected: z.boolean(),
+  indicators: z.array(z.string()),
+  recommendation: z.string(),
+});
+
 export const ConsensusResultSchema = z.object({
   agreementLevel: z.number().min(0).max(1),
   commonGround: z.array(z.string()),
   disagreementPoints: z.array(z.string()),
   summary: z.string(),
+  groupthinkWarning: GroupthinkWarningSchema.optional(),
 });
 
 export const SessionSchema = z.object({
@@ -110,7 +120,7 @@ export const SearchOptionsSchema = z.object({
 // MCP Input Schemas
 // ============================================
 
-export const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
+const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
 
 export const StartRoundtableInputSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
@@ -121,15 +131,16 @@ export const StartRoundtableInputSchema = z.object({
   parallel: ParallelizationLevelSchema.optional().describe(
     'Parallelization level for agent execution (none: sequential, last-only: parallel except last agent, full: all parallel)'
   ),
-  exitOnConsensus: z.boolean().optional().describe(
-    'Whether to exit early when consensus is reached'
-  ),
+  exitOnConsensus: z
+    .boolean()
+    .optional()
+    .describe('Whether to exit early when consensus is reached'),
 });
 
 /**
  * Schema for context result provided by caller
  */
-export const ContextResultSchema = z.object({
+const ContextResultSchema = z.object({
   requestId: z.string().min(1, 'Request ID is required'),
   success: z.boolean(),
   result: z.string().optional(),
@@ -189,9 +200,21 @@ export const ListSessionsInputSchema = z.object({
   topic: z.string().optional().describe('Search sessions by topic keyword (partial match)'),
   mode: DebateModeSchema.optional().describe('Filter by debate mode'),
   status: SessionStatusSchema.optional().describe('Filter by session status'),
-  fromDate: z.string().optional().describe('Filter sessions created after this date (ISO 8601 format)'),
-  toDate: z.string().optional().describe('Filter sessions created before this date (ISO 8601 format)'),
-  limit: z.number().int().positive().optional().default(50).describe('Maximum number of results to return'),
+  fromDate: z
+    .string()
+    .optional()
+    .describe('Filter sessions created after this date (ISO 8601 format)'),
+  toDate: z
+    .string()
+    .optional()
+    .describe('Filter sessions created before this date (ISO 8601 format)'),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .default(50)
+    .describe('Maximum number of results to return'),
 });
 
 export const GetAgentsInputSchema = z.object({});
@@ -241,12 +264,14 @@ export const AgentIdsArraySchema = z.array(z.string());
 
 /**
  * Schema for citations array parsed from JSON in storage
- * More lenient than CitationSchema to handle various stored formats
+ * Uses same URL validation as CitationSchema for consistency.
+ * Invalid citations are handled gracefully by the storage layer
+ * (logged as warning and skipped).
  */
 export const StoredCitationsArraySchema = z.array(
   z.object({
     title: z.string(),
-    url: z.string(),
+    url: z.string().url(),
     snippet: z.string().optional(),
   })
 );

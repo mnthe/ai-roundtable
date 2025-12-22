@@ -21,7 +21,7 @@ import {
   buildModePrompt,
   createOutputSections,
   type ModePromptConfig,
-} from './utils/prompt-builder.js';
+} from './utils/index.js';
 
 /**
  * My Custom Mode
@@ -166,7 +166,8 @@ Create `tests/unit/modes/my-mode.test.ts`:
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MyMode } from '../../../src/modes/my-mode.js';
-import type { DebateContext, AgentToolkit } from '../../../src/types/index.js';
+import type { DebateContext } from '../../../src/types/index.js';
+import type { AgentToolkit } from '../../../src/agents/base.js';
 
 describe('MyMode', () => {
   let mode: MyMode;
@@ -296,13 +297,13 @@ All modes should use the 4-layer prompt structure via `modes/utils/prompt-builde
 **Prompt Builder Utilities:**
 - `buildModePrompt(config, context)` - Build complete 4-layer prompt
 - `buildRoleAnchor(config)` - Layer 1 only
-- `buildBehavioralContract(config)` - Layer 2 only
-- `buildStructuralEnforcement(config, context)` - Layer 3 only
-- `buildVerificationLoop(config)` - Layer 4 only
+- `buildBehavioralContract(config, mode?)` - Layer 2 only (mode optional for tool guidance)
+- `buildVerificationLoop(config, mode?)` - Layer 4 only (mode optional for mode-specific checks)
 - `buildFocusQuestionSection(context, config)` - Optional focus question
-- `buildRoundContext(context)` - Build round context section
-- `formatPreviousResponses(responses)` - Format responses for context
 - `createOutputSections([...])` - Helper to create section arrays
+- `PROMPT_SEPARATOR` - Constant for section separators
+
+**Note:** Layer 3 (Structural Enforcement) is built internally by `buildModePrompt()` using the `structuralEnforcement` config.
 
 ## Execution Patterns
 
@@ -497,10 +498,10 @@ protected override transformContext(
 }
 ```
 
-| Processor | Purpose |
-|-----------|---------|
-| `AnonymizationProcessor` | Remove agent identities from previous responses |
-| `StatisticsProcessor` | Inject round statistics (confidence distribution, position clusters) |
+| Processor                | Purpose                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| `AnonymizationProcessor` | Remove agent identities from previous responses                      |
+| `StatisticsProcessor`    | Inject round statistics (confidence distribution, position clusters) |
 
 ### Response Validators (`modes/validators/`)
 
@@ -545,11 +546,11 @@ protected override validateResponse(
 }
 ```
 
-| Validator | Purpose |
-|-----------|---------|
-| `StanceValidator` | Validate stance matches expected value and mark violations (does not force-correct) |
-| `ConfidenceRangeValidator` | Clamp confidence to valid range [0, 1] |
-| `RequiredFieldsValidator` | Ensure position and reasoning fields are non-empty |
+| Validator                  | Purpose                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `StanceValidator`          | Validate stance matches expected value and mark violations (does not force-correct) |
+| `ConfidenceRangeValidator` | Clamp confidence to valid range [0, 1]                                              |
+| `RequiredFieldsValidator`  | Ensure position and reasoning fields are non-empty                                  |
 
 ### Tool Policy (`modes/tool-policy.ts`)
 
@@ -583,15 +584,15 @@ export class MyMode extends BaseModeStrategy {
 }
 ```
 
-| Mode | needsGroupthinkDetection | Rationale |
-|------|--------------------------|-----------|
-| collaborative | true (default) | Consensus-seeking, risk of groupthink |
-| adversarial | false | Built-in opposition |
-| socratic | false | Question-based inquiry, not consensus-seeking |
-| expert-panel | true (default) | Independent experts may still converge |
-| devils-advocate | false | Structural role-based opposition |
-| delphi | true (default) | Anonymous consensus, risk of conformity |
-| red-team-blue-team | false | Structural team opposition |
+| Mode               | needsGroupthinkDetection | Rationale                                     |
+| ------------------ | ------------------------ | --------------------------------------------- |
+| collaborative      | true (default)           | Consensus-seeking, risk of groupthink         |
+| adversarial        | false                    | Built-in opposition                           |
+| socratic           | false                    | Question-based inquiry, not consensus-seeking |
+| expert-panel       | true (default)           | Independent experts may still converge        |
+| devils-advocate    | false                    | Structural role-based opposition              |
+| delphi             | true (default)           | Anonymous consensus, risk of conformity       |
+| red-team-blue-team | false                    | Structural team opposition                    |
 
 ## Checklist
 

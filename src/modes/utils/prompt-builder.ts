@@ -5,8 +5,9 @@
  * Implements the 4-layer prompt structure used across all debate modes.
  */
 
-import type { DebateContext, AgentResponse, DebateMode } from '../../types/index.js';
+import type { DebateContext, DebateMode } from '../../types/index.js';
 import { getToolGuidanceForMode, getToolPolicy, isSequentialMode } from '../tool-policy.js';
+import { PROMPT_SEPARATOR } from './constants.js';
 
 /**
  * Configuration for the Role Anchor layer (Layer 1)
@@ -144,7 +145,7 @@ export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, reado
   ],
   collaborative: [
     'Did I identify specific points of agreement with others?',
-    'Did I build on others\' ideas constructively?',
+    "Did I build on others' ideas constructively?",
   ],
   adversarial: [
     'Did I directly address and counter the previous arguments?',
@@ -165,18 +166,13 @@ export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, reado
 } as const;
 
 /**
- * Separator line used in prompts
- */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
-
-/**
  * Build the Role Anchor layer (Layer 1)
  */
 export function buildRoleAnchor(config: RoleAnchorConfig): string {
   let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 1: ROLE ANCHOR
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 ${config.emoji} ${config.title} ${config.emoji}
 
@@ -220,14 +216,12 @@ export function buildBehavioralContract(
 
   const mustItems = allMustBehaviors.map((b) => `□ ${b}`).join('\n');
   const mustNotItems = allMustNotBehaviors.map((b) => `✗ ${b}`).join('\n');
-  const priorities = config.priorityHierarchy
-    .map((p, i) => `${i + 1}. ${p}`)
-    .join('\n');
+  const priorities = config.priorityHierarchy.map((p, i) => `${i + 1}. ${p}`).join('\n');
 
   let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 2: BEHAVIORAL CONTRACT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 MUST (Required Behaviors):
 ${mustItems}
@@ -282,21 +276,19 @@ function buildOutputSection(section: OutputSection): string {
 /**
  * Build the Structural Enforcement layer (Layer 3)
  */
-export function buildStructuralEnforcement(
+function buildStructuralEnforcement(
   config: StructuralEnforcementConfig,
   context: DebateContext
 ): string {
   const isFirstRound = context.previousResponses.length === 0;
-  const sections = isFirstRound
-    ? config.firstRoundSections
-    : config.subsequentRoundSections;
+  const sections = isFirstRound ? config.firstRoundSections : config.subsequentRoundSections;
 
   const roundLabel = isFirstRound ? ' (First Round)' : '';
 
   let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 `;
 
@@ -325,10 +317,7 @@ ${SEPARATOR}
  * @param config - Verification loop configuration
  * @param mode - Optional debate mode for mode-specific verification checks
  */
-export function buildVerificationLoop(
-  config: VerificationLoopConfig,
-  mode?: DebateMode
-): string {
+export function buildVerificationLoop(config: VerificationLoopConfig, mode?: DebateMode): string {
   // Combine mode-specific checks with tool usage checks (unless disabled)
   const includeToolChecks = config.includeToolUsageChecks !== false;
 
@@ -348,9 +337,9 @@ export function buildVerificationLoop(
   const checkItems = allChecks.map((item) => `□ ${item}`).join('\n');
 
   return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 4: VERIFICATION LOOP
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Before finalizing your response, verify:
 ${checkItems}
@@ -371,9 +360,9 @@ export function buildFocusQuestionSection(
   }
 
   return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 ${config.instructions}
 `;
@@ -394,54 +383,6 @@ Mode: ${config.modeName}
   prompt += buildFocusQuestionSection(context, config.focusQuestion);
 
   return prompt;
-}
-
-/**
- * Format previous responses for display in prompts
- *
- * Creates a structured summary of previous responses that can be
- * included in context for agents.
- */
-export function formatPreviousResponses(responses: AgentResponse[]): string {
-  if (responses.length === 0) {
-    return '';
-  }
-
-  let formatted = 'Previous Responses:\n\n';
-
-  for (const response of responses) {
-    formatted += `--- ${response.agentName} ---\n`;
-    formatted += `Position: ${response.position}\n`;
-    formatted += `Confidence: ${(response.confidence * 100).toFixed(0)}%\n`;
-    if (response.reasoning) {
-      // Truncate long reasoning to first 500 chars
-      const truncatedReasoning =
-        response.reasoning.length > 500
-          ? response.reasoning.substring(0, 500) + '...'
-          : response.reasoning;
-      formatted += `Reasoning: ${truncatedReasoning}\n`;
-    }
-    formatted += '\n';
-  }
-
-  return formatted;
-}
-
-/**
- * Build round-specific context information
- *
- * Provides context about the current round that can be appended
- * to prompts for non-first rounds.
- */
-export function buildRoundContext(context: DebateContext): string {
-  if (context.currentRound === 1) {
-    return '';
-  }
-
-  return `
-ROUND ${context.currentRound} OF ${context.totalRounds}:
-Build upon the previous discussion. Reference and respond to points raised earlier.
-`;
 }
 
 /**

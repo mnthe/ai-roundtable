@@ -3,7 +3,7 @@ import {
   PerplexityAgent,
   createPerplexityAgent,
   type PerplexitySearchOptions,
-} from '../../../src/agents/perplexity.js';
+} from '../../../src/agents/perplexity/index.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {
@@ -114,11 +114,9 @@ describe('PerplexityAgent', () => {
 
     it('should extract citations from Perplexity response (deprecated citations field)', async () => {
       const mockResponse = '{"position":"test [1] [2]","reasoning":"test","confidence":0.5}';
+      // Deprecated citations field is an array of string URLs (not objects)
       const metadata: MockPerplexityMetadata = {
-        citations: [
-          { url: 'https://example.com/1', title: 'Source 1' },
-          { url: 'https://example.com/2', title: 'Source 2' },
-        ],
+        citations: ['https://example.com/article1', 'https://example.com/article2'],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -129,8 +127,9 @@ describe('PerplexityAgent', () => {
       const response = await agent.generateResponse(defaultContext);
 
       expect(response.citations).toHaveLength(2);
-      expect(response.citations?.[0]?.title).toBe('Source 1');
-      expect(response.citations?.[0]?.url).toBe('https://example.com/1');
+      // Title is extracted from domain for deprecated string citations
+      expect(response.citations?.[0]?.title).toBe('example.com');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/article1');
       // Should record perplexity_search tool call when citations are returned
       expect(response.toolCalls?.some((tc) => tc.toolName === 'perplexity_search')).toBe(true);
     });
@@ -138,10 +137,7 @@ describe('PerplexityAgent', () => {
     it('should extract domain from URL when citation is a string (deprecated format)', async () => {
       const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
-        citations: [
-          'https://www.jsonapi.org/format/',
-          'https://example.com/article',
-        ],
+        citations: ['https://www.jsonapi.org/format/', 'https://example.com/article'],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -158,9 +154,11 @@ describe('PerplexityAgent', () => {
 
     it('should filter citations to only those referenced in response text', async () => {
       // Response only references [1] and [3], not [2]
-      const mockResponse = '{"position":"According to [1], this is true. Also see [3].","reasoning":"test","confidence":0.5}';
+      const mockResponse =
+        '{"position":"According to [1], this is true. Also see [3].","reasoning":"test","confidence":0.5}';
+      // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
-        citations: [
+        search_results: [
           { url: 'https://example.com/1', title: 'Source 1' },
           { url: 'https://example.com/2', title: 'Source 2' },
           { url: 'https://example.com/3', title: 'Source 3' },
@@ -182,9 +180,11 @@ describe('PerplexityAgent', () => {
 
     it('should include all citations when no reference markers found', async () => {
       // Response has no citation markers like [1], [2]
-      const mockResponse = '{"position":"AI should be regulated","reasoning":"For safety reasons","confidence":0.5}';
+      const mockResponse =
+        '{"position":"AI should be regulated","reasoning":"For safety reasons","confidence":0.5}';
+      // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
-        citations: [
+        search_results: [
           { url: 'https://example.com/1', title: 'Source 1' },
           { url: 'https://example.com/2', title: 'Source 2' },
         ],
@@ -202,9 +202,11 @@ describe('PerplexityAgent', () => {
     });
 
     it('should handle comma-separated citation markers like [1,2,3]', async () => {
-      const mockResponse = '{"position":"Multiple sources agree [1, 2, 3]","reasoning":"test","confidence":0.5}';
+      const mockResponse =
+        '{"position":"Multiple sources agree [1, 2, 3]","reasoning":"test","confidence":0.5}';
+      // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
-        citations: [
+        search_results: [
           { url: 'https://example.com/1', title: 'Source 1' },
           { url: 'https://example.com/2', title: 'Source 2' },
           { url: 'https://example.com/3', title: 'Source 3' },
@@ -221,14 +223,18 @@ describe('PerplexityAgent', () => {
 
       // Should include citations 1, 2, 3 but not 4
       expect(response.citations).toHaveLength(3);
-      expect(response.citations?.map(c => c.title)).toEqual(['Source 1', 'Source 2', 'Source 3']);
+      expect(response.citations?.map((c) => c.title)).toEqual(['Source 1', 'Source 2', 'Source 3']);
     });
 
     it('should extract citations from Perplexity response (new search_results field)', async () => {
       const mockResponse = '{"position":"test [1] [2] [3]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         search_results: [
-          { url: 'https://example.com/ai-article', title: 'AI Regulation Overview', date: '2025-01-15' },
+          {
+            url: 'https://example.com/ai-article',
+            title: 'AI Regulation Overview',
+            date: '2025-01-15',
+          },
           { url: 'https://example.com/research', title: 'Research Paper', date: '2024-12-20' },
           { url: 'https://example.com/news', title: 'Latest AI News' }, // No date
         ],
@@ -276,12 +282,8 @@ describe('PerplexityAgent', () => {
       const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         // Both fields present - should use search_results
-        search_results: [
-          { url: 'https://example.com/new', title: 'New Format Source' },
-        ],
-        citations: [
-          { url: 'https://example.com/old', title: 'Old Format Source' },
-        ],
+        search_results: [{ url: 'https://example.com/new', title: 'New Format Source' }],
+        citations: [{ url: 'https://example.com/old', title: 'Old Format Source' }],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -296,55 +298,10 @@ describe('PerplexityAgent', () => {
       expect(response.citations?.[0]?.url).toBe('https://example.com/new');
     });
 
-    it('should extract images from Perplexity response', async () => {
-      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
-      const metadata: MockPerplexityMetadata = {
-        images: [
-          { url: 'https://example.com/img1.jpg', description: 'Image 1' },
-          'https://example.com/img2.jpg',
-        ],
-      };
-
-      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
-      const agent = new PerplexityAgent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
-      });
-
-      const response = await agent.generateResponse(defaultContext);
-
-      expect(response.images).toHaveLength(2);
-      expect(response.images?.[0]?.url).toBe('https://example.com/img1.jpg');
-      expect(response.images?.[0]?.description).toBe('Image 1');
-      expect(response.images?.[1]?.url).toBe('https://example.com/img2.jpg');
-    });
-
-    it('should extract related questions from Perplexity response', async () => {
-      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
-      const metadata: MockPerplexityMetadata = {
-        related_questions: [
-          'What are the benefits of AI?',
-          'How is AI used in healthcare?',
-        ],
-      };
-
-      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
-      const agent = new PerplexityAgent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
-      });
-
-      const response = await agent.generateResponse(defaultContext);
-
-      expect(response.relatedQuestions).toHaveLength(2);
-      expect(response.relatedQuestions?.[0]).toBe('What are the benefits of AI?');
-      expect(response.relatedQuestions?.[1]).toBe('How is AI used in healthcare?');
-    });
-
     it('should record built-in web search as perplexity_search tool call', async () => {
       const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
-        search_results: [
-          { url: 'https://example.com/ai', title: 'AI Article' },
-        ],
+        search_results: [{ url: 'https://example.com/ai', title: 'AI Article' }],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -448,7 +405,9 @@ describe('PerplexityAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', { query: 'AI regulation' });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
+        query: 'AI regulation',
+      });
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
       expect(response.citations).toHaveLength(1);
@@ -566,8 +525,6 @@ describe('search options', () => {
     const searchOptions: PerplexitySearchOptions = {
       recencyFilter: 'month',
       domainFilter: ['arxiv.org', 'nature.com'],
-      returnImages: true,
-      returnRelatedQuestions: true,
     };
 
     const agent = new PerplexityAgent(defaultConfig, {
@@ -581,8 +538,6 @@ describe('search options', () => {
       expect.objectContaining({
         search_recency_filter: 'month',
         search_domain_filter: ['arxiv.org', 'nature.com'],
-        return_images: true,
-        return_related_questions: true,
       })
     );
   });
@@ -620,10 +575,9 @@ describe('search options', () => {
     await agent.generateResponse(defaultContext);
 
     const callArgs = mockClient.chat.completions.create.mock.calls[0]?.[0];
-    expect(callArgs).not.toHaveProperty('search_recency_filter');
-    expect(callArgs).not.toHaveProperty('search_domain_filter');
-    expect(callArgs).not.toHaveProperty('return_images');
-    expect(callArgs).not.toHaveProperty('return_related_questions');
+    // When no search options are set, values should be null (SDK allows null for optional params)
+    expect(callArgs?.search_recency_filter).toBeNull();
+    expect(callArgs?.search_domain_filter).toBeNull();
   });
 });
 
@@ -766,83 +720,12 @@ describe('Perplexity extended field type validation', () => {
     expect(response.citations).toBeUndefined();
   });
 
-  it('should handle response with invalid images structure gracefully', async () => {
-    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
-    // Invalid: images should be an array
-    const metadata = {
-      images: { invalid: 'object' },
-    };
-
-    const mockClient = {
-      chat: {
-        completions: {
-          create: vi.fn().mockResolvedValue({
-            choices: [
-              {
-                message: { content: mockResponse, role: 'assistant' },
-                finish_reason: 'stop',
-              },
-            ],
-            ...metadata,
-          }),
-        },
-      },
-    };
-
-    const agent = new PerplexityAgent(defaultConfig, {
-      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
-    });
-
-    const response = await agent.generateResponse(defaultContext);
-
-    // Should return undefined images when validation fails
-    expect(response.images).toBeUndefined();
-  });
-
-  it('should handle response with invalid related_questions structure gracefully', async () => {
-    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
-    // Invalid: related_questions should be array of strings
-    const metadata = {
-      related_questions: [123, 456], // Numbers instead of strings
-    };
-
-    const mockClient = {
-      chat: {
-        completions: {
-          create: vi.fn().mockResolvedValue({
-            choices: [
-              {
-                message: { content: mockResponse, role: 'assistant' },
-                finish_reason: 'stop',
-              },
-            ],
-            ...metadata,
-          }),
-        },
-      },
-    };
-
-    const agent = new PerplexityAgent(defaultConfig, {
-      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
-    });
-
-    const response = await agent.generateResponse(defaultContext);
-
-    // Should return undefined when validation fails
-    expect(response.relatedQuestions).toBeUndefined();
-  });
-
-  it('should handle response with valid mixed metadata', async () => {
+  it('should handle response with valid search_results metadata', async () => {
     const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
     const metadata: MockPerplexityMetadata = {
       search_results: [
         { url: 'https://example.com/article', title: 'Article Title', date: '2025-01-01' },
       ],
-      images: [
-        { url: 'https://example.com/img.jpg', description: 'Test image' },
-        'https://example.com/img2.jpg',
-      ],
-      related_questions: ['What is AI?', 'How does AI work?'],
     };
 
     const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -854,10 +737,6 @@ describe('Perplexity extended field type validation', () => {
 
     expect(response.citations).toHaveLength(1);
     expect(response.citations?.[0]?.url).toBe('https://example.com/article');
-    expect(response.images).toHaveLength(2);
-    expect(response.images?.[0]?.url).toBe('https://example.com/img.jpg');
-    expect(response.relatedQuestions).toHaveLength(2);
-    expect(response.relatedQuestions?.[0]).toBe('What is AI?');
   });
 
   it('should handle response with no Perplexity extensions', async () => {
@@ -871,42 +750,5 @@ describe('Perplexity extended field type validation', () => {
     const response = await agent.generateResponse(defaultContext);
 
     expect(response.citations).toBeUndefined();
-    expect(response.images).toBeUndefined();
-    expect(response.relatedQuestions).toBeUndefined();
-  });
-
-  it('should handle image object with missing url gracefully', async () => {
-    const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
-    // Invalid: image object missing 'url'
-    const metadata = {
-      images: [
-        { description: 'Missing URL' }, // Missing required 'url'
-      ],
-    };
-
-    const mockClient = {
-      chat: {
-        completions: {
-          create: vi.fn().mockResolvedValue({
-            choices: [
-              {
-                message: { content: mockResponse, role: 'assistant' },
-                finish_reason: 'stop',
-              },
-            ],
-            ...metadata,
-          }),
-        },
-      },
-    };
-
-    const agent = new PerplexityAgent(defaultConfig, {
-      client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
-    });
-
-    const response = await agent.generateResponse(defaultContext);
-
-    // Should return undefined when validation fails
-    expect(response.images).toBeUndefined();
   });
 });

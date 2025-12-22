@@ -23,6 +23,10 @@ describe('RedTeamBlueTeamMode', () => {
       getTools: () => [],
       executeTool: vi.fn(),
       setContext: vi.fn(),
+      setCurrentAgentId: vi.fn(),
+      getPendingContextRequests: () => [],
+      clearPendingRequests: vi.fn(),
+      hasPendingRequests: () => false,
     };
   });
 
@@ -30,15 +34,16 @@ describe('RedTeamBlueTeamMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('red-team-blue-team');
     });
-
-    it('should have parallel execution pattern', () => {
-      expect(mode.executionPattern).toBe('parallel');
-    });
   });
 
   describe('getAgentRole hook', () => {
     it('should assign red team to even indices', () => {
-      const agent = new MockAgent({ id: 'agent-0', name: 'Agent', provider: 'anthropic', model: 'mock' });
+      const agent = new MockAgent({
+        id: 'agent-0',
+        name: 'Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
       // Access protected method for testing
       const role = (mode as any).getAgentRole(agent, 0, defaultContext);
       expect(role).toBe('red');
@@ -51,7 +56,12 @@ describe('RedTeamBlueTeamMode', () => {
     });
 
     it('should assign blue team to odd indices', () => {
-      const agent = new MockAgent({ id: 'agent-1', name: 'Agent', provider: 'anthropic', model: 'mock' });
+      const agent = new MockAgent({
+        id: 'agent-1',
+        name: 'Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
       // Access protected method for testing
       const role = (mode as any).getAgentRole(agent, 1, defaultContext);
       expect(role).toBe('blue');
@@ -202,74 +212,27 @@ describe('RedTeamBlueTeamMode', () => {
   });
 
   describe('buildAgentPrompt', () => {
-    it('should include red team instructions for even index agents', () => {
-      // First agent (index 0) should get red team prompt
+    it('should return base prompt with mode overview', () => {
+      // buildAgentPrompt now returns only the base prompt
+      // Team-specific content is added by transformContext
       const prompt = mode.buildAgentPrompt(defaultContext);
 
-      expect(prompt.toLowerCase()).toContain('red team');
-      expect(prompt.toLowerCase()).toMatch(/critical|attack|risk|vulnerab/);
+      expect(prompt.toLowerCase()).toContain('red team/blue team');
+      expect(prompt).toContain('RED TEAM');
+      expect(prompt).toContain('BLUE TEAM');
     });
 
-    it('should include blue team instructions for odd index agents', () => {
-      // Second agent (index 1) should get blue team prompt
-      const contextWithOneResponse: DebateContext = {
-        ...defaultContext,
-        previousResponses: [
-          {
-            agentId: 'red-1',
-            agentName: 'Red Team',
-            position: 'Attack',
-            reasoning: 'Critical analysis',
-            confidence: 0.8,
-            timestamp: new Date(),
-          },
-        ],
-      };
-
-      const prompt = mode.buildAgentPrompt(contextWithOneResponse);
-
-      expect(prompt.toLowerCase()).toContain('blue team');
-      expect(prompt.toLowerCase()).toMatch(/constructive|solution|defend|mitigation/);
+    it('should mention that team assignment will be provided', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+      expect(prompt.toLowerCase()).toContain('team assignment');
     });
 
-    it('should include focus question when provided', () => {
-      const contextWithFocus: DebateContext = {
-        ...defaultContext,
-        focusQuestion: 'Focus on authentication vulnerabilities',
-      };
-
-      const prompt = mode.buildAgentPrompt(contextWithFocus);
-      expect(prompt).toContain('Focus on authentication vulnerabilities');
-    });
-
-    it('should reference previous responses in later rounds', () => {
-      const contextWithPrevious: DebateContext = {
-        ...defaultContext,
-        currentRound: 2,
-        previousResponses: [
-          {
-            agentId: 'blue-1',
-            agentName: 'Blue Team',
-            position: 'Implemented firewall rules',
-            reasoning: 'Block unauthorized access',
-            confidence: 0.85,
-            timestamp: new Date(),
-          },
-          {
-            agentId: 'red-1',
-            agentName: 'Red Team',
-            position: 'Found SQL injection vulnerability',
-            reasoning: 'Input validation missing',
-            confidence: 0.9,
-            timestamp: new Date(),
-          },
-        ],
-      };
-
-      const prompt = mode.buildAgentPrompt(contextWithPrevious);
-
-      // Should mention reviewing other team's responses
-      expect(prompt.toLowerCase()).toMatch(/review|blue team|red team/);
+    it('should describe both team roles in base prompt', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+      // Red team description
+      expect(prompt.toLowerCase()).toMatch(/attack|criticize|vulnerabilities|risks/);
+      // Blue team description
+      expect(prompt.toLowerCase()).toMatch(/defend|build|solutions|mitigate/);
     });
   });
 

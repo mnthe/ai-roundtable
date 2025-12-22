@@ -100,7 +100,10 @@ describe('DebateEngine', () => {
   });
 
   describe('executeRound', () => {
-    const createTestAgent = (id: string, response?: Partial<ReturnType<MockAgent['generateResponse']>>) => {
+    const createTestAgent = (
+      id: string,
+      response?: Partial<ReturnType<MockAgent['generateResponse']>>
+    ) => {
       const agent = new MockAgent({
         id,
         name: `Agent ${id}`,

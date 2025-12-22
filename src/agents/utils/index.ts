@@ -1,22 +1,20 @@
 /**
  * Agent Utilities - Shared utilities for AI agents
+ *
+ * Note: Provider-specific tool converters are in their respective folders:
+ * - Anthropic: agents/anthropic/utils.ts (buildAnthropicTools)
+ * - Google: agents/google/utils.ts (buildGeminiTools)
+ * - OpenAI: agents/openai/utils.ts (buildResponsesFunctionTools)
+ * - Perplexity: agents/perplexity/utils.ts (buildPerplexityTools)
  */
 
 export { convertSDKError, isRetryableError } from './error-converter.js';
-export { buildOpenAITools, buildResponsesFunctionTools } from './tool-converters.js';
 export {
   createLightModelAgent,
   type LightModelAgentOptions,
 } from './light-model-factory.js';
 export {
-  executeResponsesCompletion,
-  executeSimpleResponsesCompletion,
-  buildResponsesTools,
-  extractCitationsFromResponseOutput,
-  extractTextFromResponse,
-  recordWebSearchToolCall,
-  type ResponsesCompletionParams,
-  type ResponsesCompletionResult,
-  type ResponsesWebSearchConfig,
-  type SimpleResponsesCompletionParams,
-} from './openai-responses.js';
+  selectPreferredAgent,
+  createLightAgentFromBase,
+  type LightAgentConfig,
+} from './light-agent-selector.js';

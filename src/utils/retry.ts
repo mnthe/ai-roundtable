@@ -9,7 +9,14 @@ const logger = createLogger('Retry');
 
 export interface RetryOptions {
   /**
-   * Maximum number of retry attempts
+   * Maximum number of retry attempts AFTER the initial attempt.
+   * Total attempts = 1 (initial) + maxRetries.
+   *
+   * @example
+   * - maxRetries=0: 1 attempt total (no retries)
+   * - maxRetries=1: 2 attempts total (1 initial + 1 retry)
+   * - maxRetries=3: 4 attempts total (1 initial + 3 retries)
+   *
    * @default 3
    */
   maxRetries: number;
@@ -48,6 +55,13 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
 
 /**
  * Calculate delay with exponential backoff and jitter
+ * Uses "full jitter" strategy: random value between 0 and cappedDelay
+ * This helps prevent thundering herd by spreading out retries
+ *
+ * The effective delay range for each attempt:
+ * - Attempt 0: [0, baseDelay]
+ * - Attempt 1: [0, baseDelay * backoffFactor]
+ * - Attempt N: [0, min(baseDelay * backoffFactor^N, maxDelay)]
  */
 function calculateDelay(
   attempt: number,
@@ -61,19 +75,19 @@ function calculateDelay(
   // Cap at maxDelay
   const cappedDelay = Math.min(exponentialDelay, maxDelay);
 
-  // Add jitter: random value between 0 and cappedDelay
-  const jitter = Math.random() * cappedDelay;
+  // Full jitter: random value between 0.5 * cappedDelay and cappedDelay
+  // This ensures we always wait at least half the calculated delay
+  // while still providing enough randomization to prevent thundering herd
+  const minDelay = cappedDelay * 0.5;
+  const jitter = Math.random() * (cappedDelay - minDelay);
 
-  return jitter;
+  return minDelay + jitter;
 }
 
 /**
  * Check if an error should be retried
  */
-function isRetryableError(
-  error: unknown,
-  retryableErrors?: string[]
-): boolean {
+function isRetryableError(error: unknown, retryableErrors?: string[]): boolean {
   // If it's a RoundtableError, check the retryable flag
   if (error instanceof RoundtableError) {
     // If specific error codes are provided, check if this error code is in the list
@@ -104,12 +118,18 @@ function sleep(ms: number): Promise<void> {
  * Execute a function with retry logic
  *
  * @param fn - The async function to execute
- * @param options - Retry options
+ * @param options - Retry options (see {@link RetryOptions})
  * @returns Promise that resolves with the function result
  * @throws The original error if max retries exceeded or error is not retryable
  *
+ * @remarks
+ * The `maxRetries` option specifies the number of retry attempts AFTER the initial attempt.
+ * With `maxRetries=3` (default), the function will be called up to 4 times total:
+ * 1 initial attempt + 3 retries.
+ *
  * @example
  * ```typescript
+ * // Will attempt up to 6 times (1 initial + 5 retries)
  * const result = await withRetry(
  *   async () => await apiCall(),
  *   { maxRetries: 5, baseDelay: 2000 }
@@ -144,12 +164,7 @@ export async function withRetry<T>(
       }
 
       // Calculate delay with exponential backoff and jitter
-      const delay = calculateDelay(
-        attempt,
-        opts.baseDelay,
-        opts.maxDelay,
-        opts.backoffFactor
-      );
+      const delay = calculateDelay(attempt, opts.baseDelay, opts.maxDelay, opts.backoffFactor);
 
       // Log retry attempt at debug level
       logger.debug(

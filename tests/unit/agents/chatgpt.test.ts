@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ChatGPTAgent, createChatGPTAgent } from '../../../src/agents/chatgpt.js';
+import { ChatGPTAgent, createChatGPTAgent } from '../../../src/agents/openai/chatgpt.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {

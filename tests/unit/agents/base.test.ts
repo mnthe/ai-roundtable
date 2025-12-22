@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAgent } from '../../../src/agents/base.js';
-import type { AgentConfig, DebateContext, AgentResponse, Citation, ToolCallRecord } from '../../../src/types/index.js';
+import type {
+  AgentConfig,
+  DebateContext,
+  AgentResponse,
+  Citation,
+  ToolCallRecord,
+} from '../../../src/types/index.js';
 
 describe('BaseAgent', () => {
   const defaultConfig: AgentConfig = {
@@ -466,9 +472,7 @@ describe('extractCitationsFromToolResult', () => {
     const result = {
       success: true,
       data: {
-        citations: [
-          { title: 'Source 1', url: 'https://source.com/1', snippet: 'Info 1' },
-        ],
+        citations: [{ title: 'Source 1', url: 'https://source.com/1', snippet: 'Info 1' }],
       },
     };
 
@@ -487,9 +491,7 @@ describe('extractCitationsFromToolResult', () => {
     const result = {
       success: false,
       data: {
-        results: [
-          { title: 'Article', url: 'https://example.com', snippet: 'Snippet' },
-        ],
+        results: [{ title: 'Article', url: 'https://example.com', snippet: 'Snippet' }],
       },
     };
 
@@ -503,9 +505,7 @@ describe('extractCitationsFromToolResult', () => {
     const result = {
       success: true,
       data: {
-        results: [
-          { title: 'Article', url: 'https://example.com', snippet: 'Snippet' },
-        ],
+        results: [{ title: 'Article', url: 'https://example.com', snippet: 'Snippet' }],
       },
     };
 
@@ -577,7 +577,11 @@ describe('extractResponseFromToolCallsOrText', () => {
       },
     ];
 
-    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, 'Raw text', defaultContext);
+    const result = agent.testExtractResponseFromToolCallsOrText(
+      toolCalls,
+      'Raw text',
+      defaultContext
+    );
 
     expect(result.position).toBe('Tool position');
     expect(result.reasoning).toBe('Tool reasoning');
@@ -744,48 +748,6 @@ describe('buildAgentResponse', () => {
 
     expect(result.citations).toBeUndefined();
     expect(result.toolCalls).toBeUndefined();
-  });
-
-  it('should include images and relatedQuestions for Perplexity', () => {
-    const agent = new TestableAgent(defaultConfig);
-    const images = [{ url: 'https://image.com/1.jpg', description: 'Image 1' }];
-    const relatedQuestions = ['Question 1?', 'Question 2?'];
-
-    const result = agent.testBuildAgentResponse({
-      parsed: {
-        position: 'Position',
-        reasoning: 'Reasoning',
-        confidence: 0.7,
-      },
-      rawText: '',
-      citations: [],
-      toolCalls: [],
-      images,
-      relatedQuestions,
-    });
-
-    expect(result.images).toEqual(images);
-    expect(result.relatedQuestions).toEqual(relatedQuestions);
-  });
-
-  it('should omit empty images and relatedQuestions arrays', () => {
-    const agent = new TestableAgent(defaultConfig);
-
-    const result = agent.testBuildAgentResponse({
-      parsed: {
-        position: 'Position',
-        reasoning: 'Reasoning',
-        confidence: 0.5,
-      },
-      rawText: '',
-      citations: [],
-      toolCalls: [],
-      images: [],
-      relatedQuestions: [],
-    });
-
-    expect(result.images).toBeUndefined();
-    expect(result.relatedQuestions).toBeUndefined();
   });
 
   it('should use fallback values for empty position/reasoning', () => {

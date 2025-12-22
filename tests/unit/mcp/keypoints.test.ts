@@ -18,9 +18,7 @@ function extractKeyPoints(reasoning: string): string[] {
   const numberedMatches = reasoning.match(/(?:^|\n)\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?([^\n*]+)/g);
   if (numberedMatches && numberedMatches.length > 0) {
     for (const match of numberedMatches.slice(0, 3)) {
-      const cleaned = match
-        .replace(/^\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?/, '')
-        .trim();
+      const cleaned = match.replace(/^\s*(?:\d+[.):]\s*|\*\s*|-\s*)\*?\*?/, '').trim();
       if (cleaned.length > 10) {
         keyPoints.push(cleaned);
       }
@@ -50,7 +48,8 @@ describe('KeyPoints Extraction', () => {
   describe('Long content preservation', () => {
     it('should preserve keyPoints longer than 200 characters without truncation (single-line format)', () => {
       // Create long keyPoints as single lines (no newlines within each point)
-      const mockReasoning = '1. 저작권 부여를 지지하는 근거: AI가 생성한 콘텐츠가 독창적이고 창의적인 경우, 이를 창작물로 인정하여 저작권을 부여하는 것이 공정하며, AI 기술의 발전을 촉진할 수 있습니다. 이는 AI 개발자와 사용자에게 인센티브를 제공하고, AI 기반 창작 활동을 장려하는 효과가 있습니다.\n2. 저작권 부여 반대 근거: AI는 인간의 감정, 의도, 창의성을 가지지 않으므로, AI가 생성한 콘텐츠에 저작권을 부여하는 것은 부적절할 수 있습니다. 또한, 기존 저작권법의 기본 원칙인 인간의 창작 활동 보호와 충돌할 수 있습니다.\n3. 절충안 제시: AI 생성 콘텐츠의 저작권을 AI 소유자나 사용자에게 부여하되, AI의 기여도와 인간의 개입 정도를 고려하여 저작권의 범위를 조정하는 방안을 검토할 수 있습니다. 이를 통해 AI 기술 발전과 기존 저작권 보호의 균형을 맞출 수 있습니다.';
+      const mockReasoning =
+        '1. 저작권 부여를 지지하는 근거: AI가 생성한 콘텐츠가 독창적이고 창의적인 경우, 이를 창작물로 인정하여 저작권을 부여하는 것이 공정하며, AI 기술의 발전을 촉진할 수 있습니다. 이는 AI 개발자와 사용자에게 인센티브를 제공하고, AI 기반 창작 활동을 장려하는 효과가 있습니다.\n2. 저작권 부여 반대 근거: AI는 인간의 감정, 의도, 창의성을 가지지 않으므로, AI가 생성한 콘텐츠에 저작권을 부여하는 것은 부적절할 수 있습니다. 또한, 기존 저작권법의 기본 원칙인 인간의 창작 활동 보호와 충돌할 수 있습니다.\n3. 절충안 제시: AI 생성 콘텐츠의 저작권을 AI 소유자나 사용자에게 부여하되, AI의 기여도와 인간의 개입 정도를 고려하여 저작권의 범위를 조정하는 방안을 검토할 수 있습니다. 이를 통해 AI 기술 발전과 기존 저작권 보호의 균형을 맞출 수 있습니다.';
 
       const keyPoints = extractKeyPoints(mockReasoning);
 
@@ -69,14 +68,17 @@ describe('KeyPoints Extraction', () => {
       expect(keyPoints[0]).toContain('AI 기반 창작 활동을 장려하는 효과가 있습니다');
 
       expect(keyPoints[1]).toContain('저작권 부여 반대 근거');
-      expect(keyPoints[1]).toContain('기존 저작권법의 기본 원칙인 인간의 창작 활동 보호와 충돌할 수 있습니다');
+      expect(keyPoints[1]).toContain(
+        '기존 저작권법의 기본 원칙인 인간의 창작 활동 보호와 충돌할 수 있습니다'
+      );
 
       expect(keyPoints[2]).toContain('절충안 제시');
       expect(keyPoints[2]).toContain('AI 기술 발전과 기존 저작권 보호의 균형을 맞출 수 있습니다');
     });
 
     it('should preserve very long bullet points (>300 characters)', () => {
-      const veryLongPoint = 'This is an extremely long bullet point that far exceeds any reasonable character limit that might have existed previously. The content contains comprehensive analysis, detailed reasoning, multiple perspectives, and extensive evidence that must all be preserved in their entirety. Truncation would result in loss of critical information and context that is essential for understanding the complete argument being presented.';
+      const veryLongPoint =
+        'This is an extremely long bullet point that far exceeds any reasonable character limit that might have existed previously. The content contains comprehensive analysis, detailed reasoning, multiple perspectives, and extensive evidence that must all be preserved in their entirety. Truncation would result in loss of critical information and context that is essential for understanding the complete argument being presented.';
 
       const mockReasoning = `
 * ${veryLongPoint}
@@ -177,7 +179,8 @@ describe('KeyPoints Extraction', () => {
 
   describe('Sentence extraction fallback', () => {
     it('should extract sentences when no bullet points are found', () => {
-      const mockReasoning = 'This is the first sentence with sufficient length. This is the second sentence with different content. This is the third sentence with more details.';
+      const mockReasoning =
+        'This is the first sentence with sufficient length. This is the second sentence with different content. This is the third sentence with more details.';
 
       const keyPoints = extractKeyPoints(mockReasoning);
 
@@ -198,7 +201,8 @@ describe('KeyPoints Extraction', () => {
     });
 
     it('should handle sentences with various punctuation', () => {
-      const mockReasoning = 'First question asks something? Second statement declares something! Third sentence describes something.';
+      const mockReasoning =
+        'First question asks something? Second statement declares something! Third sentence describes something.';
 
       const keyPoints = extractKeyPoints(mockReasoning);
 

@@ -12,21 +12,9 @@ import { KeyPointsExtractor } from '../core/key-points-extractor.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
 import { DefaultAgentToolkit, createSessionManagerAdapter } from '../tools/index.js';
-import { TOOLS, createErrorResponse, type ToolResponse } from './tools.js';
-import {
-  handleStartRoundtable,
-  handleContinueRoundtable,
-  handleControlSession,
-  handleListSessions,
-  handleGetConsensus,
-  handleGetRoundDetails,
-  handleGetResponseDetail,
-  handleGetCitations,
-  handleGetThoughts,
-  handleExportSession,
-  handleSynthesizeDebate,
-  handleGetAgents,
-} from './handlers/index.js';
+import { TOOLS, createErrorResponse } from './tools.js';
+import { HandlerRegistry, type HandlerContext } from './handler-registry.js';
+import { registerAllHandlers } from './handlers/index.js';
 
 const logger = createLogger('MCPServer');
 
@@ -113,12 +101,25 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
     }
   );
 
+  // Create handler registry
+  const handlerRegistry = new HandlerRegistry();
+  registerAllHandlers(handlerRegistry);
+
+  // Create handler context
+  const handlerContext: HandlerContext = {
+    debateEngine,
+    sessionManager,
+    agentRegistry,
+    aiConsensusAnalyzer,
+    keyPointsExtractor,
+  };
+
   // Register tool list handler
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: TOOLS,
   }));
 
-  // Register tool call handler
+  // Register tool call handler (simplified with registry)
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const startTime = Date.now();
@@ -126,72 +127,7 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
     logger.info({ tool: name }, 'Tool call started');
 
     try {
-      let result: ToolResponse;
-
-      switch (name) {
-        case 'start_roundtable':
-          result = await handleStartRoundtable(
-            args,
-            debateEngine,
-            sessionManager,
-            agentRegistry,
-            keyPointsExtractor
-          );
-          break;
-
-        case 'continue_roundtable':
-          result = await handleContinueRoundtable(
-            args,
-            debateEngine,
-            sessionManager,
-            agentRegistry,
-            keyPointsExtractor
-          );
-          break;
-
-        case 'get_consensus':
-          result = await handleGetConsensus(args, sessionManager, aiConsensusAnalyzer);
-          break;
-
-        case 'get_agents':
-          result = await handleGetAgents(agentRegistry);
-          break;
-
-        case 'list_sessions':
-          result = await handleListSessions(sessionManager);
-          break;
-
-        case 'get_thoughts':
-          result = await handleGetThoughts(args, sessionManager);
-          break;
-
-        case 'export_session':
-          result = await handleExportSession(args, sessionManager, agentRegistry);
-          break;
-
-        case 'control_session':
-          result = await handleControlSession(args, sessionManager);
-          break;
-
-        case 'get_round_details':
-          result = await handleGetRoundDetails(args, sessionManager, aiConsensusAnalyzer);
-          break;
-
-        case 'get_response_detail':
-          result = await handleGetResponseDetail(args, sessionManager);
-          break;
-
-        case 'get_citations':
-          result = await handleGetCitations(args, sessionManager);
-          break;
-
-        case 'synthesize_debate':
-          result = await handleSynthesizeDebate(args, sessionManager, agentRegistry);
-          break;
-
-        default:
-          result = createErrorResponse(`Unknown tool: ${name}`);
-      }
+      const result = await handlerRegistry.execute(name, args, handlerContext);
 
       const duration = Date.now() - startTime;
       const isError = result.content[0]?.text?.includes('"error"') ?? false;

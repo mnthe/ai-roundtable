@@ -6,9 +6,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AIConsensusAnalyzer } from '../../../src/core/ai-consensus-analyzer.js';
 import { AgentRegistry } from '../../../src/agents/registry.js';
 import type { AgentResponse, AIConsensusResult } from '../../../src/types/index.js';
+import {
+  cleanLLMResponse,
+  parsePartialJsonResponse,
+  extractAgreementLevelFromText,
+  extractSummaryFromText,
+  parseAIConsensusResponse,
+} from '../../../src/core/utils/json-parser.js';
 
 // Mock agent for testing
-const createMockAgent = (id: string, provider: 'anthropic' | 'openai' | 'google' | 'perplexity') => ({
+const createMockAgent = (
+  id: string,
+  provider: 'anthropic' | 'openai' | 'google' | 'perplexity'
+) => ({
   getInfo: () => ({
     id,
     name: `Test ${provider}`,
@@ -66,9 +76,10 @@ const createSampleResponses = (): AgentResponse[] => [
   {
     agentId: 'chatgpt-default',
     agentName: 'ChatGPT',
-    position: 'Artificial intelligence development requires responsible approaches and safety considerations.',
+    position:
+      'Artificial intelligence development requires responsible approaches and safety considerations.',
     reasoning: 'The technology is powerful and needs oversight.',
-    confidence: 0.80,
+    confidence: 0.8,
     timestamp: new Date(),
   },
 ];
@@ -81,7 +92,7 @@ describe('AIConsensusAnalyzer', () => {
     registry = new AgentRegistry();
     analyzer = new AIConsensusAnalyzer({
       registry,
-          });
+    });
   });
 
   describe('Constructor', () => {
@@ -142,11 +153,7 @@ describe('AIConsensusAnalyzer', () => {
     describe('With AI agent', () => {
       beforeEach(() => {
         const mockAgent = createMockAgent('test-agent', 'anthropic');
-        registry.registerProvider(
-          'anthropic',
-          () => mockAgent as any,
-          'test-model'
-        );
+        registry.registerProvider('anthropic', () => mockAgent as any, 'test-model');
         registry.createAgent({
           id: 'test-agent',
           name: 'Test Agent',
@@ -329,120 +336,88 @@ describe('AIConsensusAnalyzer', () => {
 });
 
 describe('JSON parsing strategies', () => {
-  let registry: AgentRegistry;
-  let analyzer: AIConsensusAnalyzer;
-
-  beforeEach(() => {
-    registry = new AgentRegistry();
-    analyzer = new AIConsensusAnalyzer({
-      registry,
-          });
-  });
-
-  // Access private methods for testing via any
-  const getPrivateMethods = (instance: AIConsensusAnalyzer) => {
-    return instance as unknown as {
-      cleanLLMResponse: (raw: string) => string;
-      parseRawAIResponse: (raw: string, analyzerId: string) => any;
-      parsePartialJsonResponse: (json: string, analyzerId: string) => any;
-      extractAgreementLevelFromText: (text: string) => number | null;
-      extractSummaryFromText: (text: string) => string | null;
-    };
-  };
-
   describe('cleanLLMResponse', () => {
     it('should strip complete markdown code fences', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '```json\n{"agreementLevel": 0.75}\n```';
-      const result = methods.cleanLLMResponse(input);
+      const result = cleanLLMResponse(input);
       expect(result).toBe('{"agreementLevel": 0.75}');
     });
 
     it('should handle incomplete markdown code fences (truncated response)', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '```json\n{"agreementLevel": 0.75, "summary": "truncated';
-      const result = methods.cleanLLMResponse(input);
+      const result = cleanLLMResponse(input);
       expect(result).toBe('{"agreementLevel": 0.75, "summary": "truncated');
     });
 
     it('should extract JSON from text with leading content', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = 'Here is the analysis:\n{"agreementLevel": 0.5}';
-      const result = methods.cleanLLMResponse(input);
+      const result = cleanLLMResponse(input);
       expect(result).toBe('{"agreementLevel": 0.5}');
     });
   });
 
   describe('parsePartialJsonResponse', () => {
     it('should parse truncated JSON with agreementLevel', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '{"agreementLevel": 0.62, "clusters": [{"theme": "Test';
-      const result = methods.parsePartialJsonResponse(input, 'test-analyzer');
+      const result = parsePartialJsonResponse(input, 'test-analyzer');
 
       expect(result).not.toBeNull();
-      expect(result.agreementLevel).toBe(0.62);
-      expect(result.analyzerId).toBe('test-analyzer');
+      expect(result!.agreementLevel).toBe(0.62);
+      expect(result!.analyzerId).toBe('test-analyzer');
     });
 
     it('should return null if no agreementLevel found', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '{"clusters": [{"theme": "Test"';
-      const result = methods.parsePartialJsonResponse(input, 'test');
+      const result = parsePartialJsonResponse(input, 'test');
 
       expect(result).toBeNull();
     });
 
     it('should extract commonGround array from partial JSON', () => {
-      const methods = getPrivateMethods(analyzer);
-      const input = '{"agreementLevel": 0.8, "commonGround": ["Point A", "Point B"], "summary": "Test';
-      const result = methods.parsePartialJsonResponse(input, 'test');
+      const input =
+        '{"agreementLevel": 0.8, "commonGround": ["Point A", "Point B"], "summary": "Test';
+      const result = parsePartialJsonResponse(input, 'test');
 
       expect(result).not.toBeNull();
-      expect(result.commonGround).toEqual(['Point A', 'Point B']);
+      expect(result!.commonGround).toEqual(['Point A', 'Point B']);
     });
   });
 
   describe('extractAgreementLevelFromText', () => {
     it('should extract agreementLevel from malformed JSON', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '{"agreementLevel": 0.75, broken json here';
-      const result = methods.extractAgreementLevelFromText(input);
+      const result = extractAgreementLevelFromText(input);
       expect(result).toBe(0.75);
     });
 
     it('should return null for invalid agreementLevel', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '{"agreementLevel": "high"}';
-      const result = methods.extractAgreementLevelFromText(input);
+      const result = extractAgreementLevelFromText(input);
       expect(result).toBeNull();
     });
 
     it('should reject out of range values', () => {
-      const methods = getPrivateMethods(analyzer);
-      expect(methods.extractAgreementLevelFromText('{"agreementLevel": 1.5}')).toBeNull();
-      expect(methods.extractAgreementLevelFromText('{"agreementLevel": -0.5}')).toBeNull();
+      expect(extractAgreementLevelFromText('{"agreementLevel": 1.5}')).toBeNull();
+      expect(extractAgreementLevelFromText('{"agreementLevel": -0.5}')).toBeNull();
     });
   });
 
   describe('extractSummaryFromText', () => {
     it('should extract summary from partial JSON', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '{"agreementLevel": 0.5, "summary": "This is a test summary", "other';
-      const result = methods.extractSummaryFromText(input);
+      const result = extractSummaryFromText(input);
       expect(result).toBe('This is a test summary');
     });
 
     it('should return null if no summary found', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = '{"agreementLevel": 0.5}';
-      const result = methods.extractSummaryFromText(input);
+      const result = extractSummaryFromText(input);
       expect(result).toBeNull();
     });
   });
 
-  describe('parseRawAIResponse - full integration', () => {
+  describe('parseAIConsensusResponse - full integration', () => {
     it('should parse complete valid JSON', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = JSON.stringify({
         agreementLevel: 0.85,
         commonGround: ['Point 1', 'Point 2'],
@@ -450,7 +425,7 @@ describe('JSON parsing strategies', () => {
         summary: 'Test summary',
         reasoning: 'Test reasoning',
       });
-      const result = methods.parseRawAIResponse(input, 'test');
+      const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.85);
       expect(result.commonGround).toEqual(['Point 1', 'Point 2']);
@@ -458,36 +433,34 @@ describe('JSON parsing strategies', () => {
     });
 
     it('should handle markdown-wrapped JSON', () => {
-      const methods = getPrivateMethods(analyzer);
-      const input = '```json\n{"agreementLevel": 0.7, "commonGround": [], "disagreementPoints": [], "summary": "Test"}\n```';
-      const result = methods.parseRawAIResponse(input, 'test');
+      const input =
+        '```json\n{"agreementLevel": 0.7, "commonGround": [], "disagreementPoints": [], "summary": "Test"}\n```';
+      const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.7);
     });
 
     it('should handle truncated markdown JSON', () => {
-      const methods = getPrivateMethods(analyzer);
-      const input = '```json\n{"agreementLevel": 0.65, "clusters": [{"theme": "Context-Dependent Pragmatism", "agentIds": ["claude", "chatgpt"], "summary": "TypeScript\'s value dep';
-      const result = methods.parseRawAIResponse(input, 'test');
+      const input =
+        '```json\n{"agreementLevel": 0.65, "clusters": [{"theme": "Context-Dependent Pragmatism", "agentIds": ["claude", "chatgpt"], "summary": "TypeScript\'s value dep';
+      const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.65);
       expect(result.analyzerId).toBe('test');
     });
 
     it('should use regex extraction as fallback', () => {
-      const methods = getPrivateMethods(analyzer);
       // This JSON is so malformed that even partial-json can't parse it
       const input = '{"agreementLevel": 0.42 malformed content without proper JSON structure';
-      const result = methods.parseRawAIResponse(input, 'test');
+      const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.42);
       expect(result.reasoning).toContain('partial/malformed');
     });
 
     it('should return default 0.5 when all strategies fail', () => {
-      const methods = getPrivateMethods(analyzer);
       const input = 'This is not JSON at all, just plain text';
-      const result = methods.parseRawAIResponse(input, 'test');
+      const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.5);
       expect(result.commonGround).toContain('Unable to determine common ground');

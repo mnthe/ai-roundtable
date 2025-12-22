@@ -67,9 +67,7 @@ describe('AnonymizationProcessor', () => {
 
   it('should anonymize single response', () => {
     const context = createMockContext({
-      previousResponses: [
-        createMockResponse({ agentId: 'claude-1', agentName: 'Claude' }),
-      ],
+      previousResponses: [createMockResponse({ agentId: 'claude-1', agentName: 'Claude' })],
     });
 
     const result = processor.process(context);
@@ -440,9 +438,7 @@ describe('ProcessorChain', () => {
       name: 'first',
       process: (ctx) => ({
         ...ctx,
-        previousResponses: [
-          createMockResponse({ agentId: 'added-by-first', agentName: 'Added' }),
-        ],
+        previousResponses: [createMockResponse({ agentId: 'added-by-first', agentName: 'Added' })],
       }),
     };
 
@@ -496,10 +492,7 @@ describe('ProcessorChain', () => {
       ],
     });
 
-    const chain = new ProcessorChain([
-      new AnonymizationProcessor(),
-      new StatisticsProcessor(),
-    ]);
+    const chain = new ProcessorChain([new AnonymizationProcessor(), new StatisticsProcessor()]);
 
     const result = chain.process(context);
 

@@ -80,12 +80,13 @@ export function createMockAnthropicClientWithToolUse(
 
 /**
  * Extended mock response metadata for Perplexity
+ * Matches the official @perplexity-ai/perplexity_ai SDK types:
+ * - citations: Array of string URLs (deprecated field)
+ * - search_results: Array of objects with url, title, date, snippet (new field)
  */
 export interface MockPerplexityMetadata {
-  citations?: Array<string | { url: string; title?: string }>;
-  search_results?: Array<{ url: string; title?: string; date?: string }>;
-  images?: Array<string | { url: string; description?: string }>;
-  related_questions?: string[];
+  citations?: Array<string>;
+  search_results?: Array<{ url: string; title?: string; date?: string; snippet?: string }>;
 }
 
 /**
@@ -179,8 +180,6 @@ export function createMockPerplexityClient(
           ],
           citations: metadata?.citations,
           search_results: metadata?.search_results,
-          images: metadata?.images,
-          related_questions: metadata?.related_questions,
         }),
       },
     },
@@ -250,13 +249,14 @@ export function createMockResponsesClient(
   responseText: string,
   urlCitations?: Array<{ title: string; url: string }>
 ) {
-  const annotations = urlCitations?.map((c) => ({
-    type: 'url_citation' as const,
-    title: c.title,
-    url: c.url,
-    start_index: 0,
-    end_index: 10,
-  })) ?? [];
+  const annotations =
+    urlCitations?.map((c) => ({
+      type: 'url_citation' as const,
+      title: c.title,
+      url: c.url,
+      start_index: 0,
+      end_index: 10,
+    })) ?? [];
 
   return {
     responses: {

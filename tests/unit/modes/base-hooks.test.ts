@@ -462,5 +462,4 @@ describe('BaseModeStrategy Hooks', () => {
       expect(mode.transformContextCalls[1].context.previousResponses[0].agentId).toBe('agent-1');
     });
   });
-
 });

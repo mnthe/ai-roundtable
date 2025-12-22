@@ -9,11 +9,7 @@
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
-import {
-  buildModePrompt,
-  createOutputSections,
-  type ModePromptConfig,
-} from './utils/index.js';
+import { buildModePrompt, createOutputSections, type ModePromptConfig } from './utils/index.js';
 
 /**
  * Socratic mode prompt configuration

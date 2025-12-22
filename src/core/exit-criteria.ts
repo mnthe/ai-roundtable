@@ -8,6 +8,7 @@
  * 4. Max rounds - Maximum rounds reached (fallback)
  */
 
+import { EXIT_CRITERIA_CONFIG } from '../config/exit-criteria.js';
 import type { AgentResponse, ConsensusResult } from '../types/index.js';
 
 // ============================================
@@ -51,12 +52,14 @@ export interface ExitResult {
 }
 
 // ============================================
-// Default Values
+// Default Values (from centralized config)
 // ============================================
 
-const DEFAULT_CONSENSUS_THRESHOLD = 0.9;
-const DEFAULT_CONVERGENCE_ROUNDS = 2;
-const DEFAULT_CONFIDENCE_THRESHOLD = 0.85;
+const {
+  consensusThreshold: DEFAULT_CONSENSUS_THRESHOLD,
+  convergenceRounds: DEFAULT_CONVERGENCE_ROUNDS,
+  confidenceThreshold: DEFAULT_CONFIDENCE_THRESHOLD,
+} = EXIT_CRITERIA_CONFIG;
 
 /**
  * Similarity threshold for position comparison
@@ -134,8 +137,7 @@ export function checkExitCriteria(
   // Check 3: All agents confident
   const allConfident = responses.every((r) => r.confidence >= confidenceThreshold);
   if (allConfident && responses.length > 0) {
-    const avgConfidence =
-      responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
+    const avgConfidence = responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
     return {
       shouldExit: true,
       reason: 'confidence',

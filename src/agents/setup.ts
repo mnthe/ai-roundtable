@@ -1,39 +1,28 @@
 /**
  * Agent Setup - Initialize agents based on available API keys
  *
- * This module automatically detects available API keys and registers
- * the corresponding AI providers and default agents.
+ * This module registers AI providers and creates default agents
+ * using configuration from the config module.
  */
 
 import { AgentRegistry } from './registry.js';
-import { ClaudeAgent } from './claude.js';
-import { ChatGPTAgent } from './chatgpt.js';
-import { GeminiAgent } from './gemini.js';
-import { PerplexityAgent } from './perplexity.js';
-import type { AIProvider, AgentConfig } from '../types/index.js';
+import { ClaudeAgent } from './anthropic/claude.js';
+import { ChatGPTAgent } from './openai/chatgpt.js';
+import { GeminiAgent } from './google/gemini.js';
+import { PerplexityAgent } from './perplexity/perplexity.js';
+import type { AgentConfig } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
-import { getEnvOptional } from '../utils/env.js';
+import {
+  type ApiKeyConfig,
+  type ProviderAvailability,
+  DEFAULT_MODELS,
+  LIGHT_MODELS,
+  DEFAULT_AGENT_NAMES,
+  detectApiKeys,
+  checkProviderAvailability,
+} from '../config/index.js';
 
 const logger = createLogger('AgentSetup');
-
-/**
- * API key configuration for each provider
- */
-export interface ApiKeyConfig {
-  anthropic?: string;
-  openai?: string;
-  google?: string;
-  perplexity?: string;
-}
-
-/**
- * Provider availability result
- */
-export interface ProviderAvailability {
-  provider: AIProvider;
-  available: boolean;
-  reason?: string;
-}
 
 /**
  * Setup result containing registered providers and agents
@@ -44,75 +33,9 @@ export interface SetupResult {
   warnings: string[];
 }
 
-/**
- * Default models for each provider (heavy models for debate)
- */
-const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-sonnet-4-5',
-  openai: 'gpt-5.2',
-  google: 'gemini-3-flash-preview',
-  perplexity: 'sonar-pro',
-};
-
-/**
- * Light models for each provider (for analysis tasks - faster & cheaper)
- */
-export const LIGHT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-haiku-4-5',
-  openai: 'gpt-5-mini',
-  google: 'gemini-2.5-flash-lite',
-  perplexity: 'sonar',
-};
-
-/**
- * Default agent names
- */
-const DEFAULT_AGENT_NAMES: Record<AIProvider, string> = {
-  anthropic: 'Claude',
-  openai: 'ChatGPT',
-  google: 'Gemini',
-  perplexity: 'Perplexity',
-};
-
-/**
- * Check which API keys are available from environment
- */
-export function detectApiKeys(): ApiKeyConfig {
-  return {
-    anthropic: getEnvOptional('ANTHROPIC_API_KEY'),
-    openai: getEnvOptional('OPENAI_API_KEY'),
-    google: getEnvOptional('GOOGLE_API_KEY'),
-    perplexity: getEnvOptional('PERPLEXITY_API_KEY'),
-  };
-}
-
-/**
- * Check provider availability based on API keys
- */
-export function checkProviderAvailability(apiKeys: ApiKeyConfig): ProviderAvailability[] {
-  return [
-    {
-      provider: 'anthropic',
-      available: !!apiKeys.anthropic,
-      reason: apiKeys.anthropic ? undefined : 'ANTHROPIC_API_KEY not set',
-    },
-    {
-      provider: 'openai',
-      available: !!apiKeys.openai,
-      reason: apiKeys.openai ? undefined : 'OPENAI_API_KEY not set',
-    },
-    {
-      provider: 'google',
-      available: !!apiKeys.google,
-      reason: apiKeys.google ? undefined : 'GOOGLE_API_KEY not set',
-    },
-    {
-      provider: 'perplexity',
-      available: !!apiKeys.perplexity,
-      reason: apiKeys.perplexity ? undefined : 'PERPLEXITY_API_KEY not set',
-    },
-  ];
-}
+// Re-export config types and functions for backward compatibility
+export type { ApiKeyConfig, ProviderAvailability };
+export { LIGHT_MODELS, detectApiKeys, checkProviderAvailability };
 
 /**
  * Setup registry with available providers

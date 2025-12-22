@@ -5,52 +5,25 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   MessageParam,
-  Tool,
   ToolUseBlock,
-  TextBlock,
   ServerToolUseBlock,
   WebSearchToolResultBlock,
-  WebSearchResultBlock,
   ToolUnion,
 } from '@anthropic-ai/sdk/resources/messages';
-import { createLogger } from '../utils/logger.js';
-import { withRetry } from '../utils/retry.js';
-import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
-import { convertSDKError } from './utils/error-converter.js';
-import type {
-  AgentConfig,
-  DebateContext,
-  ToolCallRecord,
-  Citation,
-} from '../types/index.js';
+import { createLogger } from '../../utils/logger.js';
+import { withRetry } from '../../utils/retry.js';
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
+import { convertSDKError } from '../utils/error-converter.js';
+import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
+import type { WebSearchConfig, ClaudeAgentOptions } from './types.js';
+import { buildAnthropicTools } from './utils.js';
+import {
+  buildWebSearchTool,
+  extractTextFromResponse,
+  processWebSearchResults,
+} from './web-search.js';
 
 const logger = createLogger('ClaudeAgent');
-
-/**
- * Web search configuration options
- */
-export interface WebSearchConfig {
-  /** Enable native web search (default: true) */
-  enabled?: boolean;
-  /** Only include results from these domains */
-  allowedDomains?: string[];
-  /** Exclude results from these domains */
-  blockedDomains?: string[];
-  /** Maximum number of web searches per request (default: 5) */
-  maxUses?: number;
-}
-
-/**
- * Configuration options for Claude Agent
- */
-export interface ClaudeAgentOptions {
-  /** Anthropic API key (defaults to ANTHROPIC_API_KEY env var) */
-  apiKey?: string;
-  /** Custom Anthropic client instance (for testing) */
-  client?: Anthropic;
-  /** Web search configuration (default: enabled) */
-  webSearch?: WebSearchConfig;
-}
 
 /**
  * Claude Agent using Anthropic's API
@@ -133,37 +106,14 @@ export class ClaudeAgent extends BaseAgent {
         (block): block is WebSearchToolResultBlock => block.type === 'web_search_tool_result'
       );
 
-      // Extract citations from web search results
-      for (const result of webSearchResults) {
-        const webCitations = this.extractCitationsFromWebSearch(result);
-        citations.push(...webCitations);
-
-        // Record tool call for web search
-        if (Array.isArray(result.content)) {
-          toolCalls.push({
-            toolName: 'web_search',
-            input: {},
-            output: {
-              success: true,
-              data: {
-                results: result.content.map((r) => ({
-                  title: r.title,
-                  url: r.url,
-                  pageAge: r.page_age,
-                })),
-              },
-            },
-            timestamp: new Date(),
-          });
-        }
-      }
+      // Extract citations and tool calls from web search results
+      const webSearchData = processWebSearchResults(webSearchResults);
+      citations.push(...webSearchData.citations);
+      toolCalls.push(...webSearchData.toolCalls);
 
       // Record server tool use for logging purposes
       for (const serverTool of serverToolUseBlocks) {
-        logger.debug(
-          { agentId: this.id, toolName: serverTool.name },
-          'Server tool invoked'
-        );
+        logger.debug({ agentId: this.id, toolName: serverTool.name }, 'Server tool invoked');
       }
 
       const toolResults: MessageParam['content'] = [];
@@ -214,35 +164,12 @@ export class ClaudeAgent extends BaseAgent {
     const finalWebSearchResults = response.content.filter(
       (block): block is WebSearchToolResultBlock => block.type === 'web_search_tool_result'
     );
-    for (const result of finalWebSearchResults) {
-      const webCitations = this.extractCitationsFromWebSearch(result);
-      citations.push(...webCitations);
-
-      // Record tool call for web search in final response
-      if (Array.isArray(result.content)) {
-        toolCalls.push({
-          toolName: 'web_search',
-          input: {},
-          output: {
-            success: true,
-            data: {
-              results: result.content.map((r) => ({
-                title: r.title,
-                url: r.url,
-                pageAge: r.page_age,
-              })),
-            },
-          },
-          timestamp: new Date(),
-        });
-      }
-    }
+    const finalWebSearchData = processWebSearchResults(finalWebSearchResults);
+    citations.push(...finalWebSearchData.citations);
+    toolCalls.push(...finalWebSearchData.toolCalls);
 
     // Extract text from final response
-    const textBlocks = response.content.filter(
-      (block): block is TextBlock => block.type === 'text'
-    );
-    const rawText = textBlocks.map((block) => block.text).join('\n');
+    const rawText = extractTextFromResponse(response);
 
     return { rawText, toolCalls, citations };
   }
@@ -255,37 +182,13 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Perform synthesis by calling Claude API directly with synthesis-specific prompts
-   * This bypasses the standard debate prompt building to use synthesis format
-   */
-  protected override async performSynthesis(
-    systemPrompt: string,
-    userMessage: string
-  ): Promise<string> {
-    const response = await withRetry(
-      () =>
-        this.client.messages.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userMessage }],
-          temperature: this.temperature,
-        }),
-      { maxRetries: 3 }
-    );
-
-    // Extract text from response
-    const textBlocks = response.content.filter(
-      (block): block is TextBlock => block.type === 'text'
-    );
-    return textBlocks.map((block) => block.text).join('\n');
-  }
-
-  /**
    * Generate a raw text completion without parsing into structured format
-   * Used by AIConsensusAnalyzer to get raw JSON responses
+   * Used by AIConsensusAnalyzer and synthesis features
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const effectiveSystemPrompt =
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
     try {
@@ -294,24 +197,17 @@ export class ClaudeAgent extends BaseAgent {
           this.client.messages.create({
             model: this.model,
             max_tokens: this.maxTokens,
-            system: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+            system: effectiveSystemPrompt,
             messages: [{ role: 'user', content: prompt }],
             temperature: this.temperature,
           }),
         { maxRetries: 3 }
       );
 
-      // Extract text from response without any parsing
-      const textBlocks = response.content.filter(
-        (block): block is TextBlock => block.type === 'text'
-      );
-      return textBlocks.map((block) => block.text).join('\n');
+      return extractTextFromResponse(response);
     } catch (error) {
-      const convertedError = convertSDKError(error, 'anthropic');
-      logger.error(
-        { err: convertedError, agentId: this.id },
-        'Failed to generate raw completion'
-      );
+      const convertedError = this.convertError(error);
+      logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
       throw convertedError;
     }
   }
@@ -339,64 +235,15 @@ export class ClaudeAgent extends BaseAgent {
 
     // Add toolkit tools
     if (this.toolkit) {
-      tools.push(...this.buildAnthropicTools());
+      tools.push(...buildAnthropicTools(this.toolkit));
     }
 
     // Add native web search if enabled
     if (this.webSearchConfig.enabled) {
-      tools.push(this.buildWebSearchTool());
+      tools.push(buildWebSearchTool(this.webSearchConfig));
     }
 
     return tools;
-  }
-
-  /**
-   * Build Anthropic-format tool definitions from toolkit
-   */
-  private buildAnthropicTools(): Tool[] {
-    if (!this.toolkit) {
-      return [];
-    }
-
-    return this.toolkit.getTools().map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: {
-        type: 'object' as const,
-        properties: tool.parameters,
-        required: Object.keys(tool.parameters),
-      },
-    }));
-  }
-
-  /**
-   * Build the native web search tool configuration
-   */
-  private buildWebSearchTool(): ToolUnion {
-    return {
-      type: 'web_search_20250305',
-      name: 'web_search',
-      allowed_domains: this.webSearchConfig.allowedDomains ?? null,
-      blocked_domains: this.webSearchConfig.blockedDomains ?? null,
-      max_uses: this.webSearchConfig.maxUses ?? 5,
-    };
-  }
-
-  /**
-   * Extract citations from web search results
-   */
-  private extractCitationsFromWebSearch(result: WebSearchToolResultBlock): Citation[] {
-    if (!Array.isArray(result.content)) {
-      // Error result, no citations
-      return [];
-    }
-
-    return result.content.map((searchResult: WebSearchResultBlock) => ({
-      title: searchResult.title,
-      url: searchResult.url,
-      snippet: undefined, // encrypted_content is not human-readable
-      source: 'web_search',
-    }));
   }
 }
 

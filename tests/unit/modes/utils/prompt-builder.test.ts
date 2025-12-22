@@ -179,7 +179,7 @@ describe('prompt-builder', () => {
       const result = buildVerificationLoop(baseConfig, 'collaborative');
 
       expect(result).toContain('Did I identify specific points of agreement');
-      expect(result).toContain('Did I build on others\' ideas constructively');
+      expect(result).toContain("Did I build on others' ideas constructively");
     });
 
     it('should include mode-specific verification checks for adversarial', () => {

@@ -3,6 +3,12 @@
  */
 
 export { BaseModeStrategy, type DebateModeStrategy } from './base.js';
+export {
+  RoleBasedModeStrategy,
+  type RoleConfig,
+  type RoleBasedContext,
+  type RoleBasedRoundState,
+} from './role-based.js';
 export { CollaborativeMode } from './collaborative.js';
 export { AdversarialMode } from './adversarial.js';
 export { SocraticMode } from './socratic.js';
@@ -10,26 +16,21 @@ export { ExpertPanelMode } from './expert-panel.js';
 export { DevilsAdvocateMode } from './devils-advocate.js';
 export { DelphiMode } from './delphi.js';
 export { RedTeamBlueTeamMode } from './red-team-blue-team.js';
-export {
-  ModeRegistry,
-  getGlobalModeRegistry,
-  resetGlobalModeRegistry,
-} from './registry.js';
+export { ModeRegistry, getGlobalModeRegistry, resetGlobalModeRegistry } from './registry.js';
+
+// Mode configurations
+export * from './configs/index.js';
 
 // Prompt builder utilities
 export {
   buildRoleAnchor,
   buildBehavioralContract,
-  buildStructuralEnforcement,
   buildVerificationLoop,
   buildFocusQuestionSection,
   buildModePrompt,
-  formatPreviousResponses,
-  buildRoundContext,
   createOutputSections,
   type RoleAnchorConfig,
   type BehavioralContractConfig,
-  type StructuralEnforcementConfig,
   type VerificationLoopConfig,
   type FocusQuestionConfig,
   type ModePromptConfig,

@@ -34,10 +34,6 @@ describe('DevilsAdvocateMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('devils-advocate');
     });
-
-    it('should have sequential execution pattern', () => {
-      expect(mode.executionPattern).toBe('sequential');
-    });
   });
 
   describe('executeRound', () => {
@@ -159,72 +155,19 @@ describe('DevilsAdvocateMode', () => {
       expect(prompt.toLowerCase()).toContain("devil's advocate");
     });
 
-    it('should include focus question when provided', () => {
-      const contextWithFocus: DebateContext = {
-        ...defaultContext,
-        focusQuestion: 'What about work-life balance?',
-      };
-
-      const prompt = mode.buildAgentPrompt(contextWithFocus);
-      expect(prompt).toContain('What about work-life balance?');
+    it('should return base prompt without role-specific content', () => {
+      // buildAgentPrompt now returns only the base prompt
+      // Role-specific content is added by transformContext
+      const prompt = mode.buildAgentPrompt(defaultContext);
+      expect(prompt.toUpperCase()).toContain("DEVIL'S ADVOCATE");
+      expect(prompt).toContain('PRIMARY agents argue IN FAVOR');
+      expect(prompt).toContain('OPPOSITION agents argue AGAINST');
+      expect(prompt).toContain('EVALUATOR agents assess');
     });
 
-    it('should instruct primary position to take AFFIRMATIVE stance with stance field', () => {
-      const firstPrompt = mode.buildAgentPrompt(defaultContext);
-      expect(firstPrompt.toUpperCase()).toContain('AFFIRMATIVE');
-      // Should require stance: "YES" in JSON response
-      expect(firstPrompt).toContain('"stance": "YES"');
-      // Should explicitly forbid hedging language
-      expect(firstPrompt).toContain('FORBIDDEN PHRASES');
-      expect(firstPrompt).toContain('However');
-    });
-
-    it('should provide different prompts for different roles', () => {
-      // First agent (no previous responses)
-      const firstPrompt = mode.buildAgentPrompt(defaultContext);
-      expect(firstPrompt.toUpperCase()).toContain('PRIMARY POSITION');
-
-      // Second agent (one previous response)
-      const contextWithOneResponse: DebateContext = {
-        ...defaultContext,
-        previousResponses: [
-          {
-            agentId: 'agent-1',
-            agentName: 'First Agent',
-            position: 'Some position',
-            reasoning: 'Some reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          },
-        ],
-      };
-      const secondPrompt = mode.buildAgentPrompt(contextWithOneResponse);
-      expect(secondPrompt.toUpperCase()).toContain('OPPOSITION');
-
-      // Third agent (two previous responses)
-      const contextWithTwoResponses: DebateContext = {
-        ...defaultContext,
-        previousResponses: [
-          {
-            agentId: 'agent-1',
-            agentName: 'First Agent',
-            position: 'Some position',
-            reasoning: 'Some reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          },
-          {
-            agentId: 'agent-2',
-            agentName: 'Second Agent',
-            position: 'Counter position',
-            reasoning: 'Counter reasoning',
-            confidence: 0.7,
-            timestamp: new Date(),
-          },
-        ],
-      };
-      const thirdPrompt = mode.buildAgentPrompt(contextWithTwoResponses);
-      expect(thirdPrompt.toUpperCase()).toContain('EVALUATOR');
+    it('should mention that role will be assigned below', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+      expect(prompt.toLowerCase()).toContain('role will be assigned');
     });
   });
 
@@ -319,25 +262,25 @@ describe('DevilsAdvocateMode', () => {
       await mode.executeRound(agents, defaultContext, mockToolkit);
 
       expect(receivedPrompts).toHaveLength(4);
-      // Agent 0: Primary Position (case-insensitive checks)
-      expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY POSITION');
-      expect(receivedPrompts[0].toUpperCase()).not.toContain('OPPOSITION ROLE');
-      expect(receivedPrompts[0].toUpperCase()).not.toContain('EVALUATOR ROLE');
+      // Agent 0: Primary (Affirmative) (case-insensitive checks)
+      expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY (AFFIRMATIVE)');
+      expect(receivedPrompts[0].toUpperCase()).not.toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(receivedPrompts[0].toUpperCase()).not.toContain('YOUR ROLE: EVALUATOR');
 
-      // Agent 1: Opposition Role
-      expect(receivedPrompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
-      expect(receivedPrompts[1].toUpperCase()).not.toContain('PRIMARY POSITION');
-      expect(receivedPrompts[1].toUpperCase()).not.toContain('EVALUATOR ROLE');
+      // Agent 1: Opposition (Devil's Advocate)
+      expect(receivedPrompts[1].toUpperCase()).toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(receivedPrompts[1].toUpperCase()).not.toContain('PRIMARY (AFFIRMATIVE)');
+      expect(receivedPrompts[1].toUpperCase()).not.toContain('YOUR ROLE: EVALUATOR');
 
-      // Agent 2: Evaluator Role (NOT Opposition!)
-      expect(receivedPrompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
-      expect(receivedPrompts[2].toUpperCase()).not.toContain('OPPOSITION ROLE');
-      expect(receivedPrompts[2].toUpperCase()).not.toContain('PRIMARY POSITION');
+      // Agent 2: Evaluator (NOT Opposition!)
+      expect(receivedPrompts[2].toUpperCase()).toContain('YOUR ROLE: EVALUATOR');
+      expect(receivedPrompts[2].toUpperCase()).not.toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(receivedPrompts[2].toUpperCase()).not.toContain('PRIMARY (AFFIRMATIVE)');
 
-      // Agent 3: Evaluator Role (NOT Opposition!)
-      expect(receivedPrompts[3].toUpperCase()).toContain('EVALUATOR ROLE');
-      expect(receivedPrompts[3].toUpperCase()).not.toContain('OPPOSITION ROLE');
-      expect(receivedPrompts[3].toUpperCase()).not.toContain('PRIMARY POSITION');
+      // Agent 3: Evaluator (NOT Opposition!)
+      expect(receivedPrompts[3].toUpperCase()).toContain('YOUR ROLE: EVALUATOR');
+      expect(receivedPrompts[3].toUpperCase()).not.toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(receivedPrompts[3].toUpperCase()).not.toContain('PRIMARY (AFFIRMATIVE)');
     });
 
     it('should maintain correct roles across multiple rounds', async () => {
@@ -390,14 +333,14 @@ describe('DevilsAdvocateMode', () => {
       await mode.executeRound(agents, round2Context, mockToolkit);
 
       // Verify round 1 role assignment (case-insensitive)
-      expect(round1Prompts[0].toUpperCase()).toContain('PRIMARY POSITION');
-      expect(round1Prompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
-      expect(round1Prompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
+      expect(round1Prompts[0].toUpperCase()).toContain('PRIMARY (AFFIRMATIVE)');
+      expect(round1Prompts[1].toUpperCase()).toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(round1Prompts[2].toUpperCase()).toContain('YOUR ROLE: EVALUATOR');
 
       // Verify round 2 role assignment (same roles)
-      expect(round2Prompts[0].toUpperCase()).toContain('PRIMARY POSITION');
-      expect(round2Prompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
-      expect(round2Prompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
+      expect(round2Prompts[0].toUpperCase()).toContain('PRIMARY (AFFIRMATIVE)');
+      expect(round2Prompts[1].toUpperCase()).toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(round2Prompts[2].toUpperCase()).toContain('YOUR ROLE: EVALUATOR');
 
       // Verify round 2 prompts mention round number (case-insensitive)
       expect(round2Prompts[0].toLowerCase()).toContain('round 2');
@@ -435,9 +378,9 @@ describe('DevilsAdvocateMode', () => {
       await mode.executeRound(agents, defaultContext, mockToolkit);
 
       // All roles should be correctly assigned despite different timestamps (case-insensitive)
-      expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY POSITION');
-      expect(receivedPrompts[1].toUpperCase()).toContain('OPPOSITION ROLE');
-      expect(receivedPrompts[2].toUpperCase()).toContain('EVALUATOR ROLE');
+      expect(receivedPrompts[0].toUpperCase()).toContain('PRIMARY (AFFIRMATIVE)');
+      expect(receivedPrompts[1].toUpperCase()).toContain("OPPOSITION (DEVIL'S ADVOCATE)");
+      expect(receivedPrompts[2].toUpperCase()).toContain('YOUR ROLE: EVALUATOR');
     });
   });
 
@@ -725,36 +668,68 @@ describe('DevilsAdvocateMode', () => {
     });
 
     it('should assign correct roles for 5 agents: P, P, O, O, E', () => {
-      const agent = new MockAgent({
-        id: 'test',
-        name: 'Test',
-        provider: 'anthropic',
-        model: 'mock',
-      });
+      const agents = Array.from(
+        { length: 5 },
+        (_, i) =>
+          new MockAgent({
+            id: `agent-${i}`,
+            name: `Agent ${i}`,
+            provider: 'anthropic',
+            model: 'mock',
+          })
+      );
 
-      (mode as any).totalAgentsInRound = 5;
-      expect((mode as any).getAgentRole(agent, 0, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 1, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 4, defaultContext)).toBe('EVALUATOR');
+      // Build context with state as done in executeRound (uses _roleBasedState)
+      const agentIndexMap = new Map<string, number>();
+      agents.forEach((agent, index) => {
+        agentIndexMap.set(agent.id, index);
+      });
+      const contextWithState = {
+        ...defaultContext,
+        _devilsAdvocateState: {
+          totalAgentsInRound: 5,
+          agentIndexMap,
+        },
+      };
+
+      expect((mode as any).getAgentRole(agents[0], 0, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[1], 1, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[2], 2, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[3], 3, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[4], 4, contextWithState)).toBe('EVALUATOR');
     });
 
     it('should assign correct roles for 6 agents: P, P, O, O, E, E', () => {
-      const agent = new MockAgent({
-        id: 'test',
-        name: 'Test',
-        provider: 'anthropic',
-        model: 'mock',
-      });
+      const agents = Array.from(
+        { length: 6 },
+        (_, i) =>
+          new MockAgent({
+            id: `agent-${i}`,
+            name: `Agent ${i}`,
+            provider: 'anthropic',
+            model: 'mock',
+          })
+      );
 
-      (mode as any).totalAgentsInRound = 6;
-      expect((mode as any).getAgentRole(agent, 0, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 1, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 4, defaultContext)).toBe('EVALUATOR');
-      expect((mode as any).getAgentRole(agent, 5, defaultContext)).toBe('EVALUATOR');
+      // Build context with state as done in executeRound (uses _roleBasedState)
+      const agentIndexMap = new Map<string, number>();
+      agents.forEach((agent, index) => {
+        agentIndexMap.set(agent.id, index);
+      });
+      const contextWithState = {
+        ...defaultContext,
+        _devilsAdvocateState: {
+          totalAgentsInRound: 6,
+          agentIndexMap,
+        },
+      };
+
+      expect((mode as any).getAgentRole(agents[0], 0, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[1], 1, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[2], 2, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[3], 3, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[4], 4, contextWithState)).toBe('EVALUATOR');
+      expect((mode as any).getAgentRole(agents[5], 5, contextWithState)).toBe('EVALUATOR');
     });
 
     it('should handle edge case of 2 agents (no evaluator)', () => {
@@ -767,5 +742,4 @@ describe('DevilsAdvocateMode', () => {
       expect(distribution).toEqual({ primaryCount: 1, oppositionCount: 0, evaluatorCount: 0 });
     });
   });
-
 });

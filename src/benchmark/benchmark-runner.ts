@@ -73,11 +73,15 @@ export class BenchmarkRunner {
     let error: string | undefined;
 
     try {
-      // Execute with timeout
-      await Promise.race([
-        this.executor(scenario, collector),
-        this.createTimeout(this.config.timeoutMs),
-      ]);
+      // Execute with timeout (cleanup timer on success to prevent memory leak)
+      const { promise: timeoutPromise, cleanup: cleanupTimeout } = this.createTimeout(
+        this.config.timeoutMs
+      );
+      try {
+        await Promise.race([this.executor(scenario, collector), timeoutPromise]);
+      } finally {
+        cleanupTimeout();
+      }
     } catch (err) {
       success = false;
       error = err instanceof Error ? err.message : String(err);
@@ -208,12 +212,8 @@ export class BenchmarkRunner {
    * @param variant - Variant value
    * @param inverted - If true, reduction is positive (for metrics where lower is better)
    */
-  private calculatePercentageChange(
-    baseline: number,
-    variant: number,
-    inverted = false
-  ): number {
-    if (baseline === 0) return variant === 0 ? 0 : (inverted ? -100 : 100);
+  private calculatePercentageChange(baseline: number, variant: number, inverted = false): number {
+    if (baseline === 0) return variant === 0 ? 0 : inverted ? -100 : 100;
 
     const change = ((baseline - variant) / baseline) * 100;
     return inverted ? change : -change;
@@ -243,10 +243,7 @@ export class BenchmarkRunner {
   /**
    * Calculate composite quality score (0-100)
    */
-  private calculateQualityScore(
-    baseline: BenchmarkMetrics,
-    variant: BenchmarkMetrics
-  ): number {
+  private calculateQualityScore(baseline: BenchmarkMetrics, variant: BenchmarkMetrics): number {
     // Weight different quality aspects
     const weights = {
       confidence: 0.2,
@@ -277,17 +274,13 @@ export class BenchmarkRunner {
     score += (interactionChange / 100) * 50 * weights.interaction;
 
     // Consensus improvement (higher is better, unless groupthink)
-    const consensusDiff =
-      variant.consensus.agreementLevel - baseline.consensus.agreementLevel;
+    const consensusDiff = variant.consensus.agreementLevel - baseline.consensus.agreementLevel;
     score += consensusDiff * 50 * weights.consensus;
 
     // Groupthink penalty
     if (variant.consensus.groupthinkWarning && !baseline.consensus.groupthinkWarning) {
       score -= 20 * weights.groupthink;
-    } else if (
-      !variant.consensus.groupthinkWarning &&
-      baseline.consensus.groupthinkWarning
-    ) {
+    } else if (!variant.consensus.groupthinkWarning && baseline.consensus.groupthinkWarning) {
       score += 20 * weights.groupthink;
     }
 
@@ -345,7 +338,10 @@ export class BenchmarkRunner {
       }
 
       // Check if improvement is mode-specific
-      if (baseline.interaction.questionResponsePairs > 0 && variant.interaction.questionResponsePairs === 0) {
+      if (
+        baseline.interaction.questionResponsePairs > 0 &&
+        variant.interaction.questionResponsePairs === 0
+      ) {
         conditions.push('Question-response pairs eliminated - not suitable for Socratic mode');
       }
 
@@ -417,8 +413,7 @@ export class BenchmarkRunner {
     // Average content
     const avgContent = {
       avgConfidence: metrics.reduce((sum, m) => sum + m.content.avgConfidence, 0) / n,
-      confidenceVariance:
-        metrics.reduce((sum, m) => sum + m.content.confidenceVariance, 0) / n,
+      confidenceVariance: metrics.reduce((sum, m) => sum + m.content.confidenceVariance, 0) / n,
       toolCallsPerAgent: this.averageRecords(metrics.map((m) => m.content.toolCallsPerAgent)),
       citationCount: metrics.reduce((sum, m) => sum + m.content.citationCount, 0) / n,
     };
@@ -543,14 +538,22 @@ export class BenchmarkRunner {
   // ============================================
 
   /**
-   * Create timeout promise
+   * Create timeout promise with cleanup function
+   * Returns both the promise and a cleanup function to clear the timer
    */
-  private createTimeout(ms: number): Promise<never> {
-    return new Promise((_, reject) => {
-      setTimeout(() => {
+  private createTimeout(ms: number): { promise: Promise<never>; cleanup: () => void } {
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    const promise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => {
         reject(new Error(`Benchmark timeout after ${ms}ms`));
       }, ms);
     });
+    const cleanup = (): void => {
+      if (timerId !== undefined) {
+        clearTimeout(timerId);
+      }
+    };
+    return { promise, cleanup };
   }
 
   /**

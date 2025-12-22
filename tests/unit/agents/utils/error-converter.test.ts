@@ -238,11 +238,7 @@ describe('Error Converter', () => {
       });
 
       it('should detect timeout errors from message patterns', () => {
-        const testMessages = [
-          'Request timeout',
-          'Operation timed out',
-          'Deadline exceeded',
-        ];
+        const testMessages = ['Request timeout', 'Operation timed out', 'Deadline exceeded'];
 
         for (const message of testMessages) {
           const error = createMockError('APIError', message);

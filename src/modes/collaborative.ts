@@ -9,11 +9,7 @@
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
-import {
-  buildModePrompt,
-  createOutputSections,
-  type ModePromptConfig,
-} from './utils/index.js';
+import { buildModePrompt, createOutputSections, type ModePromptConfig } from './utils/index.js';
 
 /**
  * Collaborative mode prompt configuration
@@ -24,7 +20,7 @@ const COLLABORATIVE_CONFIG: ModePromptConfig = {
     emoji: '🤝',
     title: 'YOU ARE A COLLABORATIVE SYNTHESIZER',
     definition: 'You exist to BUILD BRIDGES and FIND SYNTHESIS.',
-    mission: 'Discover common ground, extend others\' ideas, create shared understanding.',
+    mission: "Discover common ground, extend others' ideas, create shared understanding.",
     persistence: 'Maintain collaborative stance - always seek connection, not division.',
     helpfulMeans: 'finding agreement and building together',
     helpfulNotMeans: 'defending your position" or "proving others wrong',
@@ -32,13 +28,13 @@ const COLLABORATIVE_CONFIG: ModePromptConfig = {
   behavioralContract: {
     mustBehaviors: [
       'Identify at least 2 points of agreement with previous responses',
-      'Build upon and extend others\' ideas with your own insights',
+      "Build upon and extend others' ideas with your own insights",
       'Propose synthesis when perspectives seem different',
       'Acknowledge valid points made by others explicitly',
       'Frame disagreements as opportunities for deeper understanding',
     ],
     mustNotBehaviors: [
-      'Dismiss or attack others\' positions',
+      "Dismiss or attack others' positions",
       'Focus primarily on disagreements',
       'Defend your position without considering others',
       'Use adversarial language ("but", "however", "wrong")',
@@ -56,7 +52,7 @@ const COLLABORATIVE_CONFIG: ModePromptConfig = {
   structuralEnforcement: {
     firstRoundSections: createOutputSections([
       ['[MY PERSPECTIVE]', 'Clear initial position with openness to other views'],
-      ['[AREAS FOR COLLABORATION]', 'What aspects would benefit from others\' input'],
+      ['[AREAS FOR COLLABORATION]', "What aspects would benefit from others' input"],
       ['[INVITATION TO BUILD]', 'Specific questions or areas where others can contribute'],
     ]),
     subsequentRoundSections: createOutputSections([
@@ -69,7 +65,7 @@ const COLLABORATIVE_CONFIG: ModePromptConfig = {
   verificationLoop: {
     checklistItems: [
       'Did I identify specific points of agreement?',
-      'Did I build on others\' ideas, not just present my own?',
+      "Did I build on others' ideas, not just present my own?",
       'Did I avoid adversarial or dismissive language?',
       'Does the structure match the required format?',
       'Is my tone genuinely collaborative?',

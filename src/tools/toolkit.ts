@@ -2,25 +2,14 @@
  * Agent Toolkit - Common tools available to all agents during debates
  */
 
-import type {
-  AgentTool,
-  AgentToolkit,
-  ToolDefinition,
-} from './types.js';
+import type { AgentTool, AgentToolkit, ToolDefinition } from './types.js';
 import type {
   DebateContext,
   ToolResult,
   ContextRequest,
   ContextRequestPriority,
 } from '../types/index.js';
-import {
-  validateToolInput,
-  type FactCheckInput,
-  type RequestContextInput,
-} from './schemas.js';
-
-// Re-export types from types.ts for backwards compatibility
-export type { AgentTool, AgentToolkit, ToolDefinition, ToolExecutor } from './types.js';
+import { validateToolInput, type FactCheckInput, type RequestContextInput } from './schemas.js';
 
 /**
  * Interface for retrieving debate evidence from sessions
@@ -33,24 +22,15 @@ export interface SessionDataProvider {
    * @param sessionId - The session ID to retrieve evidence from
    * @returns Array of evidence from all agents in the session
    */
-  getDebateEvidence(sessionId: string): Promise<Array<{
-    agentId: string;
-    agentName: string;
-    position: string;
-    reasoning: string;
-    confidence: number;
-  }>>;
-}
-
-// Counter for generating unique request IDs
-let requestIdCounter = 0;
-
-/**
- * Generate a unique ID for context requests
- */
-function generateRequestId(): string {
-  requestIdCounter++;
-  return `ctx-${Date.now()}-${requestIdCounter}`;
+  getDebateEvidence(sessionId: string): Promise<
+    Array<{
+      agentId: string;
+      agentName: string;
+      position: string;
+      reasoning: string;
+      confidence: number;
+    }>
+  >;
 }
 
 /**
@@ -72,10 +52,9 @@ export class DefaultAgentToolkit implements AgentToolkit {
   private currentContext?: DebateContext;
   private pendingContextRequests: ContextRequest[] = [];
   private currentAgentId: string = 'unknown';
+  private requestIdCounter = 0;
 
-  constructor(
-    private sessionDataProvider?: SessionDataProvider
-  ) {
+  constructor(private sessionDataProvider?: SessionDataProvider) {
     this.registerDefaultTools();
   }
 
@@ -112,6 +91,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
    */
   hasPendingRequests(): boolean {
     return this.pendingContextRequests.length > 0;
+  }
+
+  /**
+   * Generate a unique ID for context requests
+   */
+  private generateRequestId(): string {
+    this.requestIdCounter++;
+    return `ctx-${Date.now()}-${this.requestIdCounter}`;
   }
 
   /**
@@ -230,17 +217,19 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
    */
-  private async executeFactCheck(input: unknown): Promise<ToolResult<{
-    claim: string;
-    sourceAgent: string;
-    debateEvidence: Array<{
-      agentId: string;
-      agentName: string;
-      position: string;
-      reasoning: string;
-      confidence: number;
-    }>;
-  }>> {
+  private async executeFactCheck(input: unknown): Promise<
+    ToolResult<{
+      claim: string;
+      sourceAgent: string;
+      debateEvidence: Array<{
+        agentId: string;
+        agentName: string;
+        position: string;
+        reasoning: string;
+        confidence: number;
+      }>;
+    }>
+  > {
     // Input is already validated by Zod schema
     const data = input as FactCheckInput;
 
@@ -279,19 +268,22 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
    */
-  private async executeRequestContext(input: unknown): Promise<ToolResult<{
-    requestId: string;
-    message: string;
-  }>> {
+  private async executeRequestContext(input: unknown): Promise<
+    ToolResult<{
+      requestId: string;
+      message: string;
+    }>
+  > {
     // Input is already validated by Zod schema
     const data = input as RequestContextInput;
 
     // Create the context request
     const request: ContextRequest = {
-      id: generateRequestId(),
+      id: this.generateRequestId(),
       agentId: this.currentAgentId,
       query: data.query,
       reason: data.reason,
+      // Safe cast: priority is validated by RequestContextInputSchema as 'required' | 'optional'
       priority: data.priority as ContextRequestPriority,
       timestamp: new Date(),
     };

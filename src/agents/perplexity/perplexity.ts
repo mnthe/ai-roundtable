@@ -1,0 +1,308 @@
+/**
+ * Perplexity Agent - Perplexity AI implementation using official SDK
+ *
+ * Uses the official @perplexity-ai/perplexity_ai SDK for native TypeScript
+ * support and built-in web search capabilities.
+ */
+
+import Perplexity from '@perplexity-ai/perplexity_ai';
+import type { ChatMessageInput } from '@perplexity-ai/perplexity_ai/resources';
+import type { StreamChunk } from '@perplexity-ai/perplexity_ai/resources/chat/chat';
+import type {
+  CompletionCreateParams,
+  CompletionCreateParamsNonStreaming,
+} from '@perplexity-ai/perplexity_ai/resources/chat/completions';
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
+import { withRetry } from '../../utils/retry.js';
+import { createLogger } from '../../utils/logger.js';
+import { convertSDKError } from '../utils/index.js';
+import { buildPerplexityTools } from './utils.js';
+import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
+import type { PerplexitySearchOptions, PerplexityAgentOptions } from './types.js';
+import { extractContentText, extractPerplexityCitations, createSearchToolCall } from './search.js';
+
+const logger = createLogger('PerplexityAgent');
+
+/**
+ * Perplexity Agent using the official Perplexity SDK
+ *
+ * Perplexity models have built-in web search capabilities.
+ * Supported models (2025):
+ * - sonar: Fast, lightweight model based on Llama 3.3 70B
+ * - sonar-pro: Enhanced search with richer context
+ * - sonar-reasoning: Chain-of-thought reasoning with live search
+ * - sonar-reasoning-pro: Advanced reasoning powered by DeepSeek-R1
+ *
+ * Supports:
+ * - Built-in web search (citations returned automatically via search_results)
+ * - Function calling (tools)
+ * - Structured response parsing
+ */
+export class PerplexityAgent extends BaseAgent {
+  private client: Perplexity;
+  private searchOptions: PerplexitySearchOptions;
+
+  constructor(config: AgentConfig, options?: PerplexityAgentOptions) {
+    super(config);
+    this.searchOptions = options?.searchOptions ?? {};
+
+    if (options?.client) {
+      this.client = options.client;
+    } else {
+      this.client = new Perplexity({
+        apiKey: options?.apiKey ?? process.env.PERPLEXITY_API_KEY,
+      });
+    }
+  }
+
+  /**
+   * Update search options dynamically
+   */
+  setSearchOptions(options: PerplexitySearchOptions): void {
+    this.searchOptions = { ...this.searchOptions, ...options };
+  }
+
+  /**
+   * Get current search options
+   */
+  getSearchOptions(): PerplexitySearchOptions {
+    return { ...this.searchOptions };
+  }
+
+  /**
+   * Call Perplexity API to generate a response
+   *
+   * Implements the provider-specific API call for the template method pattern.
+   * Note: Perplexity has built-in web search and returns citations via search_results field.
+   */
+  protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
+    const systemPrompt = this.buildSystemPrompt(context);
+    const userMessage = this.buildUserMessage(context);
+
+    const messages: ChatMessageInput[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ];
+
+    const toolCalls: ToolCallRecord[] = [];
+    const citations: Citation[] = [];
+
+    // Build tools if toolkit is available (Perplexity supports function calling)
+    const tools = buildPerplexityTools(this.toolkit);
+
+    // Make the API call with Perplexity-specific search options and retry logic
+    let response: StreamChunk = await withRetry(
+      () => this.client.chat.completions.create(this.buildCompletionParams(messages, tools)),
+      { maxRetries: 3 }
+    );
+
+    let choice = response.choices[0];
+
+    // Handle tool call loop - check if message has tool_calls
+    while (choice?.message?.tool_calls && choice.message.tool_calls.length > 0) {
+      const assistantMessage = choice.message;
+      const currentToolCalls = choice.message.tool_calls;
+      messages.push(assistantMessage);
+
+      for (const toolCall of currentToolCalls ?? []) {
+        // Skip non-function tool calls
+        if (toolCall.type !== 'function' || !toolCall.function) continue;
+
+        const functionName = toolCall.function.name ?? '';
+        const functionArgs = JSON.parse(toolCall.function.arguments ?? '{}');
+
+        const result = await this.executeTool(functionName, functionArgs);
+
+        toolCalls.push({
+          toolName: functionName,
+          input: functionArgs,
+          output: result,
+          timestamp: new Date(),
+        });
+
+        // Extract citations from search results
+        const extractedCitations = this.extractCitationsFromToolResult(functionName, result);
+        citations.push(...extractedCitations);
+
+        const toolResultMessage: ChatMessageInput = {
+          role: 'tool',
+          tool_call_id: toolCall.id ?? null,
+          content: JSON.stringify(result),
+        };
+        messages.push(toolResultMessage);
+      }
+
+      // Continue the conversation with tool results
+      response = await withRetry(
+        () => this.client.chat.completions.create(this.buildCompletionParams(messages, tools)),
+        { maxRetries: 3 }
+      );
+
+      choice = response.choices[0];
+    }
+
+    // Extract text from final response
+    const rawText = extractContentText(choice?.message);
+
+    // Extract citations from Perplexity's native search_results field
+    const perplexityCitations = extractPerplexityCitations(response, rawText);
+    if (perplexityCitations.length > 0) {
+      citations.push(...perplexityCitations);
+
+      // Record built-in web search as a tool call for consistency with other agents
+      toolCalls.push(createSearchToolCall(perplexityCitations, context.topic));
+    }
+
+    return {
+      rawText,
+      toolCalls,
+      citations,
+    };
+  }
+
+  /**
+   * Convert Perplexity SDK errors to standard error types
+   */
+  protected override convertError(error: unknown): Error {
+    return convertSDKError(error, 'perplexity');
+  }
+
+  /**
+   * Build completion params for API calls
+   * Centralizes common configuration to avoid duplication
+   */
+  private buildCompletionParams(
+    messages: ChatMessageInput[],
+    tools?: CompletionCreateParams.Tool[]
+  ): CompletionCreateParamsNonStreaming {
+    return {
+      model: this.model,
+      max_tokens: this.maxTokens,
+      messages,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      temperature: this.temperature,
+      search_recency_filter: this.searchOptions.recencyFilter ?? null,
+      search_domain_filter:
+        this.searchOptions.domainFilter && this.searchOptions.domainFilter.length > 0
+          ? this.searchOptions.domainFilter.slice(0, 3)
+          : null,
+    };
+  }
+
+  /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer and synthesis features
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    const effectiveSystemPrompt =
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+
+    logger.debug({ agentId: this.id }, 'Generating raw completion');
+
+    try {
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            messages: [
+              { role: 'system', content: effectiveSystemPrompt },
+              { role: 'user', content: prompt },
+            ],
+            temperature: this.temperature,
+          }),
+        { maxRetries: 3 }
+      );
+
+      return extractContentText(response.choices[0]?.message);
+    } catch (error) {
+      const convertedError = this.convertError(error);
+      logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
+      throw convertedError;
+    }
+  }
+
+  /**
+   * Perform minimal API call to verify connectivity
+   */
+  protected override async performHealthCheck(): Promise<void> {
+    await withRetry(
+      () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'test' }],
+        }),
+      { maxRetries: 3 }
+    );
+  }
+
+  /**
+   * Override buildUserMessage for Perplexity to prioritize topic-related search
+   *
+   * Perplexity automatically searches the web based on the prompt content.
+   * By structuring the prompt to emphasize the debate topic FIRST and
+   * placing format instructions LAST, we ensure that Perplexity's search
+   * focuses on the actual topic rather than "JSON format" keywords.
+   */
+  protected override buildUserMessage(context: DebateContext): string {
+    const parts: string[] = [];
+
+    // CRITICAL: Put the main topic query FIRST for Perplexity's search to pick up
+    parts.push(`TOPIC FOR ANALYSIS: ${context.topic}`);
+    parts.push('');
+
+    // Add search guidance to help Perplexity focus on relevant sources
+    parts.push(
+      'Please search for and cite recent, authoritative sources on this topic. ' +
+        'Focus on academic papers, news articles, expert opinions, and official reports.'
+    );
+    parts.push('');
+
+    // Add previous responses context if any
+    if (context.previousResponses.length > 0) {
+      parts.push('Previous responses in this round:');
+      for (const response of context.previousResponses) {
+        parts.push(`
+--- ${response.agentName} ---
+Position: ${response.position}
+Reasoning: ${response.reasoning}
+Confidence: ${(response.confidence * 100).toFixed(0)}%
+${response.citations?.length ? `Sources: ${response.citations.map((c) => c.title).join(', ')}` : ''}
+`);
+      }
+      parts.push('');
+    }
+
+    // Put format instructions LAST (after topic-focused content)
+    // This prevents Perplexity from searching for "JSON format" related content
+    parts.push('Provide your response with the following structure:');
+    parts.push('- position: Your clear position statement on the topic');
+    parts.push('- reasoning: Your detailed reasoning and arguments with citations');
+    parts.push('- confidence: A number from 0.0 to 1.0 indicating your confidence');
+    parts.push('');
+    parts.push('Format as JSON: {"position": "...", "reasoning": "...", "confidence": 0.0-1.0}');
+
+    logger.debug(
+      { topic: context.topic, promptLength: parts.join('\n').length },
+      'Built Perplexity-optimized user message'
+    );
+
+    return parts.join('\n');
+  }
+}
+
+/**
+ * Factory function for creating Perplexity agents
+ */
+export function createPerplexityAgent(
+  config: AgentConfig,
+  toolkit?: AgentToolkit,
+  options?: PerplexityAgentOptions
+): PerplexityAgent {
+  const agent = new PerplexityAgent(config, options);
+  if (toolkit) {
+    agent.setToolkit(toolkit);
+  }
+  return agent;
+}
