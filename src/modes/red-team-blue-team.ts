@@ -32,10 +32,16 @@ type Team = 'red' | 'blue';
 
 /**
  * Extended context for red-team-blue-team mode with role tracking
+ * and concurrency-safe round state
  */
 interface RedTeamBlueTeamContext extends DebateContext {
   /** Current agent's team role */
   _agentTeam?: Team;
+  /** Concurrency-safe round state (bound to context, not instance) */
+  _redTeamBlueTeamState?: {
+    /** Map of agent IDs to their indices for this round */
+    agentIndexMap: Map<string, number>;
+  };
 }
 
 
@@ -168,12 +174,6 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
   readonly needsGroupthinkDetection = false;
 
   /**
-   * Stores agent indices for the current round execution.
-   * Used by transformContext to determine team assignment.
-   */
-  private agentIndices: Map<string, number> = new Map();
-
-  /**
    * Execute a red team/blue team round
    *
    * Agents are divided by index via getAgentRole hook:
@@ -182,21 +182,32 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
    *
    * Both teams execute in parallel using the base class executeParallel method.
    * Team assignment is handled via the transformContext hook.
+   *
+   * Note: Round state is bound to context (not instance) for concurrency safety.
+   * This allows the same mode instance to be safely reused across concurrent sessions.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    // Store agent indices for hook access (used by transformContext)
-    this.agentIndices.clear();
+    // Build agent index map for this round (context-bound, not instance-bound)
+    const agentIndexMap = new Map<string, number>();
     agents.forEach((agent, index) => {
-      this.agentIndices.set(agent.id, index);
+      agentIndexMap.set(agent.id, index);
     });
+
+    // Create context with round state bound to it (concurrency-safe)
+    const contextWithState: RedTeamBlueTeamContext = {
+      ...context,
+      _redTeamBlueTeamState: {
+        agentIndexMap,
+      },
+    };
 
     // Delegate to base class executeParallel
     // Team-specific prompts are handled via transformContext hook
-    return this.executeParallel(agents, context, toolkit);
+    return this.executeParallel(agents, contextWithState, toolkit);
   }
 
   /**
@@ -218,57 +229,57 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
   /**
    * Transform context to inject the team role for prompt building.
    * Hook implementation for BaseModeStrategy.
+   *
+   * This adds team-specific guidance to the existing modePrompt
+   * (which was already set by the base class executeParallel).
    */
   protected override transformContext(
     context: DebateContext,
     agent: BaseAgent
   ): RedTeamBlueTeamContext {
-    const index = this.agentIndices.get(agent.id) ?? 0;
+    const state = (context as RedTeamBlueTeamContext)._redTeamBlueTeamState;
+    const index = state?.agentIndexMap.get(agent.id) ?? 0;
     const team = this.getAgentRole(agent, index, context);
+
+    // Only add team-specific additions to existing modePrompt
+    const teamAddition = this.buildTeamAddition(context, team);
 
     const transformedContext: RedTeamBlueTeamContext = {
       ...context,
       _agentTeam: team,
-      // Rebuild modePrompt with the correct team role
-      modePrompt: team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context),
+      modePrompt: (context.modePrompt || '') + teamAddition,
     };
     return transformedContext;
   }
 
   /**
-   * Build team-specific prompt
-   *
-   * Different prompts for red team (critical/attacking) and blue team (constructive/defensive)
-   *
-   * Note: When called from executeRound, the context will have been transformed
-   * by transformContext to include _agentTeam. Fallback to red team for direct calls.
+   * Build team-specific prompt addition.
+   * This is appended to the base modePrompt, not a replacement.
    */
-  buildAgentPrompt(context: DebateContext): string {
-    // Use _agentTeam if available (set by transformContext),
-    // otherwise fallback to red team as default
-    const rtbtContext = context as RedTeamBlueTeamContext;
-    const team: Team = rtbtContext._agentTeam ?? 'red';
-
-    return team === 'red' ? this.buildRedTeamPrompt(context) : this.buildBlueTeamPrompt(context);
+  private buildTeamAddition(context: DebateContext, team: Team): string {
+    return team === 'red'
+      ? this.buildRedTeamAddition(context)
+      : this.buildBlueTeamAddition(context);
   }
 
   /**
-   * Build Red Team (critical/attacking) prompt
+   * Build Red Team (critical/attacking) addition
    */
-  private buildRedTeamPrompt(context: DebateContext): string {
-    let prompt = `
-Mode: Red Team/Blue Team - RED TEAM
-`;
+  private buildRedTeamAddition(context: DebateContext): string {
+    let addition = `
 
-    prompt += buildRoleAnchor(RED_TEAM_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(RED_TEAM_BEHAVIORAL_CONTRACT);
-    prompt += this.buildTeamStructuralEnforcement(RED_TEAM_OUTPUT_SECTIONS);
+## Your Team: RED TEAM (Attacker)
+
+${buildRoleAnchor(RED_TEAM_ROLE_ANCHOR)}
+${buildBehavioralContract(RED_TEAM_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildTeamStructuralEnforcement(RED_TEAM_OUTPUT_SECTIONS)}`;
 
     if (context.previousResponses.length > 0) {
       const blueTeamResponses = this.filterResponsesByTeam(context.previousResponses, 'blue');
 
       if (blueTeamResponses.length > 0) {
-        prompt += `
+        addition += `
+
 BLUE TEAM HAS PROPOSED SOLUTIONS. YOUR JOB: BREAK THEM.
 - Find holes in their defenses
 - Identify what they missed
@@ -278,10 +289,10 @@ BLUE TEAM HAS PROPOSED SOLUTIONS. YOUR JOB: BREAK THEM.
       }
     }
 
-    prompt += buildVerificationLoop(RED_TEAM_VERIFICATION);
+    addition += buildVerificationLoop(RED_TEAM_VERIFICATION, context.mode);
 
     if (context.focusQuestion) {
-      prompt += `
+      addition += `
 ${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
 ${PROMPT_SEPARATOR}
@@ -290,26 +301,27 @@ Attack this question. What are ALL the risks and problems?
 `;
     }
 
-    return prompt;
+    return addition;
   }
 
   /**
-   * Build Blue Team (constructive/defensive) prompt
+   * Build Blue Team (constructive/defensive) addition
    */
-  private buildBlueTeamPrompt(context: DebateContext): string {
-    let prompt = `
-Mode: Red Team/Blue Team - BLUE TEAM
-`;
+  private buildBlueTeamAddition(context: DebateContext): string {
+    let addition = `
 
-    prompt += buildRoleAnchor(BLUE_TEAM_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(BLUE_TEAM_BEHAVIORAL_CONTRACT);
-    prompt += this.buildTeamStructuralEnforcement(BLUE_TEAM_OUTPUT_SECTIONS);
+## Your Team: BLUE TEAM (Defender)
+
+${buildRoleAnchor(BLUE_TEAM_ROLE_ANCHOR)}
+${buildBehavioralContract(BLUE_TEAM_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildTeamStructuralEnforcement(BLUE_TEAM_OUTPUT_SECTIONS)}`;
 
     if (context.previousResponses.length > 0) {
       const redTeamResponses = this.filterResponsesByTeam(context.previousResponses, 'red');
 
       if (redTeamResponses.length > 0) {
-        prompt += `
+        addition += `
+
 RED TEAM HAS ATTACKED. YOUR JOB: DEFEND AND BUILD.
 - Counter every attack with a defense
 - Propose solutions for identified risks
@@ -319,10 +331,10 @@ RED TEAM HAS ATTACKED. YOUR JOB: DEFEND AND BUILD.
       }
     }
 
-    prompt += buildVerificationLoop(BLUE_TEAM_VERIFICATION);
+    addition += buildVerificationLoop(BLUE_TEAM_VERIFICATION, context.mode);
 
     if (context.focusQuestion) {
-      prompt += `
+      addition += `
 ${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
 ${PROMPT_SEPARATOR}
@@ -331,7 +343,25 @@ Solve this. Propose robust solutions that withstand attacks.
 `;
     }
 
-    return prompt;
+    return addition;
+  }
+
+  /**
+   * Build red team/blue team base prompt
+   *
+   * This provides the generic mode context. Team-specific content
+   * (RED/BLUE) is added by transformContext.
+   */
+  buildAgentPrompt(_context: DebateContext): string {
+    return `
+Mode: Red Team/Blue Team
+
+This is a security-focused analysis exercise with two teams:
+- RED TEAM: Attack, criticize, find vulnerabilities and risks
+- BLUE TEAM: Defend, build solutions, mitigate risks
+
+Your specific team assignment will be provided below.
+`;
   }
 
   /**

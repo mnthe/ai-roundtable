@@ -189,13 +189,13 @@ Mode: Delphi Method
     prompt += buildRoleAnchor(DELPHI_ROLE_ANCHOR);
 
     // Layer 2: Behavioral Contract
-    prompt += buildBehavioralContract(DELPHI_BEHAVIORAL_CONTRACT);
+    prompt += buildBehavioralContract(DELPHI_BEHAVIORAL_CONTRACT, context.mode);
 
     // Layer 3: Structural Enforcement (custom for Delphi due to statistics)
     prompt += this.buildStructuralEnforcementWithStats(context);
 
     // Layer 4: Verification Loop
-    prompt += buildVerificationLoop(DELPHI_VERIFICATION_LOOP);
+    prompt += buildVerificationLoop(DELPHI_VERIFICATION_LOOP, context.mode);
 
     // Focus Question (if present)
     prompt += buildFocusQuestionSection(context, DELPHI_FOCUS_QUESTION);

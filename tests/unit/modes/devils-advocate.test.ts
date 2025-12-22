@@ -155,72 +155,19 @@ describe('DevilsAdvocateMode', () => {
       expect(prompt.toLowerCase()).toContain("devil's advocate");
     });
 
-    it('should include focus question when provided', () => {
-      const contextWithFocus: DebateContext = {
-        ...defaultContext,
-        focusQuestion: 'What about work-life balance?',
-      };
-
-      const prompt = mode.buildAgentPrompt(contextWithFocus);
-      expect(prompt).toContain('What about work-life balance?');
+    it('should return base prompt without role-specific content', () => {
+      // buildAgentPrompt now returns only the base prompt
+      // Role-specific content is added by transformContext
+      const prompt = mode.buildAgentPrompt(defaultContext);
+      expect(prompt.toUpperCase()).toContain("DEVIL'S ADVOCATE");
+      expect(prompt).toContain('PRIMARY agents argue IN FAVOR');
+      expect(prompt).toContain('OPPOSITION agents argue AGAINST');
+      expect(prompt).toContain('EVALUATOR agents assess');
     });
 
-    it('should instruct primary position to take AFFIRMATIVE stance with stance field', () => {
-      const firstPrompt = mode.buildAgentPrompt(defaultContext);
-      expect(firstPrompt.toUpperCase()).toContain('AFFIRMATIVE');
-      // Should require stance: "YES" in JSON response
-      expect(firstPrompt).toContain('"stance": "YES"');
-      // Should explicitly forbid hedging language
-      expect(firstPrompt).toContain('FORBIDDEN PHRASES');
-      expect(firstPrompt).toContain('However');
-    });
-
-    it('should provide different prompts for different roles', () => {
-      // First agent (no previous responses)
-      const firstPrompt = mode.buildAgentPrompt(defaultContext);
-      expect(firstPrompt.toUpperCase()).toContain('PRIMARY POSITION');
-
-      // Second agent (one previous response)
-      const contextWithOneResponse: DebateContext = {
-        ...defaultContext,
-        previousResponses: [
-          {
-            agentId: 'agent-1',
-            agentName: 'First Agent',
-            position: 'Some position',
-            reasoning: 'Some reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          },
-        ],
-      };
-      const secondPrompt = mode.buildAgentPrompt(contextWithOneResponse);
-      expect(secondPrompt.toUpperCase()).toContain('OPPOSITION');
-
-      // Third agent (two previous responses)
-      const contextWithTwoResponses: DebateContext = {
-        ...defaultContext,
-        previousResponses: [
-          {
-            agentId: 'agent-1',
-            agentName: 'First Agent',
-            position: 'Some position',
-            reasoning: 'Some reasoning',
-            confidence: 0.8,
-            timestamp: new Date(),
-          },
-          {
-            agentId: 'agent-2',
-            agentName: 'Second Agent',
-            position: 'Counter position',
-            reasoning: 'Counter reasoning',
-            confidence: 0.7,
-            timestamp: new Date(),
-          },
-        ],
-      };
-      const thirdPrompt = mode.buildAgentPrompt(contextWithTwoResponses);
-      expect(thirdPrompt.toUpperCase()).toContain('EVALUATOR');
+    it('should mention that role will be assigned below', () => {
+      const prompt = mode.buildAgentPrompt(defaultContext);
+      expect(prompt.toLowerCase()).toContain('role will be assigned');
     });
   });
 
@@ -721,36 +668,64 @@ describe('DevilsAdvocateMode', () => {
     });
 
     it('should assign correct roles for 5 agents: P, P, O, O, E', () => {
-      const agent = new MockAgent({
-        id: 'test',
-        name: 'Test',
-        provider: 'anthropic',
-        model: 'mock',
-      });
+      const agents = Array.from({ length: 5 }, (_, i) =>
+        new MockAgent({
+          id: `agent-${i}`,
+          name: `Agent ${i}`,
+          provider: 'anthropic',
+          model: 'mock',
+        })
+      );
 
-      (mode as any).totalAgentsInRound = 5;
-      expect((mode as any).getAgentRole(agent, 0, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 1, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 4, defaultContext)).toBe('EVALUATOR');
+      // Build context with state as done in executeRound
+      const agentIndexMap = new Map<string, number>();
+      agents.forEach((agent, index) => {
+        agentIndexMap.set(agent.id, index);
+      });
+      const contextWithState = {
+        ...defaultContext,
+        _devilsAdvocateState: {
+          totalAgentsInRound: 5,
+          agentIndexMap,
+        },
+      };
+
+      expect((mode as any).getAgentRole(agents[0], 0, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[1], 1, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[2], 2, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[3], 3, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[4], 4, contextWithState)).toBe('EVALUATOR');
     });
 
     it('should assign correct roles for 6 agents: P, P, O, O, E, E', () => {
-      const agent = new MockAgent({
-        id: 'test',
-        name: 'Test',
-        provider: 'anthropic',
-        model: 'mock',
-      });
+      const agents = Array.from({ length: 6 }, (_, i) =>
+        new MockAgent({
+          id: `agent-${i}`,
+          name: `Agent ${i}`,
+          provider: 'anthropic',
+          model: 'mock',
+        })
+      );
 
-      (mode as any).totalAgentsInRound = 6;
-      expect((mode as any).getAgentRole(agent, 0, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 1, defaultContext)).toBe('PRIMARY');
-      expect((mode as any).getAgentRole(agent, 2, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 3, defaultContext)).toBe('OPPOSITION');
-      expect((mode as any).getAgentRole(agent, 4, defaultContext)).toBe('EVALUATOR');
-      expect((mode as any).getAgentRole(agent, 5, defaultContext)).toBe('EVALUATOR');
+      // Build context with state as done in executeRound
+      const agentIndexMap = new Map<string, number>();
+      agents.forEach((agent, index) => {
+        agentIndexMap.set(agent.id, index);
+      });
+      const contextWithState = {
+        ...defaultContext,
+        _devilsAdvocateState: {
+          totalAgentsInRound: 6,
+          agentIndexMap,
+        },
+      };
+
+      expect((mode as any).getAgentRole(agents[0], 0, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[1], 1, contextWithState)).toBe('PRIMARY');
+      expect((mode as any).getAgentRole(agents[2], 2, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[3], 3, contextWithState)).toBe('OPPOSITION');
+      expect((mode as any).getAgentRole(agents[4], 4, contextWithState)).toBe('EVALUATOR');
+      expect((mode as any).getAgentRole(agents[5], 5, contextWithState)).toBe('EVALUATOR');
     });
 
     it('should handle edge case of 2 agents (no evaluator)', () => {

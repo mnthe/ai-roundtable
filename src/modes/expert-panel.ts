@@ -90,10 +90,16 @@ const PERSPECTIVE_ROLE_ANCHORS: Record<Perspective, Partial<RoleAnchorConfig>> =
 
 /**
  * Extended context for expert-panel mode with agent perspective tracking
+ * and concurrency-safe round state
  */
 interface ExpertPanelContext extends DebateContext {
   /** Current agent's assigned perspective */
   _agentPerspective?: Perspective;
+  /** Concurrency-safe round state (bound to context, not instance) */
+  _expertPanelState?: {
+    /** Map of agent IDs to their assigned perspectives for this round */
+    agentPerspectiveMap: Map<string, Perspective>;
+  };
 }
 
 /**
@@ -184,143 +190,109 @@ export class ExpertPanelMode extends BaseModeStrategy {
   readonly needsGroupthinkDetection = true;
 
   /**
-   * Map to track agent-to-perspective assignments during a round.
-   * Cleared at the start of each round.
-   */
-  private agentPerspectiveMap: Map<string, Perspective> = new Map();
-
-  /**
-   * Counter for round-robin perspective assignment
-   */
-  private perspectiveCounter = 0;
-
-  /**
    * Execute an expert panel round
    *
    * All experts respond in parallel, providing their independent
    * professional assessments from their assigned perspectives.
+   *
+   * Note: Round state is bound to context (not instance) for concurrency safety.
+   * This allows the same mode instance to be safely reused across concurrent sessions.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    // Reset perspective assignments for this round
-    this.agentPerspectiveMap.clear();
-    this.perspectiveCounter = 0;
+    // Build perspective map for this round (context-bound, not instance-bound)
+    const agentPerspectiveMap = new Map<string, Perspective>();
+    agents.forEach((agent, index) => {
+      // Round-robin perspective assignment using index
+      const perspective = PERSPECTIVE_ANCHORS[index % PERSPECTIVE_ANCHORS.length]!;
+      agentPerspectiveMap.set(agent.id, perspective);
+    });
 
-    // Pre-assign perspectives to agents using round-robin
-    for (const agent of agents) {
-      const perspective = this.assignPerspective(agent);
-      this.agentPerspectiveMap.set(agent.id, perspective);
-    }
+    // Create context with round state bound to it (concurrency-safe)
+    const contextWithState: ExpertPanelContext = {
+      ...context,
+      _expertPanelState: {
+        agentPerspectiveMap,
+      },
+    };
 
-    return this.executeParallel(agents, context, toolkit);
-  }
-
-  /**
-   * Assign a perspective to an agent using round-robin.
-   *
-   * @param _agent - The agent to assign a perspective to
-   * @returns The assigned perspective
-   */
-  private assignPerspective(_agent: BaseAgent): Perspective {
-    // Modulo operation guarantees a valid index, use non-null assertion
-    const perspective = PERSPECTIVE_ANCHORS[this.perspectiveCounter % PERSPECTIVE_ANCHORS.length]!;
-    this.perspectiveCounter++;
-    return perspective;
+    return this.executeParallel(agents, contextWithState, toolkit);
   }
 
   /**
    * Transform context to inject the agent's assigned perspective.
    * Hook implementation for BaseModeStrategy.
    *
-   * This ensures that buildAgentPrompt can access the agent's perspective
-   * to customize the prompt with perspective-specific guidance.
+   * This adds perspective-specific guidance to the existing modePrompt
+   * (which was already set by the base class executeParallel).
    */
   protected override transformContext(
     context: DebateContext,
     agent: BaseAgent
   ): ExpertPanelContext {
-    const perspective = this.agentPerspectiveMap.get(agent.id);
+    const state = (context as ExpertPanelContext)._expertPanelState;
+    const perspective = state?.agentPerspectiveMap.get(agent.id);
+
+    // Only add perspective-specific additions to existing modePrompt
+    const perspectiveAddition = perspective
+      ? this.buildPerspectiveAddition(perspective)
+      : '';
+
     const transformedContext: ExpertPanelContext = {
       ...context,
       _agentPerspective: perspective,
-      // Rebuild modePrompt with the agent's perspective
-      modePrompt: this.buildAgentPromptWithPerspective(context, perspective),
+      modePrompt: (context.modePrompt || '') + perspectiveAddition,
     };
     return transformedContext;
   }
 
   /**
-   * Build expert-panel-specific prompt
+   * Build perspective-specific prompt addition.
+   * This is appended to the base modePrompt, not a replacement.
+   */
+  private buildPerspectiveAddition(perspective: Perspective): string {
+    const perspectiveOverrides = PERSPECTIVE_ROLE_ANCHORS[perspective];
+    const perspectiveDescription = PERSPECTIVE_DESCRIPTIONS[perspective];
+    const capitalizedPerspective = perspective.charAt(0).toUpperCase() + perspective.slice(1);
+
+    return `
+
+---
+## Expert Panel (${capitalizedPerspective} Perspective)
+
+${perspectiveOverrides.emoji || '🎓'} ${perspectiveOverrides.title || 'DOMAIN EXPERT'}
+
+${perspectiveOverrides.definition || ''}
+
+${perspectiveDescription}
+
+${perspectiveOverrides.additionalContext || ''}
+
+**Perspective-Specific Requirements:**
+- MUST analyze from the ${perspective.toUpperCase()} perspective
+
+**Perspective-Specific Verification:**
+- Did I analyze primarily from the ${perspective} perspective?
+- Did I provide expertise specific to ${perspective} considerations?
+`;
+  }
+
+  /**
+   * Build expert-panel base prompt
+   *
+   * This provides the generic expert panel context. Perspective-specific
+   * content (technical/economic/ethical/social) is added by transformContext.
    *
    * Encourages agents to:
    * - Provide professional expert analysis
    * - Cite evidence and sources
    * - Stay within their domain expertise
    * - Be objective and measured
-   *
-   * Note: This method is called by the base class to build the initial modePrompt.
-   * The transformContext hook then rebuilds it with the agent's specific perspective.
    */
   buildAgentPrompt(context: DebateContext): string {
-    // Check if context already has a perspective (from transformContext)
-    const epContext = context as ExpertPanelContext;
-    if (epContext._agentPerspective) {
-      return this.buildAgentPromptWithPerspective(context, epContext._agentPerspective);
-    }
-    // Fallback to default config (no perspective)
     return buildModePrompt(EXPERT_PANEL_CONFIG, context);
-  }
-
-  /**
-   * Build expert-panel-specific prompt with perspective-specific guidance
-   *
-   * @param context - The debate context
-   * @param perspective - The agent's assigned perspective (optional)
-   * @returns The complete mode prompt
-   */
-  private buildAgentPromptWithPerspective(
-    context: DebateContext,
-    perspective?: Perspective
-  ): string {
-    if (!perspective) {
-      return buildModePrompt(EXPERT_PANEL_CONFIG, context);
-    }
-
-    // Get perspective-specific role anchor overrides
-    const perspectiveOverrides = PERSPECTIVE_ROLE_ANCHORS[perspective];
-    const perspectiveDescription = PERSPECTIVE_DESCRIPTIONS[perspective];
-
-    // Create perspective-specific config by merging base config with perspective overrides
-    const perspectiveConfig: ModePromptConfig = {
-      ...EXPERT_PANEL_CONFIG,
-      modeName: `Expert Panel (${perspective.charAt(0).toUpperCase() + perspective.slice(1)} Perspective)`,
-      roleAnchor: {
-        ...EXPERT_PANEL_CONFIG.roleAnchor,
-        ...perspectiveOverrides,
-        // Keep persistence and helpful definitions from base, enhance with perspective
-        persistence: EXPERT_PANEL_CONFIG.roleAnchor.persistence,
-        helpfulMeans: `providing accurate, well-sourced expertise from the ${perspective} perspective`,
-        helpfulNotMeans: EXPERT_PANEL_CONFIG.roleAnchor.helpfulNotMeans,
-      },
-      behavioralContract: {
-        ...EXPERT_PANEL_CONFIG.behavioralContract,
-        mustBehaviors: [
-          `MUST analyze from the ${perspective.toUpperCase()} perspective`,
-          perspectiveDescription,
-          ...EXPERT_PANEL_CONFIG.behavioralContract.mustBehaviors,
-        ],
-      },
-      verificationLoop: {
-        checklistItems: [
-          `Did I analyze primarily from the ${perspective} perspective?`,
-          ...EXPERT_PANEL_CONFIG.verificationLoop.checklistItems,
-        ],
-      },
-    };
-
-    return buildModePrompt(perspectiveConfig, context);
   }
 }

@@ -376,6 +376,136 @@ describe('ExpertPanelMode', () => {
     });
   });
 
+  describe('concurrency safety', () => {
+    it('should isolate state between concurrent executeRound calls', async () => {
+      // Create two sets of agents for concurrent sessions
+      const session1Contexts: DebateContext[] = [];
+      const session2Contexts: DebateContext[] = [];
+
+      const createCapturingAgent = (
+        id: string,
+        targetContexts: DebateContext[],
+        delay: number
+      ) => {
+        const agent = new MockAgent({
+          id,
+          name: `Agent ${id}`,
+          provider: 'anthropic',
+          model: 'mock',
+        });
+
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+          // Delay to simulate real processing time
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          targetContexts.push(ctx);
+          return {
+            agentId: id,
+            agentName: `Agent ${id}`,
+            position: `Position from ${id}`,
+            reasoning: 'Test reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+
+        return agent;
+      };
+
+      // Session 1: 2 agents, technical and economic perspectives
+      const session1Agents = [
+        createCapturingAgent('s1-agent-0', session1Contexts, 50),
+        createCapturingAgent('s1-agent-1', session1Contexts, 50),
+      ];
+
+      // Session 2: 3 agents, technical, economic, and ethical perspectives
+      const session2Agents = [
+        createCapturingAgent('s2-agent-0', session2Contexts, 30),
+        createCapturingAgent('s2-agent-1', session2Contexts, 30),
+        createCapturingAgent('s2-agent-2', session2Contexts, 30),
+      ];
+
+      // Execute both rounds concurrently using the same mode instance
+      await Promise.all([
+        mode.executeRound(session1Agents, { ...defaultContext, sessionId: 'session-1' }, mockToolkit),
+        mode.executeRound(session2Agents, { ...defaultContext, sessionId: 'session-2' }, mockToolkit),
+      ]);
+
+      // Session 1 should have perspectives: technical, economic (2 agents)
+      expect(session1Contexts).toHaveLength(2);
+      expect(session1Contexts[0].modePrompt).toContain('Technical');
+      expect(session1Contexts[1].modePrompt).toContain('Economic');
+
+      // Session 2 should have perspectives: technical, economic, ethical (3 agents)
+      expect(session2Contexts).toHaveLength(3);
+      expect(session2Contexts[0].modePrompt).toContain('Technical');
+      expect(session2Contexts[1].modePrompt).toContain('Economic');
+      expect(session2Contexts[2].modePrompt).toContain('Ethical');
+    });
+
+    it('should not share perspective map between concurrent sessions', async () => {
+      const session1Perspectives: (string | undefined)[] = [];
+      const session2Perspectives: (string | undefined)[] = [];
+
+      const createCapturingAgent = (
+        id: string,
+        targetPerspectives: (string | undefined)[],
+        delay: number
+      ) => {
+        const agent = new MockAgent({
+          id,
+          name: `Agent ${id}`,
+          provider: 'anthropic',
+          model: 'mock',
+        });
+
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          // Extract perspective from modePrompt
+          const perspectiveMatch = ctx.modePrompt?.match(
+            /\((\w+) Perspective\)/i
+          );
+          targetPerspectives.push(perspectiveMatch?.[1]);
+          return {
+            agentId: id,
+            agentName: `Agent ${id}`,
+            position: `Position from ${id}`,
+            reasoning: 'Test reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+
+        return agent;
+      };
+
+      // Run multiple times to check for race conditions
+      for (let i = 0; i < 3; i++) {
+        session1Perspectives.length = 0;
+        session2Perspectives.length = 0;
+
+        const session1Agents = [
+          createCapturingAgent(`s1-a0-${i}`, session1Perspectives, 20),
+          createCapturingAgent(`s1-a1-${i}`, session1Perspectives, 20),
+        ];
+
+        const session2Agents = [
+          createCapturingAgent(`s2-a0-${i}`, session2Perspectives, 10),
+          createCapturingAgent(`s2-a1-${i}`, session2Perspectives, 10),
+          createCapturingAgent(`s2-a2-${i}`, session2Perspectives, 10),
+        ];
+
+        await Promise.all([
+          mode.executeRound(session1Agents, defaultContext, mockToolkit),
+          mode.executeRound(session2Agents, defaultContext, mockToolkit),
+        ]);
+
+        // Both sessions should always start with Technical (index 0)
+        expect(session1Perspectives[0]).toBe('Technical');
+        expect(session2Perspectives[0]).toBe('Technical');
+      }
+    });
+  });
+
   describe('perspective-specific prompts', () => {
     it('should include perspective in mode name', async () => {
       const receivedContext: DebateContext[] = [];

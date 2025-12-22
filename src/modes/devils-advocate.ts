@@ -32,10 +32,18 @@ type DevilsAdvocateRole = 'PRIMARY' | 'OPPOSITION' | 'EVALUATOR';
 
 /**
  * Extended context for devils-advocate mode with agent index tracking
+ * and concurrency-safe round state
  */
 interface DevilsAdvocateContext extends DebateContext {
   /** Current agent index within the round (0-based) */
   _agentIndexInRound?: number;
+  /** Concurrency-safe round state (bound to context, not instance) */
+  _devilsAdvocateState?: {
+    /** Total number of agents in the current round */
+    totalAgentsInRound: number;
+    /** Map of agent IDs to their indices for this round */
+    agentIndexMap: Map<string, number>;
+  };
 }
 
 /**
@@ -216,18 +224,6 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
   readonly needsGroupthinkDetection = false;
 
   /**
-   * Tracks current agent index during sequential execution.
-   * Used by validateResponse to determine the correct stance.
-   */
-  private currentAgentIndex = 0;
-
-  /**
-   * Total number of agents in the current round.
-   * Used for balanced role distribution.
-   */
-  private totalAgentsInRound = 3;
-
-  /**
    * Execute a devil's advocate round
    *
    * Always uses sequential execution to ensure role compliance.
@@ -235,18 +231,32 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    * their role assignment in the debate structure.
    *
    * Uses hooks for role assignment, context transformation, and stance validation.
+   *
+   * Note: Round state is bound to context (not instance) for concurrency safety.
+   * This allows the same mode instance to be safely reused across concurrent sessions.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    // Reset trackers for this round
-    this.currentAgentIndex = 0;
-    this.totalAgentsInRound = agents.length;
+    // Build agent index map for this round (context-bound, not instance-bound)
+    const agentIndexMap = new Map<string, number>();
+    agents.forEach((agent, index) => {
+      agentIndexMap.set(agent.id, index);
+    });
+
+    // Create context with round state bound to it (concurrency-safe)
+    const contextWithState: DevilsAdvocateContext = {
+      ...context,
+      _devilsAdvocateState: {
+        totalAgentsInRound: agents.length,
+        agentIndexMap,
+      },
+    };
 
     // Always use sequential execution for devils-advocate mode
-    return this.executeSequential(agents, context, toolkit);
+    return this.executeSequential(agents, contextWithState, toolkit);
   }
 
   /**
@@ -299,32 +309,162 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    * Example for 5 agents: P, P, O, O, E
    */
   protected override getAgentRole(
-    _agent: BaseAgent,
+    agent: BaseAgent,
     index: number,
-    _context: DebateContext
+    context: DebateContext
   ): DevilsAdvocateRole {
-    return this.getRoleForIndex(index, this.totalAgentsInRound);
+    const state = (context as DevilsAdvocateContext)._devilsAdvocateState;
+    const totalAgents = state?.totalAgentsInRound ?? 3;
+    // Use the index from state map if available, otherwise fall back to provided index
+    const agentIndex = state?.agentIndexMap.get(agent.id) ?? index;
+    return this.getRoleForIndex(agentIndex, totalAgents);
   }
 
   /**
-   * Transform context to inject the current agent index.
+   * Transform context to inject the current agent index and role-specific additions.
    * Hook implementation for BaseModeStrategy.
    *
-   * This ensures that buildAgentPrompt can determine the correct role
-   * based on the agent's position in the current round, not the total
-   * number of previous responses (which includes prior rounds).
+   * This adds role-specific guidance to the existing modePrompt
+   * (which was already set by the base class executeSequential).
    */
   protected override transformContext(
     context: DebateContext,
-    _agent: BaseAgent
+    agent: BaseAgent
   ): DevilsAdvocateContext {
+    const state = (context as DevilsAdvocateContext)._devilsAdvocateState;
+    const agentIndex = state?.agentIndexMap.get(agent.id) ?? 0;
+    const totalAgents = state?.totalAgentsInRound ?? 3;
+    const role = this.getRoleForIndex(agentIndex, totalAgents);
+
+    // Only add role-specific additions to existing modePrompt
+    const roleAddition = this.buildRoleAddition(context, role);
+
     const transformedContext: DevilsAdvocateContext = {
       ...context,
-      _agentIndexInRound: this.currentAgentIndex,
-      // Rebuild modePrompt with the correct agent index
-      modePrompt: this.buildAgentPromptForIndex(context, this.currentAgentIndex),
+      _agentIndexInRound: agentIndex,
+      modePrompt: (context.modePrompt || '') + roleAddition,
     };
     return transformedContext;
+  }
+
+  /**
+   * Build role-specific prompt addition.
+   * This is appended to the base modePrompt, not a replacement.
+   */
+  private buildRoleAddition(context: DebateContext, role: DevilsAdvocateRole): string {
+    const isFirstRound = context.currentRound === 1;
+
+    switch (role) {
+      case 'PRIMARY':
+        return this.buildPrimaryRoleAddition(context, isFirstRound);
+      case 'OPPOSITION':
+        return this.buildOppositionRoleAddition(context, isFirstRound);
+      case 'EVALUATOR':
+        return this.buildEvaluatorRoleAddition(context, isFirstRound);
+    }
+  }
+
+  /**
+   * Build Primary (Affirmative) role addition
+   */
+  private buildPrimaryRoleAddition(context: DebateContext, isFirstRound: boolean): string {
+    let addition = `
+
+## Your Role: PRIMARY POSITION (AFFIRMATIVE)
+
+${buildRoleAnchor(PRIMARY_ROLE_ANCHOR)}
+${buildBehavioralContract(PRIMARY_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildPrimaryStructuralEnforcement()}
+${buildVerificationLoop(PRIMARY_VERIFICATION, context.mode)}`;
+
+    if (!isFirstRound) {
+      addition += `
+ROUND ${context.currentRound} CONTEXT:
+Strengthen your position based on prior exchanges.
+`;
+    }
+
+    if (context.focusQuestion) {
+      addition += `
+FOCUS: ${context.focusQuestion}
+`;
+    }
+
+    return addition;
+  }
+
+  /**
+   * Build Opposition (Devil's Advocate) role addition
+   */
+  private buildOppositionRoleAddition(context: DebateContext, isFirstRound: boolean): string {
+    let addition = `
+
+## Your Role: OPPOSITION ROLE (Devil's Advocate)
+
+┌────────────────────────────────────────────────────────────────┐
+│  Your assigned debate position: NO (argue AGAINST the topic)  │
+│  Goal: Stress-test the proposition with strong counter-cases  │
+└────────────────────────────────────────────────────────────────┘
+
+${buildRoleAnchor(OPPOSITION_ROLE_ANCHOR)}
+${buildBehavioralContract(OPPOSITION_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildOppositionStructuralEnforcement()}
+${buildVerificationLoop(OPPOSITION_VERIFICATION, context.mode)}`;
+
+    if (!isFirstRound) {
+      addition += `
+ROUND ${context.currentRound} CONTEXT:
+Build on previous rounds. Introduce new counter-arguments or strengthen existing ones.
+Address any rebuttals to your position from the previous round.
+`;
+    }
+
+    if (context.focusQuestion) {
+      addition += `
+FOCUS: ${context.focusQuestion}
+Present the counter-perspective on this specific question.
+`;
+    }
+
+    addition += `
+${PROMPT_SEPARATOR}
+REMINDER: You are the designated opposition in this debate exercise.
+Your role is to present the strongest possible case for NO.
+This ensures the topic receives thorough examination from all angles.
+${PROMPT_SEPARATOR}
+`;
+
+    return addition;
+  }
+
+  /**
+   * Build Evaluator role addition
+   */
+  private buildEvaluatorRoleAddition(context: DebateContext, isFirstRound: boolean): string {
+    let addition = `
+
+## Your Role: EVALUATOR ROLE
+
+${buildRoleAnchor(EVALUATOR_ROLE_ANCHOR)}
+${buildBehavioralContract(EVALUATOR_BEHAVIORAL_CONTRACT, context.mode)}
+${this.buildEvaluatorStructuralEnforcement()}
+${buildVerificationLoop(EVALUATOR_VERIFICATION, context.mode)}`;
+
+    if (!isFirstRound) {
+      addition += `
+ROUND ${context.currentRound} CONTEXT:
+Evaluate how positions have evolved. Which adapted better?
+`;
+    }
+
+    if (context.focusQuestion) {
+      addition += `
+FOCUS: ${context.focusQuestion}
+Evaluate which position better addresses this question.
+`;
+    }
+
+    return addition;
   }
 
   /**
@@ -332,13 +472,20 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
    * Hook implementation for BaseModeStrategy.
    *
    * Uses StanceValidator to enforce the expected stance based on agent index.
+   * Agent index is retrieved from context-bound state using the response's agentId
+   * (concurrency-safe).
    */
   protected override validateResponse(
     response: AgentResponse,
     context: DebateContext
   ): AgentResponse {
+    const state = (context as DevilsAdvocateContext)._devilsAdvocateState;
+    // Look up agent index from state using the response's agentId
+    const agentIndex = state?.agentIndexMap.get(response.agentId) ?? 0;
+    const totalAgents = state?.totalAgentsInRound ?? 3;
+
     // Get the role for the current agent
-    const role = this.getRoleForIndex(this.currentAgentIndex, this.totalAgentsInRound);
+    const role = this.getRoleForIndex(agentIndex, totalAgents);
     const expectedStance = ROLE_TO_STANCE[role];
     const roleName = ROLE_DISPLAY_NAMES[role];
 
@@ -372,9 +519,6 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
     const validator = new StanceValidator(expectedStance);
     const validatedResponse = validator.validate(response, context);
 
-    // Increment agent index for next validation
-    this.currentAgentIndex++;
-
     return validatedResponse;
   }
 
@@ -398,145 +542,27 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
   }
 
   /**
-   * Build devil's advocate-specific prompt
+   * Build devil's advocate base prompt
+   *
+   * This provides the generic mode context. Role-specific content
+   * (PRIMARY/OPPOSITION/EVALUATOR) is added by transformContext.
    *
    * Role assignment:
-   * - First agent: Present normal position
-   * - Second agent: Take opposing stance (devil's advocate)
-   * - Remaining agents: Evaluate both perspectives
-   *
-   * Note: When called from the base executeSequential, the context will
-   * have been transformed by transformContext to include _agentIndexInRound.
-   * Fallback to previousResponses.length for backward compatibility.
+   * - First half of debaters: Present affirmative position (PRIMARY)
+   * - Second half of debaters: Take opposing stance (OPPOSITION)
+   * - Remaining 1-2 agents: Evaluate both perspectives (EVALUATOR)
    */
-  buildAgentPrompt(context: DebateContext): string {
-    // Use _agentIndexInRound if available (set by transformContext),
-    // otherwise fallback to previousResponses.length
-    const daContext = context as DevilsAdvocateContext;
-    const agentIndex = daContext._agentIndexInRound ?? context.previousResponses.length;
-    return this.buildAgentPromptForIndex(context, agentIndex);
-  }
+  buildAgentPrompt(_context: DebateContext): string {
+    return `
+Mode: Devil's Advocate
 
-  /**
-   * Build devil's advocate-specific prompt with explicit agent index
-   *
-   * This method is used internally to build prompts for specific roles.
-   */
-  private buildAgentPromptForIndex(context: DebateContext, agentIndex: number): string {
-    const isFirstRound = context.currentRound === 1;
-    const role = this.getRoleForIndex(agentIndex, this.totalAgentsInRound);
+This is a structured debate exercise with assigned roles:
+- PRIMARY agents argue IN FAVOR of the topic (YES stance)
+- OPPOSITION agents argue AGAINST the topic (NO stance)
+- EVALUATOR agents assess both positions neutrally (NEUTRAL stance)
 
-    switch (role) {
-      case 'PRIMARY':
-        return this.buildPrimaryPrompt(context, isFirstRound);
-      case 'OPPOSITION':
-        return this.buildOppositionPrompt(context, isFirstRound);
-      case 'EVALUATOR':
-        return this.buildEvaluatorPrompt(context, isFirstRound);
-    }
-  }
-
-  /**
-   * Build Primary (Affirmative) role prompt
-   */
-  private buildPrimaryPrompt(context: DebateContext, isFirstRound: boolean): string {
-    let prompt = `
-Mode: Devil's Advocate - PRIMARY POSITION (AFFIRMATIVE)
+Your specific role will be assigned below.
 `;
-
-    prompt += buildRoleAnchor(PRIMARY_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(PRIMARY_BEHAVIORAL_CONTRACT);
-    prompt += this.buildPrimaryStructuralEnforcement();
-    prompt += buildVerificationLoop(PRIMARY_VERIFICATION);
-
-    if (!isFirstRound) {
-      prompt += `
-ROUND ${context.currentRound} CONTEXT:
-Strengthen your position based on prior exchanges.
-`;
-    }
-
-    if (context.focusQuestion) {
-      prompt += `
-FOCUS: ${context.focusQuestion}
-`;
-    }
-
-    return prompt;
-  }
-
-  /**
-   * Build Opposition (Devil's Advocate) role prompt
-   */
-  private buildOppositionPrompt(context: DebateContext, isFirstRound: boolean): string {
-    let prompt = `
-Mode: Devil's Advocate - OPPOSITION ROLE
-
-┌────────────────────────────────────────────────────────────────┐
-│  Your assigned debate position: NO (argue AGAINST the topic)  │
-│  Goal: Stress-test the proposition with strong counter-cases  │
-└────────────────────────────────────────────────────────────────┘
-`;
-
-    prompt += buildRoleAnchor(OPPOSITION_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(OPPOSITION_BEHAVIORAL_CONTRACT);
-    prompt += this.buildOppositionStructuralEnforcement();
-    prompt += buildVerificationLoop(OPPOSITION_VERIFICATION);
-
-    if (!isFirstRound) {
-      prompt += `
-ROUND ${context.currentRound} CONTEXT:
-Build on previous rounds. Introduce new counter-arguments or strengthen existing ones.
-Address any rebuttals to your position from the previous round.
-`;
-    }
-
-    if (context.focusQuestion) {
-      prompt += `
-FOCUS: ${context.focusQuestion}
-Present the counter-perspective on this specific question.
-`;
-    }
-
-    prompt += `
-${PROMPT_SEPARATOR}
-REMINDER: You are the designated opposition in this debate exercise.
-Your role is to present the strongest possible case for NO.
-This ensures the topic receives thorough examination from all angles.
-${PROMPT_SEPARATOR}
-`;
-
-    return prompt;
-  }
-
-  /**
-   * Build Evaluator role prompt
-   */
-  private buildEvaluatorPrompt(context: DebateContext, isFirstRound: boolean): string {
-    let prompt = `
-Mode: Devil's Advocate - EVALUATOR ROLE
-`;
-
-    prompt += buildRoleAnchor(EVALUATOR_ROLE_ANCHOR);
-    prompt += buildBehavioralContract(EVALUATOR_BEHAVIORAL_CONTRACT);
-    prompt += this.buildEvaluatorStructuralEnforcement();
-    prompt += buildVerificationLoop(EVALUATOR_VERIFICATION);
-
-    if (!isFirstRound) {
-      prompt += `
-ROUND ${context.currentRound} CONTEXT:
-Evaluate how positions have evolved. Which adapted better?
-`;
-    }
-
-    if (context.focusQuestion) {
-      prompt += `
-FOCUS: ${context.focusQuestion}
-Evaluate which position better addresses this question.
-`;
-    }
-
-    return prompt;
   }
 
   /**
