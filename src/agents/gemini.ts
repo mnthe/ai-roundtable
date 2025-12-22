@@ -95,10 +95,8 @@ export class GeminiAgent extends BaseAgent {
       enabled: options?.googleSearch?.enabled !== false,
     };
 
-    // Use light model for Phase 1 search
-    // NOTE: Disabled by default because gemini-2.5-flash-lite doesn't support Google Search grounding properly
-    // Set to true only if using a model that supports grounding
-    this.useLightModelForSearch = options?.useLightModelForSearch === true;
+    // Use light model for Phase 1 search by default (faster & cheaper)
+    this.useLightModelForSearch = options?.useLightModelForSearch !== false;
   }
 
   /**

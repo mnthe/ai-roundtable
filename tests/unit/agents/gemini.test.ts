@@ -732,6 +732,82 @@ describe('GeminiAgent', () => {
       expect(response.citations?.length ?? 0).toBe(0);
       expect(response.toolCalls?.length ?? 0).toBe(0);
     });
+
+    it('should use light model for Phase 1 by default', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.8,
+      });
+
+      const capturedModels: string[] = [];
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedModels.push(params?.model);
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: [{ groundingMetadata: {} }],
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+        // useLightModelForSearch defaults to true
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Phase 1 should use light model (gemini-2.5-flash-lite)
+      expect(capturedModels[0]).toBe('gemini-2.5-flash-lite');
+    });
+
+    it('should use heavy model for Phase 1 when useLightModelForSearch is false', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.8,
+      });
+
+      const capturedModels: string[] = [];
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedModels.push(params?.model);
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: [{ groundingMetadata: {} }],
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+        useLightModelForSearch: false,
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Phase 1 should use heavy model when disabled
+      expect(capturedModels[0]).toBe('gemini-3-flash-preview');
+    });
   });
 });
 
