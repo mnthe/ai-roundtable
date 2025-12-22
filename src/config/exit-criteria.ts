@@ -10,19 +10,25 @@
  * - ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS: Stable rounds required (default: 2)
  */
 
+import { z } from 'zod';
 import { getEnvBoolean, getEnvNumber } from '../utils/env.js';
 
 /**
- * Exit criteria configuration
+ * Exit criteria configuration schema
  */
-export interface ExitCriteriaConfig {
+export const ExitCriteriaConfigSchema = z.object({
   /** Enable automatic exit criteria checking */
-  enabled: boolean;
+  enabled: z.boolean().default(true),
   /** Agreement level to trigger early exit (0-1) */
-  consensusThreshold: number;
+  consensusThreshold: z.number().min(0).max(1).default(0.9),
   /** Number of rounds with stable positions to trigger exit */
-  convergenceRounds: number;
-}
+  convergenceRounds: z.number().min(1).default(2),
+});
+
+/**
+ * Exit criteria configuration type derived from schema
+ */
+export type ExitCriteriaConfig = z.infer<typeof ExitCriteriaConfigSchema>;
 
 /**
  * Default exit criteria values

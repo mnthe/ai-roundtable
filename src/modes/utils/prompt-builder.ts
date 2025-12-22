@@ -165,19 +165,15 @@ export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, reado
   ],
 } as const;
 
-/**
- * Alias for backward compatibility within this file
- */
-const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Build the Role Anchor layer (Layer 1)
  */
 export function buildRoleAnchor(config: RoleAnchorConfig): string {
   let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 1: ROLE ANCHOR
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 ${config.emoji} ${config.title} ${config.emoji}
 
@@ -226,9 +222,9 @@ export function buildBehavioralContract(
     .join('\n');
 
   let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 2: BEHAVIORAL CONTRACT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 MUST (Required Behaviors):
 ${mustItems}
@@ -295,9 +291,9 @@ export function buildStructuralEnforcement(
   const roundLabel = isFirstRound ? ' (First Round)' : '';
 
   let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 `;
 
@@ -349,9 +345,9 @@ export function buildVerificationLoop(
   const checkItems = allChecks.map((item) => `□ ${item}`).join('\n');
 
   return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 4: VERIFICATION LOOP
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Before finalizing your response, verify:
 ${checkItems}
@@ -372,9 +368,9 @@ export function buildFocusQuestionSection(
   }
 
   return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 ${config.instructions}
 `;
