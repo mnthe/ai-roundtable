@@ -128,6 +128,32 @@ describe('BenchmarkRunner', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('timeout');
     });
+
+    it('should cleanup timeout timer on successful completion', async () => {
+      const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+      const runner = new BenchmarkRunner(createMockExecutor(), { timeoutMs: 60000 });
+      const scenario = createScenario();
+
+      await runner.runScenario(scenario);
+
+      // Timer should be cleared after successful completion
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it('should cleanup timeout timer even on failure', async () => {
+      const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+      const runner = new BenchmarkRunner(createMockExecutor({ shouldFail: true }), {
+        timeoutMs: 60000,
+      });
+      const scenario = createScenario();
+
+      await runner.runScenario(scenario);
+
+      // Timer should be cleared even when executor fails
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
   });
 
   describe('runScenarios', () => {

@@ -478,7 +478,8 @@ export class MetricsCollector {
 
     // Get last round responses
     const responsesByRound = this.groupResponsesByRound();
-    const lastRound = Math.max(...responsesByRound.keys());
+    const keys = [...responsesByRound.keys()];
+    const lastRound = keys.length > 0 ? Math.max(...keys) : 0;
     const lastRoundResponses = responsesByRound.get(lastRound) || [];
 
     if (lastRoundResponses.length <= 1) return 1;

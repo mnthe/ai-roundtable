@@ -278,6 +278,12 @@ describe('MetricsCollector', () => {
   });
 
   describe('consensus metrics', () => {
+    it('should handle empty responses in agreement level calculation', () => {
+      // No responses recorded - should return 0 without throwing
+      const metrics = collector.getMetrics();
+      expect(metrics.consensus.agreementLevel).toBe(0);
+    });
+
     it('should calculate agreement level', () => {
       collector.recordResponse(
         {

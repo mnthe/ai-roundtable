@@ -73,11 +73,15 @@ export class BenchmarkRunner {
     let error: string | undefined;
 
     try {
-      // Execute with timeout
-      await Promise.race([
-        this.executor(scenario, collector),
-        this.createTimeout(this.config.timeoutMs),
-      ]);
+      // Execute with timeout (cleanup timer on success to prevent memory leak)
+      const { promise: timeoutPromise, cleanup: cleanupTimeout } = this.createTimeout(
+        this.config.timeoutMs
+      );
+      try {
+        await Promise.race([this.executor(scenario, collector), timeoutPromise]);
+      } finally {
+        cleanupTimeout();
+      }
     } catch (err) {
       success = false;
       error = err instanceof Error ? err.message : String(err);
@@ -543,14 +547,22 @@ export class BenchmarkRunner {
   // ============================================
 
   /**
-   * Create timeout promise
+   * Create timeout promise with cleanup function
+   * Returns both the promise and a cleanup function to clear the timer
    */
-  private createTimeout(ms: number): Promise<never> {
-    return new Promise((_, reject) => {
-      setTimeout(() => {
+  private createTimeout(ms: number): { promise: Promise<never>; cleanup: () => void } {
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    const promise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => {
         reject(new Error(`Benchmark timeout after ${ms}ms`));
       }, ms);
     });
+    const cleanup = (): void => {
+      if (timerId !== undefined) {
+        clearTimeout(timerId);
+      }
+    };
+    return { promise, cleanup };
   }
 
   /**
