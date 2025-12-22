@@ -3,7 +3,7 @@
  */
 
 export { convertSDKError, isRetryableError } from './error-converter.js';
-export { buildOpenAITools } from './tool-converters.js';
+export { buildOpenAITools, buildResponsesFunctionTools } from './tool-converters.js';
 export {
   createLightModelAgent,
   type LightModelAgentOptions,
@@ -17,3 +17,15 @@ export {
   type ToolExecutor,
   type CitationExtractor,
 } from './openai-completion.js';
+export {
+  executeResponsesCompletion,
+  executeSimpleResponsesCompletion,
+  buildResponsesTools,
+  extractCitationsFromResponseOutput,
+  extractTextFromResponse,
+  recordWebSearchToolCall,
+  type ResponsesCompletionParams,
+  type ResponsesCompletionResult,
+  type ResponsesWebSearchConfig,
+  type SimpleResponsesCompletionParams,
+} from './openai-responses.js';
