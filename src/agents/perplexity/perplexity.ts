@@ -11,7 +11,10 @@ import type {
   ChatMessageOutput,
 } from '@perplexity-ai/perplexity_ai/resources';
 import type { StreamChunk } from '@perplexity-ai/perplexity_ai/resources/chat/chat';
-import type { CompletionCreateParams } from '@perplexity-ai/perplexity_ai/resources/chat/completions';
+import type {
+  CompletionCreateParams,
+  CompletionCreateParamsNonStreaming,
+} from '@perplexity-ai/perplexity_ai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { withRetry } from '../../utils/retry.js';
 import { createLogger } from '../../utils/logger.js';
@@ -90,20 +93,7 @@ export class PerplexityAgent extends BaseAgent {
 
     // Make the API call with Perplexity-specific search options and retry logic
     let response: StreamChunk = await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          messages,
-          tools: tools.length > 0 ? tools : undefined,
-          temperature: this.temperature,
-          // Perplexity-specific search options
-          search_recency_filter: this.searchOptions.recencyFilter ?? null,
-          search_domain_filter:
-            this.searchOptions.domainFilter && this.searchOptions.domainFilter.length > 0
-              ? this.searchOptions.domainFilter.slice(0, 3)
-              : null,
-        }),
+      () => this.client.chat.completions.create(this.buildCompletionParams(messages, tools)),
       { maxRetries: 3 }
     );
 
@@ -145,19 +135,7 @@ export class PerplexityAgent extends BaseAgent {
 
       // Continue the conversation with tool results
       response = await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            messages,
-            tools: tools.length > 0 ? tools : undefined,
-            temperature: this.temperature,
-            search_recency_filter: this.searchOptions.recencyFilter ?? null,
-            search_domain_filter:
-              this.searchOptions.domainFilter && this.searchOptions.domainFilter.length > 0
-                ? this.searchOptions.domainFilter.slice(0, 3)
-                : null,
-          }),
+        () => this.client.chat.completions.create(this.buildCompletionParams(messages, tools)),
         { maxRetries: 3 }
       );
 
@@ -201,6 +179,28 @@ export class PerplexityAgent extends BaseAgent {
    */
   protected override convertError(error: unknown): Error {
     return convertSDKError(error, 'perplexity');
+  }
+
+  /**
+   * Build completion params for API calls
+   * Centralizes common configuration to avoid duplication
+   */
+  private buildCompletionParams(
+    messages: ChatMessageInput[],
+    tools?: CompletionCreateParams.Tool[]
+  ): CompletionCreateParamsNonStreaming {
+    return {
+      model: this.model,
+      max_tokens: this.maxTokens,
+      messages,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      temperature: this.temperature,
+      search_recency_filter: this.searchOptions.recencyFilter ?? null,
+      search_domain_filter:
+        this.searchOptions.domainFilter && this.searchOptions.domainFilter.length > 0
+          ? this.searchOptions.domainFilter.slice(0, 3)
+          : null,
+    };
   }
 
   /**
