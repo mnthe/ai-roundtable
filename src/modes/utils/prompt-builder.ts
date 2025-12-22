@@ -7,6 +7,7 @@
 
 import type { DebateContext, AgentResponse, DebateMode } from '../../types/index.js';
 import { getToolGuidanceForMode, getToolPolicy, isSequentialMode } from '../tool-policy.js';
+import { PROMPT_SEPARATOR } from './constants.js';
 
 /**
  * Configuration for the Role Anchor layer (Layer 1)
@@ -165,9 +166,9 @@ export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, reado
 } as const;
 
 /**
- * Separator line used in prompts
+ * Alias for backward compatibility within this file
  */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Build the Role Anchor layer (Layer 1)

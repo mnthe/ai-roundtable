@@ -18,6 +18,7 @@ import {
   buildBehavioralContract,
   buildVerificationLoop,
   createOutputSections,
+  PROMPT_SEPARATOR,
   type RoleAnchorConfig,
   type BehavioralContractConfig,
   type VerificationLoopConfig,
@@ -38,9 +39,9 @@ interface RedTeamBlueTeamContext extends DebateContext {
 }
 
 /**
- * Separator line used in prompts
+ * Alias for backward compatibility within this file
  */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Red Team role configuration

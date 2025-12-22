@@ -19,6 +19,7 @@ import {
   buildVerificationLoop,
   buildFocusQuestionSection,
   createOutputSections,
+  PROMPT_SEPARATOR,
   type RoleAnchorConfig,
   type BehavioralContractConfig,
   type VerificationLoopConfig,
@@ -33,9 +34,9 @@ import {
 } from './processors/index.js';
 
 /**
- * Separator line used in prompts
+ * Alias for backward compatibility within this file
  */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Delphi mode role anchor configuration

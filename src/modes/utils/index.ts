@@ -26,3 +26,5 @@ export {
   type ModePromptConfig,
   type OutputSection,
 } from './prompt-builder.js';
+
+export { PROMPT_SEPARATOR } from './constants.js';

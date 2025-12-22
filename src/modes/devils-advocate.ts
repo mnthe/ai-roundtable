@@ -16,6 +16,7 @@ import {
   buildRoleAnchor,
   buildBehavioralContract,
   buildVerificationLoop,
+  PROMPT_SEPARATOR,
   type RoleAnchorConfig,
   type BehavioralContractConfig,
   type VerificationLoopConfig,
@@ -24,9 +25,9 @@ import {
 const logger = createLogger('DevilsAdvocateMode');
 
 /**
- * Separator line used in prompts
+ * Alias for backward compatibility within this file
  */
-const SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Role identifiers for devils-advocate mode
