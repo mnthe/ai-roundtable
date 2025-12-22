@@ -12,7 +12,6 @@ import type {
   SynthesisContext,
   Citation,
   ToolCallRecord,
-  ImageResult,
 } from '../types/index.js';
 import type { AgentToolkit } from '../tools/types.js';
 
@@ -42,10 +41,6 @@ export interface ProviderApiResult {
   toolCalls: ToolCallRecord[];
   /** Citations extracted from tool results */
   citations: Citation[];
-  /** Optional images (Perplexity only) */
-  images?: ImageResult[];
-  /** Optional related questions (Perplexity only) */
-  relatedQuestions?: string[];
 }
 
 /**
@@ -79,8 +74,6 @@ interface AgentResponseParams {
   rawText: string;
   citations: Citation[];
   toolCalls: ToolCallRecord[];
-  images?: ImageResult[];
-  relatedQuestions?: string[];
 }
 
 /**
@@ -173,8 +166,6 @@ export abstract class BaseAgent {
         rawText: apiResult.rawText,
         citations: apiResult.citations,
         toolCalls: apiResult.toolCalls,
-        images: apiResult.images,
-        relatedQuestions: apiResult.relatedQuestions,
       });
 
       const durationMs = Date.now() - startTime;
@@ -610,7 +601,7 @@ ${stanceInstruction}  "position": "Your clear position statement",
    * @returns Complete AgentResponse object
    */
   protected buildAgentResponse(params: AgentResponseParams): AgentResponse {
-    const { parsed, rawText, citations, toolCalls, images, relatedQuestions } = params;
+    const { parsed, rawText, citations, toolCalls } = params;
 
     // Validate response has content - use || to catch empty strings
     const position = parsed.position || 'Unable to determine position';
@@ -625,8 +616,6 @@ ${stanceInstruction}  "position": "Your clear position statement",
       confidence: parsed.confidence,
       citations: citations.length > 0 ? citations : undefined,
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      images: images && images.length > 0 ? images : undefined,
-      relatedQuestions: relatedQuestions && relatedQuestions.length > 0 ? relatedQuestions : undefined,
       timestamp: new Date(),
     };
   }

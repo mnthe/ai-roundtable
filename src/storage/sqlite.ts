@@ -288,14 +288,29 @@ export class SQLiteStorage implements Storage {
 
   /**
    * Delete a session and its responses
+   * Uses transaction to prevent orphaned data
    */
   async deleteSession(sessionId: string): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
 
-    // Delete responses first (manual cascade for sql.js)
-    db.run('DELETE FROM responses WHERE session_id = ?', [sessionId]);
-    db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+    logger.debug({ sessionId }, 'Deleting session from database');
+
+    db.run('BEGIN TRANSACTION');
+    try {
+      // Delete responses first (manual cascade for sql.js)
+      db.run('DELETE FROM responses WHERE session_id = ?', [sessionId]);
+      db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+      db.run('COMMIT');
+      logger.debug({ sessionId }, 'Session deleted successfully');
+    } catch (error) {
+      db.run('ROLLBACK');
+      logger.error({ sessionId, err: error }, 'Failed to delete session, rolling back');
+      throw new StorageError(`Failed to delete session ${sessionId}`, {
+        code: 'DELETE_SESSION_FAILED',
+        cause: error instanceof Error ? error : undefined,
+      });
+    }
   }
 
   /**

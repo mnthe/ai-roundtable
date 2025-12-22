@@ -37,9 +37,12 @@ const ToolCallRecordSchema = z.object({
   timestamp: z.coerce.date(),
 });
 
+const StanceSchema = z.enum(['YES', 'NO', 'NEUTRAL']);
+
 export const AgentResponseSchema = z.object({
   agentId: z.string().min(1),
   agentName: z.string().min(1),
+  stance: StanceSchema.optional(),
   position: z.string().min(1),
   reasoning: z.string().min(1),
   confidence: z.number().min(0).max(1),
@@ -76,11 +79,18 @@ export const DebateConfigSchema = z.object({
 
 export const SessionStatusSchema = z.enum(['active', 'paused', 'completed', 'error']);
 
+const GroupthinkWarningSchema = z.object({
+  detected: z.boolean(),
+  indicators: z.array(z.string()),
+  recommendation: z.string(),
+});
+
 export const ConsensusResultSchema = z.object({
   agreementLevel: z.number().min(0).max(1),
   commonGround: z.array(z.string()),
   disagreementPoints: z.array(z.string()),
   summary: z.string(),
+  groupthinkWarning: GroupthinkWarningSchema.optional(),
 });
 
 export const SessionSchema = z.object({

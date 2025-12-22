@@ -48,6 +48,13 @@ const DEFAULT_RETRY_OPTIONS: RetryOptions = {
 
 /**
  * Calculate delay with exponential backoff and jitter
+ * Uses "full jitter" strategy: random value between 0 and cappedDelay
+ * This helps prevent thundering herd by spreading out retries
+ *
+ * The effective delay range for each attempt:
+ * - Attempt 0: [0, baseDelay]
+ * - Attempt 1: [0, baseDelay * backoffFactor]
+ * - Attempt N: [0, min(baseDelay * backoffFactor^N, maxDelay)]
  */
 function calculateDelay(
   attempt: number,
@@ -61,10 +68,13 @@ function calculateDelay(
   // Cap at maxDelay
   const cappedDelay = Math.min(exponentialDelay, maxDelay);
 
-  // Add jitter: random value between 0 and cappedDelay
-  const jitter = Math.random() * cappedDelay;
+  // Full jitter: random value between 0.5 * cappedDelay and cappedDelay
+  // This ensures we always wait at least half the calculated delay
+  // while still providing enough randomization to prevent thundering herd
+  const minDelay = cappedDelay * 0.5;
+  const jitter = Math.random() * (cappedDelay - minDelay);
 
-  return jitter;
+  return minDelay + jitter;
 }
 
 /**
