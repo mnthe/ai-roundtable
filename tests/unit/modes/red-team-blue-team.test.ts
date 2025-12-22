@@ -38,7 +38,12 @@ describe('RedTeamBlueTeamMode', () => {
 
   describe('getAgentRole hook', () => {
     it('should assign red team to even indices', () => {
-      const agent = new MockAgent({ id: 'agent-0', name: 'Agent', provider: 'anthropic', model: 'mock' });
+      const agent = new MockAgent({
+        id: 'agent-0',
+        name: 'Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
       // Access protected method for testing
       const role = (mode as any).getAgentRole(agent, 0, defaultContext);
       expect(role).toBe('red');
@@ -51,7 +56,12 @@ describe('RedTeamBlueTeamMode', () => {
     });
 
     it('should assign blue team to odd indices', () => {
-      const agent = new MockAgent({ id: 'agent-1', name: 'Agent', provider: 'anthropic', model: 'mock' });
+      const agent = new MockAgent({
+        id: 'agent-1',
+        name: 'Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
       // Access protected method for testing
       const role = (mode as any).getAgentRole(agent, 1, defaultContext);
       expect(role).toBe('blue');

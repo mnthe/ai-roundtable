@@ -382,11 +382,7 @@ describe('ExpertPanelMode', () => {
       const session1Contexts: DebateContext[] = [];
       const session2Contexts: DebateContext[] = [];
 
-      const createCapturingAgent = (
-        id: string,
-        targetContexts: DebateContext[],
-        delay: number
-      ) => {
+      const createCapturingAgent = (id: string, targetContexts: DebateContext[], delay: number) => {
         const agent = new MockAgent({
           id,
           name: `Agent ${id}`,
@@ -426,8 +422,16 @@ describe('ExpertPanelMode', () => {
 
       // Execute both rounds concurrently using the same mode instance
       await Promise.all([
-        mode.executeRound(session1Agents, { ...defaultContext, sessionId: 'session-1' }, mockToolkit),
-        mode.executeRound(session2Agents, { ...defaultContext, sessionId: 'session-2' }, mockToolkit),
+        mode.executeRound(
+          session1Agents,
+          { ...defaultContext, sessionId: 'session-1' },
+          mockToolkit
+        ),
+        mode.executeRound(
+          session2Agents,
+          { ...defaultContext, sessionId: 'session-2' },
+          mockToolkit
+        ),
       ]);
 
       // Session 1 should have perspectives: technical, economic (2 agents)
@@ -461,9 +465,7 @@ describe('ExpertPanelMode', () => {
         vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
           await new Promise((resolve) => setTimeout(resolve, delay));
           // Extract perspective from modePrompt
-          const perspectiveMatch = ctx.modePrompt?.match(
-            /\((\w+) Perspective\)/i
-          );
+          const perspectiveMatch = ctx.modePrompt?.match(/\((\w+) Perspective\)/i);
           targetPerspectives.push(perspectiveMatch?.[1]);
           return {
             agentId: id,
@@ -689,5 +691,4 @@ describe('ExpertPanelMode', () => {
       expect(receivedContexts[3].modePrompt).toContain('SOCIAL IMPACT DOMAIN EXPERT');
     });
   });
-
 });

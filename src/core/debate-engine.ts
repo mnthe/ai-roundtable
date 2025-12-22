@@ -3,10 +3,7 @@
  */
 
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
-import {
-  EXIT_CRITERIA_CONFIG,
-  type ExitCriteriaConfig,
-} from '../config/exit-criteria.js';
+import { EXIT_CRITERIA_CONFIG, type ExitCriteriaConfig } from '../config/exit-criteria.js';
 import { ConfigurationError } from '../errors/index.js';
 import type { DebateModeStrategy } from '../modes/base.js';
 import { getGlobalModeRegistry } from '../modes/registry.js';

@@ -138,10 +138,7 @@ describe('buildGeminiTools', () => {
     ]);
 
     const result = buildGeminiTools(toolkit);
-    const properties = result[0]?.parameters?.properties as Record<
-      string,
-      { description: string }
-    >;
+    const properties = result[0]?.parameters?.properties as Record<string, { description: string }>;
 
     expect(properties.param.description).toBe('Custom description');
   });
@@ -158,10 +155,7 @@ describe('buildGeminiTools', () => {
     ]);
 
     const result = buildGeminiTools(toolkit);
-    const properties = result[0]?.parameters?.properties as Record<
-      string,
-      { description: string }
-    >;
+    const properties = result[0]?.parameters?.properties as Record<string, { description: string }>;
 
     expect(properties.param.description).toBe('');
   });

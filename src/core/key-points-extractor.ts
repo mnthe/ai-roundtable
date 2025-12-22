@@ -96,9 +96,7 @@ export class KeyPointsExtractor {
    * @param responses - Agent responses to extract key points from
    * @returns Map of agentId to key points
    */
-  async extractKeyPointsBatch(
-    responses: AgentResponse[]
-  ): Promise<Map<string, string[]>> {
+  async extractKeyPointsBatch(responses: AgentResponse[]): Promise<Map<string, string[]>> {
     const results = new Map<string, string[]>();
 
     if (responses.length === 0) {
@@ -115,10 +113,7 @@ export class KeyPointsExtractor {
           const keyPoints = await this.extractWithAI(agent, response);
           return { agentId: response.agentId, keyPoints };
         } catch (error) {
-          logger.warn(
-            { err: error, agentId: response.agentId },
-            'AI extraction failed'
-          );
+          logger.warn({ err: error, agentId: response.agentId }, 'AI extraction failed');
           // Fallback for this specific response
           if (this.fallbackToRuleBased) {
             return {
@@ -190,10 +185,7 @@ export class KeyPointsExtractor {
   /**
    * Extract key points using AI
    */
-  private async extractWithAI(
-    agent: BaseAgent,
-    response: AgentResponse
-  ): Promise<string[]> {
+  private async extractWithAI(agent: BaseAgent, response: AgentResponse): Promise<string[]> {
     // Build the extraction prompt
     const prompt = EXTRACTION_PROMPT.replace('{agentName}', response.agentName)
       .replace('{position}', response.position)

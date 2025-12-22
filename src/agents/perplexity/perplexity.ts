@@ -19,11 +19,7 @@ import { convertSDKError } from '../utils/index.js';
 import { buildPerplexityTools } from './utils.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import type { PerplexitySearchOptions, PerplexityAgentOptions } from './types.js';
-import {
-  extractContentText,
-  extractPerplexityCitations,
-  createSearchToolCall,
-} from './search.js';
+import { extractContentText, extractPerplexityCitations, createSearchToolCall } from './search.js';
 
 const logger = createLogger('PerplexityAgent');
 

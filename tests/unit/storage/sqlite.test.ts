@@ -537,9 +537,7 @@ describe('SQLiteStorage', () => {
         position: 'Test position',
         reasoning: 'Test reasoning',
         confidence: 0.75,
-        citations: [
-          { title: 'Citation 1', url: 'https://example.com/1', snippet: 'Snippet 1' },
-        ],
+        citations: [{ title: 'Citation 1', url: 'https://example.com/1', snippet: 'Snippet 1' }],
         toolCalls: [
           {
             toolName: 'search_web',

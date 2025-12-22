@@ -134,4 +134,3 @@ export function isParallelMode(mode: DebateMode): boolean {
 export function getToolGuidanceForMode(mode: DebateMode): string {
   return isSequentialMode(mode) ? SEQUENTIAL_MODE_TOOL_GUIDANCE : '';
 }
-

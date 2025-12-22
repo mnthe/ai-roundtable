@@ -10,7 +10,10 @@ import { MockAgent } from '../../../src/agents/base.js';
 import type { DebateContext, AgentResponse } from '../../../src/types/index.js';
 
 // Mock agent for testing
-const createMockAgent = (id: string, provider: 'anthropic' | 'openai' | 'google' | 'perplexity') => ({
+const createMockAgent = (
+  id: string,
+  provider: 'anthropic' | 'openai' | 'google' | 'perplexity'
+) => ({
   getInfo: () => ({
     id,
     name: `Test ${provider}`,
@@ -83,11 +86,7 @@ describe('DebateEngine with AI Consensus', () => {
 
     // Register mock agent
     const mockAgent = createMockAgent('test-agent', 'anthropic');
-    registry.registerProvider(
-      'anthropic',
-      () => mockAgent as any,
-      'test-model'
-    );
+    registry.registerProvider('anthropic', () => mockAgent as any, 'test-model');
     registry.createAgent({
       id: 'test-agent',
       name: 'Test Agent',
@@ -247,5 +246,4 @@ describe('DebateEngine with AI Consensus', () => {
       expect(result.commonGround.length).toBeGreaterThan(0);
     });
   });
-
 });

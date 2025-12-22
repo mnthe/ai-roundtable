@@ -16,11 +16,7 @@ export { ExpertPanelMode } from './expert-panel.js';
 export { DevilsAdvocateMode } from './devils-advocate.js';
 export { DelphiMode } from './delphi.js';
 export { RedTeamBlueTeamMode } from './red-team-blue-team.js';
-export {
-  ModeRegistry,
-  getGlobalModeRegistry,
-  resetGlobalModeRegistry,
-} from './registry.js';
+export { ModeRegistry, getGlobalModeRegistry, resetGlobalModeRegistry } from './registry.js';
 
 // Mode configurations
 export * from './configs/index.js';

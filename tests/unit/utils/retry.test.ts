@@ -31,10 +31,7 @@ describe('Retry Utility', () => {
 
     it('should retry on retryable error', async () => {
       const error = new APIRateLimitError('Rate limited', {});
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(error)
-        .mockResolvedValue('success');
+      const fn = vi.fn().mockRejectedValueOnce(error).mockResolvedValue('success');
 
       const promise = withRetry(fn, { maxRetries: 3, baseDelay: 1000 });
 
@@ -106,10 +103,7 @@ describe('Retry Utility', () => {
     it('should retry only specified error codes', async () => {
       const rateLimitError = new APIRateLimitError('Rate limited', {});
       const networkError = new APINetworkError('Network error', {});
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(rateLimitError)
-        .mockRejectedValueOnce(networkError);
+      const fn = vi.fn().mockRejectedValueOnce(rateLimitError).mockRejectedValueOnce(networkError);
 
       const promise = withRetry(fn, {
         maxRetries: 3,
@@ -136,10 +130,7 @@ describe('Retry Utility', () => {
 
     it('should retry non-RoundtableError if listed in retryableErrors', async () => {
       const error = new TypeError('Type error');
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(error)
-        .mockResolvedValue('success');
+      const fn = vi.fn().mockRejectedValueOnce(error).mockResolvedValue('success');
 
       const promise = withRetry(fn, {
         maxRetries: 2,
@@ -159,10 +150,7 @@ describe('Retry Utility', () => {
         retryable: true,
         provider: 'test',
       });
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(error)
-        .mockResolvedValue('success');
+      const fn = vi.fn().mockRejectedValueOnce(error).mockResolvedValue('success');
 
       const promise = withRetry(fn, { maxRetries: 2, baseDelay: 100 });
 
@@ -196,9 +184,9 @@ describe('Retry Utility', () => {
       const error = new APIRateLimitError('Rate limited', {});
       const fn = vi.fn().mockRejectedValue(error);
 
-      await expect(
-        withRetry(fn, { maxRetries: 0, baseDelay: 100 })
-      ).rejects.toThrow(APIRateLimitError);
+      await expect(withRetry(fn, { maxRetries: 0, baseDelay: 100 })).rejects.toThrow(
+        APIRateLimitError
+      );
       expect(fn).toHaveBeenCalledTimes(1);
     });
 
@@ -278,10 +266,7 @@ describe('Retry Utility', () => {
 
     it('should work with very short delays', async () => {
       const error = new APIRateLimitError('Rate limited', {});
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(error)
-        .mockResolvedValue('success');
+      const fn = vi.fn().mockRejectedValueOnce(error).mockResolvedValue('success');
 
       const promise = withRetry(fn, { maxRetries: 1, baseDelay: 1 });
       await vi.runAllTimersAsync();

@@ -15,12 +15,7 @@ import type { AgentConfig, AIProvider } from '../../../../src/types/index.js';
 /**
  * Create a mock agent that implements BaseAgent interface
  */
-function createMockAgent(
-  id: string,
-  name: string,
-  provider: AIProvider,
-  model: string
-): BaseAgent {
+function createMockAgent(id: string, name: string, provider: AIProvider, model: string): BaseAgent {
   return {
     id,
     name,

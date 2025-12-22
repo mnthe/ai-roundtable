@@ -23,12 +23,7 @@ describe('Type Definitions', () => {
     });
 
     it('should accept all provider types', () => {
-      const providers: AgentConfig['provider'][] = [
-        'anthropic',
-        'openai',
-        'google',
-        'perplexity',
-      ];
+      const providers: AgentConfig['provider'][] = ['anthropic', 'openai', 'google', 'perplexity'];
 
       providers.forEach((provider) => {
         const config: AgentConfig = {

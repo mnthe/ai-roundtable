@@ -87,10 +87,7 @@ function calculateDelay(
 /**
  * Check if an error should be retried
  */
-function isRetryableError(
-  error: unknown,
-  retryableErrors?: string[]
-): boolean {
+function isRetryableError(error: unknown, retryableErrors?: string[]): boolean {
   // If it's a RoundtableError, check the retryable flag
   if (error instanceof RoundtableError) {
     // If specific error codes are provided, check if this error code is in the list
@@ -167,12 +164,7 @@ export async function withRetry<T>(
       }
 
       // Calculate delay with exponential backoff and jitter
-      const delay = calculateDelay(
-        attempt,
-        opts.baseDelay,
-        opts.maxDelay,
-        opts.backoffFactor
-      );
+      const delay = calculateDelay(attempt, opts.baseDelay, opts.maxDelay, opts.backoffFactor);
 
       // Log retry attempt at debug level
       logger.debug(

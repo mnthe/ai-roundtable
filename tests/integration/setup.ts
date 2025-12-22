@@ -123,7 +123,9 @@ export function markProviderHealthy(provider: Provider): void {
 /**
  * Get health check status for a provider
  */
-export function getProviderHealthStatus(provider: Provider): { healthy: boolean; error?: string } | undefined {
+export function getProviderHealthStatus(
+  provider: Provider
+): { healthy: boolean; error?: string } | undefined {
   return healthCheckCache.get(provider);
 }
 

@@ -390,7 +390,7 @@ describe('MetricsCollector', () => {
       // convergenceRound is either a number or null
       expect(
         metrics.consensus.convergenceRound === null ||
-        typeof metrics.consensus.convergenceRound === 'number'
+          typeof metrics.consensus.convergenceRound === 'number'
       ).toBe(true);
     });
 

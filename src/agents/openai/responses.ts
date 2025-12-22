@@ -72,9 +72,7 @@ export function buildResponsesTools(
  * @param output - Response output items
  * @returns Array of citations
  */
-export function extractCitationsFromResponseOutput(
-  output: Response['output']
-): Citation[] {
+export function extractCitationsFromResponseOutput(output: Response['output']): Citation[] {
   const citations: Citation[] = [];
 
   for (const item of output) {
@@ -139,9 +137,7 @@ export function recordWebSearchToolCall(
   citations: Citation[]
 ): ToolCallRecord | undefined {
   // Check if web search was used by looking for web_search_call items
-  const webSearchCall = output.find(
-    (item) => item.type === 'web_search_call'
-  );
+  const webSearchCall = output.find((item) => item.type === 'web_search_call');
 
   if (!webSearchCall || citations.length === 0) {
     return undefined;
@@ -204,7 +200,10 @@ export async function executeResponsesCompletion(
   // Build tools array
   const tools = buildResponsesTools(functionTools, webSearch);
 
-  logger.debug({ model, hasWebSearch: webSearch?.enabled !== false }, 'Executing Responses API call');
+  logger.debug(
+    { model, hasWebSearch: webSearch?.enabled !== false },
+    'Executing Responses API call'
+  );
 
   // Make the initial API call with retry logic
   let response = await withRetry(
@@ -331,16 +330,8 @@ export async function executeResponsesCompletion(
 export async function executeSimpleResponsesCompletion(
   params: SimpleResponsesCompletionParams
 ): Promise<string> {
-  const {
-    client,
-    model,
-    maxTokens,
-    temperature,
-    instructions,
-    input,
-    agentId,
-    convertError,
-  } = params;
+  const { client, model, maxTokens, temperature, instructions, input, agentId, convertError } =
+    params;
 
   logger.debug({ agentId }, params.debugMessage ?? 'Executing simple Responses API completion');
 
@@ -360,7 +351,10 @@ export async function executeSimpleResponsesCompletion(
     return extractTextFromResponse(response);
   } catch (error) {
     const convertedError = convertError(error);
-    logger.error({ err: convertedError, agentId }, 'Failed to execute simple Responses API completion');
+    logger.error(
+      { err: convertedError, agentId },
+      'Failed to execute simple Responses API completion'
+    );
     throw convertedError;
   }
 }

@@ -15,7 +15,10 @@ import {
 } from '../../../src/core/utils/json-parser.js';
 
 // Mock agent for testing
-const createMockAgent = (id: string, provider: 'anthropic' | 'openai' | 'google' | 'perplexity') => ({
+const createMockAgent = (
+  id: string,
+  provider: 'anthropic' | 'openai' | 'google' | 'perplexity'
+) => ({
   getInfo: () => ({
     id,
     name: `Test ${provider}`,
@@ -73,9 +76,10 @@ const createSampleResponses = (): AgentResponse[] => [
   {
     agentId: 'chatgpt-default',
     agentName: 'ChatGPT',
-    position: 'Artificial intelligence development requires responsible approaches and safety considerations.',
+    position:
+      'Artificial intelligence development requires responsible approaches and safety considerations.',
     reasoning: 'The technology is powerful and needs oversight.',
-    confidence: 0.80,
+    confidence: 0.8,
     timestamp: new Date(),
   },
 ];
@@ -88,7 +92,7 @@ describe('AIConsensusAnalyzer', () => {
     registry = new AgentRegistry();
     analyzer = new AIConsensusAnalyzer({
       registry,
-          });
+    });
   });
 
   describe('Constructor', () => {
@@ -149,11 +153,7 @@ describe('AIConsensusAnalyzer', () => {
     describe('With AI agent', () => {
       beforeEach(() => {
         const mockAgent = createMockAgent('test-agent', 'anthropic');
-        registry.registerProvider(
-          'anthropic',
-          () => mockAgent as any,
-          'test-model'
-        );
+        registry.registerProvider('anthropic', () => mockAgent as any, 'test-model');
         registry.createAgent({
           id: 'test-agent',
           name: 'Test Agent',
@@ -374,7 +374,8 @@ describe('JSON parsing strategies', () => {
     });
 
     it('should extract commonGround array from partial JSON', () => {
-      const input = '{"agreementLevel": 0.8, "commonGround": ["Point A", "Point B"], "summary": "Test';
+      const input =
+        '{"agreementLevel": 0.8, "commonGround": ["Point A", "Point B"], "summary": "Test';
       const result = parsePartialJsonResponse(input, 'test');
 
       expect(result).not.toBeNull();
@@ -432,14 +433,16 @@ describe('JSON parsing strategies', () => {
     });
 
     it('should handle markdown-wrapped JSON', () => {
-      const input = '```json\n{"agreementLevel": 0.7, "commonGround": [], "disagreementPoints": [], "summary": "Test"}\n```';
+      const input =
+        '```json\n{"agreementLevel": 0.7, "commonGround": [], "disagreementPoints": [], "summary": "Test"}\n```';
       const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.7);
     });
 
     it('should handle truncated markdown JSON', () => {
-      const input = '```json\n{"agreementLevel": 0.65, "clusters": [{"theme": "Context-Dependent Pragmatism", "agentIds": ["claude", "chatgpt"], "summary": "TypeScript\'s value dep';
+      const input =
+        '```json\n{"agreementLevel": 0.65, "clusters": [{"theme": "Context-Dependent Pragmatism", "agentIds": ["claude", "chatgpt"], "summary": "TypeScript\'s value dep';
       const result = parseAIConsensusResponse(input, { analyzerId: 'test' });
 
       expect(result.agreementLevel).toBe(0.65);

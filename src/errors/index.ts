@@ -51,7 +51,8 @@ export class RoundtableError extends Error {
 export class APIRateLimitError extends RoundtableError {
   constructor(
     message: string = 'API rate limit exceeded',
-    options: Omit<ErrorOptions, 'code' | 'retryable'> & Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
+    options: Omit<ErrorOptions, 'code' | 'retryable'> &
+      Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
   ) {
     super(message, {
       code: options.code ?? 'API_RATE_LIMIT',
@@ -68,7 +69,8 @@ export class APIRateLimitError extends RoundtableError {
 export class APIAuthError extends RoundtableError {
   constructor(
     message: string = 'API authentication failed',
-    options: Omit<ErrorOptions, 'code' | 'retryable'> & Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
+    options: Omit<ErrorOptions, 'code' | 'retryable'> &
+      Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
   ) {
     super(message, {
       code: options.code ?? 'API_AUTH_FAILED',
@@ -85,7 +87,8 @@ export class APIAuthError extends RoundtableError {
 export class APINetworkError extends RoundtableError {
   constructor(
     message: string = 'Network error occurred',
-    options: Omit<ErrorOptions, 'code' | 'retryable'> & Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
+    options: Omit<ErrorOptions, 'code' | 'retryable'> &
+      Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
   ) {
     super(message, {
       code: options.code ?? 'API_NETWORK_ERROR',
@@ -102,7 +105,8 @@ export class APINetworkError extends RoundtableError {
 export class APITimeoutError extends RoundtableError {
   constructor(
     message: string = 'API request timed out',
-    options: Omit<ErrorOptions, 'code' | 'retryable'> & Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
+    options: Omit<ErrorOptions, 'code' | 'retryable'> &
+      Partial<Pick<ErrorOptions, 'code' | 'retryable'>>
   ) {
     super(message, {
       code: options.code ?? 'API_TIMEOUT',

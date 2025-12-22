@@ -134,8 +134,7 @@ export function checkExitCriteria(
   // Check 3: All agents confident
   const allConfident = responses.every((r) => r.confidence >= confidenceThreshold);
   if (allConfident && responses.length > 0) {
-    const avgConfidence =
-      responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
+    const avgConfidence = responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
     return {
       shouldExit: true,
       reason: 'confidence',

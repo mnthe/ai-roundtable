@@ -113,10 +113,7 @@ export class ClaudeAgent extends BaseAgent {
 
       // Record server tool use for logging purposes
       for (const serverTool of serverToolUseBlocks) {
-        logger.debug(
-          { agentId: this.id, toolName: serverTool.name },
-          'Server tool invoked'
-        );
+        logger.debug({ agentId: this.id, toolName: serverTool.name }, 'Server tool invoked');
       }
 
       const toolResults: MessageParam['content'] = [];

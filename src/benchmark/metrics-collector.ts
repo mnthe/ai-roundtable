@@ -180,16 +180,12 @@ export class MetricsCollector {
    */
   calculateContentMetrics(): ContentMetrics {
     const confidences = this.responses.map((r) => r.confidence);
-    const avgConfidence = confidences.length > 0
-      ? confidences.reduce((sum, c) => sum + c, 0) / confidences.length
-      : 0;
+    const avgConfidence =
+      confidences.length > 0 ? confidences.reduce((sum, c) => sum + c, 0) / confidences.length : 0;
 
     const confidenceVariance = this.calculateVariance(confidences, avgConfidence);
     const toolCallsPerAgent = this.calculateToolCallsPerAgent();
-    const citationCount = this.responses.reduce(
-      (sum, r) => sum + (r.citations?.length ?? 0),
-      0
-    );
+    const citationCount = this.responses.reduce((sum, r) => sum + (r.citations?.length ?? 0), 0);
 
     return {
       avgConfidence,
@@ -249,9 +245,7 @@ export class MetricsCollector {
     for (const start of agentStarts) {
       if (!start.agentId) continue;
 
-      const end = agentEnds.find(
-        (e) => e.agentId === start.agentId && e.round === start.round
-      );
+      const end = agentEnds.find((e) => e.agentId === start.agentId && e.round === start.round);
       if (end) {
         const duration = end.timestamp - start.timestamp;
         agentLatencies[start.agentId] = (agentLatencies[start.agentId] ?? 0) + duration;
@@ -265,12 +259,8 @@ export class MetricsCollector {
    * Get duration of a specific round
    */
   private getRoundDuration(round: number): number | null {
-    const start = this.timingEvents.find(
-      (e) => e.type === 'round_start' && e.round === round
-    );
-    const end = this.timingEvents.find(
-      (e) => e.type === 'round_end' && e.round === round
-    );
+    const start = this.timingEvents.find((e) => e.type === 'round_start' && e.round === round);
+    const end = this.timingEvents.find((e) => e.type === 'round_end' && e.round === round);
 
     if (start && end) {
       return end.timestamp - start.timestamp;
@@ -320,9 +310,7 @@ export class MetricsCollector {
     for (const pattern of referencePatterns) {
       if (pattern.test(textToSearch)) {
         // If we can't identify specific target, count as reference to any previous agent
-        const prevResponse = this.responses.find(
-          (r) => r.agentId !== response.agentId
-        );
+        const prevResponse = this.responses.find((r) => r.agentId !== response.agentId);
         if (prevResponse) {
           // Avoid duplicate references
           const exists = references.some(
@@ -486,8 +474,7 @@ export class MetricsCollector {
 
     // Compare confidence levels as proxy for agreement
     const avgConfidence =
-      lastRoundResponses.reduce((sum, r) => sum + r.confidence, 0) /
-      lastRoundResponses.length;
+      lastRoundResponses.reduce((sum, r) => sum + r.confidence, 0) / lastRoundResponses.length;
 
     // Check if positions converge (simplified check using keywords)
     const positions = lastRoundResponses.map((r) => r.position.toLowerCase());
@@ -510,9 +497,7 @@ export class MetricsCollector {
     const firstSet = keywordSets[0];
     if (!firstSet) return [];
 
-    return Array.from(firstSet).filter((keyword) =>
-      keywordSets.every((set) => set.has(keyword))
-    );
+    return Array.from(firstSet).filter((keyword) => keywordSets.every((set) => set.has(keyword)));
   }
 
   /**
@@ -657,11 +642,9 @@ export class MetricsCollector {
 
       // Check if confidence changed significantly
       const currentAvgConf =
-        currentResponses.reduce((sum, r) => sum + r.confidence, 0) /
-        currentResponses.length;
+        currentResponses.reduce((sum, r) => sum + r.confidence, 0) / currentResponses.length;
       const previousAvgConf =
-        previousResponses.reduce((sum, r) => sum + r.confidence, 0) /
-        previousResponses.length;
+        previousResponses.reduce((sum, r) => sum + r.confidence, 0) / previousResponses.length;
 
       const confidenceStable = Math.abs(currentAvgConf - previousAvgConf) < 0.1;
 
@@ -673,9 +656,7 @@ export class MetricsCollector {
         previousResponses.flatMap((r) => this.extractKeywords(r.position.toLowerCase()))
       );
 
-      const intersection = new Set(
-        [...currentKeywords].filter((k) => previousKeywords.has(k))
-      );
+      const intersection = new Set([...currentKeywords].filter((k) => previousKeywords.has(k)));
       const union = new Set([...currentKeywords, ...previousKeywords]);
       const jaccard = union.size > 0 ? intersection.size / union.size : 0;
 

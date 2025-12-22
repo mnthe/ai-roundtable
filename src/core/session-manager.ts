@@ -73,7 +73,11 @@ export class SessionManager {
    * Add a response to a session
    * @param roundNumber - The round number this response belongs to
    */
-  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
+  async addResponse(
+    sessionId: string,
+    response: AgentResponse,
+    roundNumber: number
+  ): Promise<void> {
     const session = await this.getSession(sessionId);
     if (!session) {
       throw new SessionError(`Session ${sessionId} not found`, {

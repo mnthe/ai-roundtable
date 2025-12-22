@@ -62,9 +62,7 @@ export function extractCitationsFromWebSearch(result: WebSearchToolResultBlock):
  * @returns Concatenated text content
  */
 export function extractTextFromResponse(response: Anthropic.Message): string {
-  const textBlocks = response.content.filter(
-    (block): block is TextBlock => block.type === 'text'
-  );
+  const textBlocks = response.content.filter((block): block is TextBlock => block.type === 'text');
   return textBlocks.map((block) => block.text).join('\n');
 }
 

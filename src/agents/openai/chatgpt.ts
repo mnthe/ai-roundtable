@@ -18,10 +18,7 @@ import { convertSDKError } from '../utils/index.js';
 import { buildResponsesFunctionTools } from './utils.js';
 import { executeResponsesCompletion, executeSimpleResponsesCompletion } from './responses.js';
 import type { AgentConfig, DebateContext } from '../../types/index.js';
-import type {
-  ChatGPTAgentOptions,
-  ResponsesWebSearchConfig,
-} from './types.js';
+import type { ChatGPTAgentOptions, ResponsesWebSearchConfig } from './types.js';
 
 /**
  * ChatGPT Agent using OpenAI's Responses API
@@ -85,10 +82,12 @@ export class ChatGPTAgent extends BaseAgent {
       input: userMessage,
       functionTools,
       webSearch: this.webSearchConfig,
-      executeTool: functionTools.length > 0 ? (name, input) => this.executeTool(name, input) : undefined,
-      extractToolCitations: functionTools.length > 0
-        ? (name, result) => this.extractCitationsFromToolResult(name, result)
-        : undefined,
+      executeTool:
+        functionTools.length > 0 ? (name, input) => this.executeTool(name, input) : undefined,
+      extractToolCitations:
+        functionTools.length > 0
+          ? (name, result) => this.extractCitationsFromToolResult(name, result)
+          : undefined,
     });
   }
 
@@ -145,7 +144,8 @@ export class ChatGPTAgent extends BaseAgent {
       model: this.model,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
-      instructions: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      instructions:
+        systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
       input: prompt,
       agentId: this.id,
       convertError: (error) => this.convertError(error),

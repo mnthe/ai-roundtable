@@ -5,4 +5,5 @@
 /**
  * Separator line used in mode prompts for visual structure
  */
-export const PROMPT_SEPARATOR = '═══════════════════════════════════════════════════════════════════';
+export const PROMPT_SEPARATOR =
+  '═══════════════════════════════════════════════════════════════════';

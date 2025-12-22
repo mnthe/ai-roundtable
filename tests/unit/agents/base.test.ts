@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAgent } from '../../../src/agents/base.js';
-import type { AgentConfig, DebateContext, AgentResponse, Citation, ToolCallRecord } from '../../../src/types/index.js';
+import type {
+  AgentConfig,
+  DebateContext,
+  AgentResponse,
+  Citation,
+  ToolCallRecord,
+} from '../../../src/types/index.js';
 
 describe('BaseAgent', () => {
   const defaultConfig: AgentConfig = {
@@ -466,9 +472,7 @@ describe('extractCitationsFromToolResult', () => {
     const result = {
       success: true,
       data: {
-        citations: [
-          { title: 'Source 1', url: 'https://source.com/1', snippet: 'Info 1' },
-        ],
+        citations: [{ title: 'Source 1', url: 'https://source.com/1', snippet: 'Info 1' }],
       },
     };
 
@@ -487,9 +491,7 @@ describe('extractCitationsFromToolResult', () => {
     const result = {
       success: false,
       data: {
-        results: [
-          { title: 'Article', url: 'https://example.com', snippet: 'Snippet' },
-        ],
+        results: [{ title: 'Article', url: 'https://example.com', snippet: 'Snippet' }],
       },
     };
 
@@ -503,9 +505,7 @@ describe('extractCitationsFromToolResult', () => {
     const result = {
       success: true,
       data: {
-        results: [
-          { title: 'Article', url: 'https://example.com', snippet: 'Snippet' },
-        ],
+        results: [{ title: 'Article', url: 'https://example.com', snippet: 'Snippet' }],
       },
     };
 
@@ -577,7 +577,11 @@ describe('extractResponseFromToolCallsOrText', () => {
       },
     ];
 
-    const result = agent.testExtractResponseFromToolCallsOrText(toolCalls, 'Raw text', defaultContext);
+    const result = agent.testExtractResponseFromToolCallsOrText(
+      toolCalls,
+      'Raw text',
+      defaultContext
+    );
 
     expect(result.position).toBe('Tool position');
     expect(result.reasoning).toBe('Tool reasoning');

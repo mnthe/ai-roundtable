@@ -249,13 +249,14 @@ export function createMockResponsesClient(
   responseText: string,
   urlCitations?: Array<{ title: string; url: string }>
 ) {
-  const annotations = urlCitations?.map((c) => ({
-    type: 'url_citation' as const,
-    title: c.title,
-    url: c.url,
-    start_index: 0,
-    end_index: 10,
-  })) ?? [];
+  const annotations =
+    urlCitations?.map((c) => ({
+      type: 'url_citation' as const,
+      title: c.title,
+      url: c.url,
+      start_index: 0,
+      end_index: 10,
+    })) ?? [];
 
   return {
     responses: {

@@ -131,9 +131,10 @@ export const StartRoundtableInputSchema = z.object({
   parallel: ParallelizationLevelSchema.optional().describe(
     'Parallelization level for agent execution (none: sequential, last-only: parallel except last agent, full: all parallel)'
   ),
-  exitOnConsensus: z.boolean().optional().describe(
-    'Whether to exit early when consensus is reached'
-  ),
+  exitOnConsensus: z
+    .boolean()
+    .optional()
+    .describe('Whether to exit early when consensus is reached'),
 });
 
 /**
@@ -199,9 +200,21 @@ export const ListSessionsInputSchema = z.object({
   topic: z.string().optional().describe('Search sessions by topic keyword (partial match)'),
   mode: DebateModeSchema.optional().describe('Filter by debate mode'),
   status: SessionStatusSchema.optional().describe('Filter by session status'),
-  fromDate: z.string().optional().describe('Filter sessions created after this date (ISO 8601 format)'),
-  toDate: z.string().optional().describe('Filter sessions created before this date (ISO 8601 format)'),
-  limit: z.number().int().positive().optional().default(50).describe('Maximum number of results to return'),
+  fromDate: z
+    .string()
+    .optional()
+    .describe('Filter sessions created after this date (ISO 8601 format)'),
+  toDate: z
+    .string()
+    .optional()
+    .describe('Filter sessions created before this date (ISO 8601 format)'),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .default(50)
+    .describe('Maximum number of results to return'),
 });
 
 export const GetAgentsInputSchema = z.object({});

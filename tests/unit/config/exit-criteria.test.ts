@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { EXIT_CRITERIA_CONFIG, type ExitCriteriaConfig } from '../../../src/config/exit-criteria.js';
+import {
+  EXIT_CRITERIA_CONFIG,
+  type ExitCriteriaConfig,
+} from '../../../src/config/exit-criteria.js';
 
 describe('Exit Criteria Config', () => {
   describe('EXIT_CRITERIA_CONFIG', () => {

@@ -75,7 +75,7 @@ describe('OpenAI Responses API Utilities', () => {
       expect(tools).toHaveLength(2);
       expect(tools[0].type).toBe('web_search');
       expect(tools[1].type).toBe('function');
-      expect((tools[1] as typeof functionTools[0]).name).toBe('fact_check');
+      expect((tools[1] as (typeof functionTools)[0]).name).toBe('fact_check');
     });
 
     it('should combine web search and multiple function tools', () => {
@@ -240,7 +240,13 @@ describe('OpenAI Responses API Utilities', () => {
                   end_index: 5,
                   url: 'https://example.com/no-title',
                   // title is missing
-                } as { type: 'url_citation'; start_index: number; end_index: number; url: string; title?: string },
+                } as {
+                  type: 'url_citation';
+                  start_index: number;
+                  end_index: number;
+                  url: string;
+                  title?: string;
+                },
               ],
             },
           ],
@@ -505,9 +511,7 @@ describe('OpenAI Responses API Utilities', () => {
 
       expect(mockClient.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          tools: expect.arrayContaining([
-            expect.objectContaining({ type: 'web_search' }),
-          ]),
+          tools: expect.arrayContaining([expect.objectContaining({ type: 'web_search' })]),
         })
       );
     });
@@ -687,9 +691,9 @@ describe('OpenAI Responses API Utilities', () => {
         data: { results: [{ title: 'Source', url: 'https://source.com' }] },
       };
       const executeTool = vi.fn().mockResolvedValue(toolResult);
-      const extractToolCitations = vi.fn().mockReturnValue([
-        { title: 'Source', url: 'https://source.com', snippet: undefined },
-      ]);
+      const extractToolCitations = vi
+        .fn()
+        .mockReturnValue([{ title: 'Source', url: 'https://source.com', snippet: undefined }]);
 
       const result = await executeResponsesCompletion({
         client: mockClient as any,
@@ -792,7 +796,7 @@ describe('OpenAI Responses API Utilities', () => {
         instructions: 'System prompt',
         input: 'User input',
         agentId: 'test-agent',
-        convertError: (e) => e instanceof Error ? e : new Error(String(e)),
+        convertError: (e) => (e instanceof Error ? e : new Error(String(e))),
       };
 
       const result = await executeSimpleResponsesCompletion(params);
@@ -825,7 +829,7 @@ describe('OpenAI Responses API Utilities', () => {
         instructions: 'System',
         input: 'Input',
         agentId: 'test',
-        convertError: (e) => e instanceof Error ? e : new Error(String(e)),
+        convertError: (e) => (e instanceof Error ? e : new Error(String(e))),
       });
 
       expect(mockClient.responses.create).toHaveBeenCalledWith(

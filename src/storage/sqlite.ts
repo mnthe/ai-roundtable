@@ -47,12 +47,12 @@ export interface SQLiteStorageOptions {}
  * Session filter options for search
  */
 export interface SessionFilter {
-  topic?: string;           // Search by topic keyword
-  mode?: DebateMode;        // Filter by debate mode
-  status?: SessionStatus;   // Filter by session status
-  fromDate?: Date;          // Filter sessions created after this date
-  toDate?: Date;            // Filter sessions created before this date
-  limit?: number;           // Maximum number of results
+  topic?: string; // Search by topic keyword
+  mode?: DebateMode; // Filter by debate mode
+  status?: SessionStatus; // Filter by session status
+  fromDate?: Date; // Filter sessions created after this date
+  toDate?: Date; // Filter sessions created before this date
+  limit?: number; // Maximum number of results
 }
 
 export interface StoredSession {
@@ -165,7 +165,9 @@ export class SQLiteStorage implements Storage {
 
     db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_id ON responses(session_id)`);
     db.run(`CREATE INDEX IF NOT EXISTS idx_responses_timestamp ON responses(timestamp)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_responses_session_round ON responses(session_id, round_number)`);
+    db.run(
+      `CREATE INDEX IF NOT EXISTS idx_responses_session_round ON responses(session_id, round_number)`
+    );
   }
 
   /**
@@ -229,10 +231,7 @@ export class SQLiteStorage implements Storage {
       return this.mapStoredSessionToSession(row, responses);
     } catch (error) {
       if (error instanceof ZodError) {
-        logger.error(
-          { sessionId, error: error.issues },
-          'Invalid session data in database'
-        );
+        logger.error({ sessionId, error: error.issues }, 'Invalid session data in database');
         throw new StorageError(`Invalid session data for ${sessionId}: ${error.message}`, {
           code: 'INVALID_SESSION_DATA',
           cause: error,
@@ -249,10 +248,7 @@ export class SQLiteStorage implements Storage {
     await this.ensureInitialized();
     const db = this.getDb();
 
-    logger.debug(
-      { sessionId, updates: Object.keys(updates) },
-      'Updating session in database'
-    );
+    logger.debug({ sessionId, updates: Object.keys(updates) }, 'Updating session in database');
 
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -418,7 +414,11 @@ export class SQLiteStorage implements Storage {
   /**
    * Add a response to a session
    */
-  async addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void> {
+  async addResponse(
+    sessionId: string,
+    response: AgentResponse,
+    roundNumber: number
+  ): Promise<void> {
     await this.ensureInitialized();
     const db = this.getDb();
 
@@ -659,7 +659,8 @@ export class SQLiteStorage implements Storage {
         // Convert timestamp to Date if needed
         toolCalls = validated.map((tc) => ({
           ...tc,
-          timestamp: tc.timestamp instanceof Date ? tc.timestamp : new Date(tc.timestamp as string | number),
+          timestamp:
+            tc.timestamp instanceof Date ? tc.timestamp : new Date(tc.timestamp as string | number),
         }));
       } catch (error) {
         if (error instanceof ZodError) {
@@ -676,9 +677,10 @@ export class SQLiteStorage implements Storage {
 
     // Parse stance (validate it's one of the allowed values)
     const validStances = ['YES', 'NO', 'NEUTRAL'] as const;
-    const stance = stored.stance && validStances.includes(stored.stance as (typeof validStances)[number])
-      ? (stored.stance as 'YES' | 'NO' | 'NEUTRAL')
-      : undefined;
+    const stance =
+      stored.stance && validStances.includes(stored.stance as (typeof validStances)[number])
+        ? (stored.stance as 'YES' | 'NO' | 'NEUTRAL')
+        : undefined;
 
     return {
       agentId: stored.agent_id,

@@ -319,7 +319,9 @@ describe('GeminiAgent', () => {
                 if (phase2CallCount === 1) {
                   return Promise.resolve({
                     text: '',
-                    functionCalls: [{ id: 'call-1', name: 'failing_tool', args: { input: 'test' } }],
+                    functionCalls: [
+                      { id: 'call-1', name: 'failing_tool', args: { input: 'test' } },
+                    ],
                   });
                 }
                 return Promise.resolve({

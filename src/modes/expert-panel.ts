@@ -104,9 +104,7 @@ export class ExpertPanelMode extends BaseModeStrategy {
     const perspective = state?.agentPerspectiveMap.get(agent.id);
 
     // Only add perspective-specific additions to existing modePrompt
-    const perspectiveAddition = perspective
-      ? this.buildPerspectiveAddition(perspective)
-      : '';
+    const perspectiveAddition = perspective ? this.buildPerspectiveAddition(perspective) : '';
 
     const transformedContext: ExpertPanelContext = {
       ...context,

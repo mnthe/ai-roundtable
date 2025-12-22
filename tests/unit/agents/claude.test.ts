@@ -164,7 +164,11 @@ describe('ClaudeAgent', () => {
       const mockClient = createMockAnthropicClientWithToolUse(
         'search_web',
         { query: 'AI regulation' },
-        { results: [{ title: 'AI News', url: 'https://example.com', snippet: 'Recent developments...' }] },
+        {
+          results: [
+            { title: 'AI News', url: 'https://example.com', snippet: 'Recent developments...' },
+          ],
+        },
         createJsonResponse({
           position: 'Based on research',
           reasoning: 'Found relevant sources',
@@ -197,7 +201,9 @@ describe('ClaudeAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', { query: 'AI regulation' });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
+        query: 'AI regulation',
+      });
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
       expect(response.citations).toHaveLength(1);
@@ -297,7 +303,11 @@ describe('ClaudeAgent', () => {
             answer: 'Recent AI regulations...',
             citations: [
               { title: 'EU AI Act', url: 'https://eu.example.com', snippet: 'New regulations...' },
-              { title: 'US AI Policy', url: 'https://us.example.com', snippet: 'Policy updates...' },
+              {
+                title: 'US AI Policy',
+                url: 'https://us.example.com',
+                snippet: 'Policy updates...',
+              },
             ],
           },
         }),
@@ -328,14 +338,16 @@ describe('ClaudeAgent', () => {
         'submit_response',
         {
           position: 'AI should be carefully regulated to balance innovation and safety',
-          reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
+          reasoning:
+            'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
           confidence: 0.85,
         },
         {
           success: true,
           data: {
             position: 'AI should be carefully regulated to balance innovation and safety',
-            reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
+            reasoning:
+              'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
             confidence: 0.85,
           },
         },
@@ -358,7 +370,8 @@ describe('ClaudeAgent', () => {
           success: true,
           data: {
             position: 'AI should be carefully regulated to balance innovation and safety',
-            reasoning: 'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
+            reasoning:
+              'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.',
             confidence: 0.85,
           },
         }),
@@ -372,8 +385,12 @@ describe('ClaudeAgent', () => {
       const response = await agent.generateResponse(defaultContext);
 
       // Should extract from tool call, NOT from text response
-      expect(response.position).toBe('AI should be carefully regulated to balance innovation and safety');
-      expect(response.reasoning).toBe('Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.');
+      expect(response.position).toBe(
+        'AI should be carefully regulated to balance innovation and safety'
+      );
+      expect(response.reasoning).toBe(
+        'Regulation is necessary to prevent misuse while ensuring technological progress continues. Evidence shows that proactive regulation helps establish trust.'
+      );
       expect(response.confidence).toBe(0.85);
 
       // Should record the tool call
@@ -401,9 +418,7 @@ describe('ClaudeAgent', () => {
       const call = mockClient.messages.create.mock.calls[0]?.[0];
       expect(call?.tools).toBeDefined();
       // Should have web_search tool
-      const webSearchTool = call?.tools?.find(
-        (t: { name: string }) => t.name === 'web_search'
-      );
+      const webSearchTool = call?.tools?.find((t: { name: string }) => t.name === 'web_search');
       expect(webSearchTool).toBeDefined();
       expect(webSearchTool?.type).toBe('web_search_20250305');
     });
@@ -450,9 +465,9 @@ describe('ClaudeAgent', () => {
       await agent.generateResponse(defaultContext);
 
       const call = mockClient.messages.create.mock.calls[0]?.[0];
-      const webSearchTool = call?.tools?.find(
-        (t: { name: string }) => t.name === 'web_search'
-      ) as { allowed_domains?: string[]; max_uses?: number } | undefined;
+      const webSearchTool = call?.tools?.find((t: { name: string }) => t.name === 'web_search') as
+        | { allowed_domains?: string[]; max_uses?: number }
+        | undefined;
       expect(webSearchTool?.allowed_domains).toEqual(['example.com', 'test.org']);
       expect(webSearchTool?.max_uses).toBe(3);
     });

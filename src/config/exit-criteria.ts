@@ -43,12 +43,18 @@ const DEFAULTS: ExitCriteriaConfig = {
  * Load exit criteria config from environment variables with defaults
  */
 function loadConfig(): ExitCriteriaConfig {
-  const threshold = getEnvNumber('ROUNDTABLE_EXIT_CONSENSUS_THRESHOLD', DEFAULTS.consensusThreshold);
+  const threshold = getEnvNumber(
+    'ROUNDTABLE_EXIT_CONSENSUS_THRESHOLD',
+    DEFAULTS.consensusThreshold
+  );
 
   return {
     enabled: getEnvBoolean('ROUNDTABLE_EXIT_ENABLED', DEFAULTS.enabled),
     consensusThreshold: threshold >= 0 && threshold <= 1 ? threshold : DEFAULTS.consensusThreshold,
-    convergenceRounds: getEnvNumber('ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS', DEFAULTS.convergenceRounds),
+    convergenceRounds: getEnvNumber(
+      'ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS',
+      DEFAULTS.convergenceRounds
+    ),
   };
 }
 

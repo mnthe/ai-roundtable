@@ -2,23 +2,14 @@
  * Agent Toolkit - Common tools available to all agents during debates
  */
 
-import type {
-  AgentTool,
-  AgentToolkit,
-  ToolDefinition,
-} from './types.js';
+import type { AgentTool, AgentToolkit, ToolDefinition } from './types.js';
 import type {
   DebateContext,
   ToolResult,
   ContextRequest,
   ContextRequestPriority,
 } from '../types/index.js';
-import {
-  validateToolInput,
-  type FactCheckInput,
-  type RequestContextInput,
-} from './schemas.js';
-
+import { validateToolInput, type FactCheckInput, type RequestContextInput } from './schemas.js';
 
 /**
  * Interface for retrieving debate evidence from sessions
@@ -31,13 +22,15 @@ export interface SessionDataProvider {
    * @param sessionId - The session ID to retrieve evidence from
    * @returns Array of evidence from all agents in the session
    */
-  getDebateEvidence(sessionId: string): Promise<Array<{
-    agentId: string;
-    agentName: string;
-    position: string;
-    reasoning: string;
-    confidence: number;
-  }>>;
+  getDebateEvidence(sessionId: string): Promise<
+    Array<{
+      agentId: string;
+      agentName: string;
+      position: string;
+      reasoning: string;
+      confidence: number;
+    }>
+  >;
 }
 
 /**
@@ -61,9 +54,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
   private currentAgentId: string = 'unknown';
   private requestIdCounter = 0;
 
-  constructor(
-    private sessionDataProvider?: SessionDataProvider
-  ) {
+  constructor(private sessionDataProvider?: SessionDataProvider) {
     this.registerDefaultTools();
   }
 
@@ -226,17 +217,19 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
    */
-  private async executeFactCheck(input: unknown): Promise<ToolResult<{
-    claim: string;
-    sourceAgent: string;
-    debateEvidence: Array<{
-      agentId: string;
-      agentName: string;
-      position: string;
-      reasoning: string;
-      confidence: number;
-    }>;
-  }>> {
+  private async executeFactCheck(input: unknown): Promise<
+    ToolResult<{
+      claim: string;
+      sourceAgent: string;
+      debateEvidence: Array<{
+        agentId: string;
+        agentName: string;
+        position: string;
+        reasoning: string;
+        confidence: number;
+      }>;
+    }>
+  > {
     // Input is already validated by Zod schema
     const data = input as FactCheckInput;
 
@@ -275,10 +268,12 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
    */
-  private async executeRequestContext(input: unknown): Promise<ToolResult<{
-    requestId: string;
-    message: string;
-  }>> {
+  private async executeRequestContext(input: unknown): Promise<
+    ToolResult<{
+      requestId: string;
+      message: string;
+    }>
+  > {
     // Input is already validated by Zod schema
     const data = input as RequestContextInput;
 

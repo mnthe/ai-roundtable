@@ -116,10 +116,7 @@ describe('PerplexityAgent', () => {
       const mockResponse = '{"position":"test [1] [2]","reasoning":"test","confidence":0.5}';
       // Deprecated citations field is an array of string URLs (not objects)
       const metadata: MockPerplexityMetadata = {
-        citations: [
-          'https://example.com/article1',
-          'https://example.com/article2',
-        ],
+        citations: ['https://example.com/article1', 'https://example.com/article2'],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -140,10 +137,7 @@ describe('PerplexityAgent', () => {
     it('should extract domain from URL when citation is a string (deprecated format)', async () => {
       const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
-        citations: [
-          'https://www.jsonapi.org/format/',
-          'https://example.com/article',
-        ],
+        citations: ['https://www.jsonapi.org/format/', 'https://example.com/article'],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -160,7 +154,8 @@ describe('PerplexityAgent', () => {
 
     it('should filter citations to only those referenced in response text', async () => {
       // Response only references [1] and [3], not [2]
-      const mockResponse = '{"position":"According to [1], this is true. Also see [3].","reasoning":"test","confidence":0.5}';
+      const mockResponse =
+        '{"position":"According to [1], this is true. Also see [3].","reasoning":"test","confidence":0.5}';
       // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
         search_results: [
@@ -185,7 +180,8 @@ describe('PerplexityAgent', () => {
 
     it('should include all citations when no reference markers found', async () => {
       // Response has no citation markers like [1], [2]
-      const mockResponse = '{"position":"AI should be regulated","reasoning":"For safety reasons","confidence":0.5}';
+      const mockResponse =
+        '{"position":"AI should be regulated","reasoning":"For safety reasons","confidence":0.5}';
       // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
         search_results: [
@@ -206,7 +202,8 @@ describe('PerplexityAgent', () => {
     });
 
     it('should handle comma-separated citation markers like [1,2,3]', async () => {
-      const mockResponse = '{"position":"Multiple sources agree [1, 2, 3]","reasoning":"test","confidence":0.5}';
+      const mockResponse =
+        '{"position":"Multiple sources agree [1, 2, 3]","reasoning":"test","confidence":0.5}';
       // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
         search_results: [
@@ -226,14 +223,18 @@ describe('PerplexityAgent', () => {
 
       // Should include citations 1, 2, 3 but not 4
       expect(response.citations).toHaveLength(3);
-      expect(response.citations?.map(c => c.title)).toEqual(['Source 1', 'Source 2', 'Source 3']);
+      expect(response.citations?.map((c) => c.title)).toEqual(['Source 1', 'Source 2', 'Source 3']);
     });
 
     it('should extract citations from Perplexity response (new search_results field)', async () => {
       const mockResponse = '{"position":"test [1] [2] [3]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         search_results: [
-          { url: 'https://example.com/ai-article', title: 'AI Regulation Overview', date: '2025-01-15' },
+          {
+            url: 'https://example.com/ai-article',
+            title: 'AI Regulation Overview',
+            date: '2025-01-15',
+          },
           { url: 'https://example.com/research', title: 'Research Paper', date: '2024-12-20' },
           { url: 'https://example.com/news', title: 'Latest AI News' }, // No date
         ],
@@ -281,12 +282,8 @@ describe('PerplexityAgent', () => {
       const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
         // Both fields present - should use search_results
-        search_results: [
-          { url: 'https://example.com/new', title: 'New Format Source' },
-        ],
-        citations: [
-          { url: 'https://example.com/old', title: 'Old Format Source' },
-        ],
+        search_results: [{ url: 'https://example.com/new', title: 'New Format Source' }],
+        citations: [{ url: 'https://example.com/old', title: 'Old Format Source' }],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -304,9 +301,7 @@ describe('PerplexityAgent', () => {
     it('should record built-in web search as perplexity_search tool call', async () => {
       const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
       const metadata: MockPerplexityMetadata = {
-        search_results: [
-          { url: 'https://example.com/ai', title: 'AI Article' },
-        ],
+        search_results: [{ url: 'https://example.com/ai', title: 'AI Article' }],
       };
 
       const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
@@ -410,7 +405,9 @@ describe('PerplexityAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', { query: 'AI regulation' });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
+        query: 'AI regulation',
+      });
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
       expect(response.citations).toHaveLength(1);

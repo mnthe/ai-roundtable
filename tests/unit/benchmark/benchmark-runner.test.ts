@@ -9,9 +9,10 @@ import type { BenchmarkScenario, BenchmarkMetrics } from '../../../src/benchmark
 
 describe('BenchmarkRunner', () => {
   // Mock executor that simulates a successful scenario
-  const createMockExecutor = (
-    options?: { delay?: number; shouldFail?: boolean }
-  ): ScenarioExecutor => {
+  const createMockExecutor = (options?: {
+    delay?: number;
+    shouldFail?: boolean;
+  }): ScenarioExecutor => {
     return async (scenario, collector) => {
       if (options?.shouldFail) {
         throw new Error('Simulated failure');
@@ -117,10 +118,7 @@ describe('BenchmarkRunner', () => {
     });
 
     it('should timeout long-running scenarios', async () => {
-      const runner = new BenchmarkRunner(
-        createMockExecutor({ delay: 1000 }),
-        { timeoutMs: 50 }
-      );
+      const runner = new BenchmarkRunner(createMockExecutor({ delay: 1000 }), { timeoutMs: 50 });
       const scenario = createScenario();
 
       const result = await runner.runScenario(scenario);
@@ -264,7 +262,9 @@ describe('BenchmarkRunner', () => {
     it('should calculate latency reduction', () => {
       const runner = new BenchmarkRunner(createMockExecutor());
 
-      const baseline = createMetrics({ latency: { totalMs: 1000, perRoundMs: [], perAgentMs: {} } });
+      const baseline = createMetrics({
+        latency: { totalMs: 1000, perRoundMs: [], perAgentMs: {} },
+      });
       const variant = createMetrics({ latency: { totalMs: 800, perRoundMs: [], perAgentMs: {} } });
 
       const comparison = runner.compare(baseline, variant);
@@ -312,11 +312,21 @@ describe('BenchmarkRunner', () => {
       const runner = new BenchmarkRunner(createMockExecutor());
 
       const baseline = createMetrics({
-        content: { avgConfidence: 0.5, confidenceVariance: 0.1, toolCallsPerAgent: {}, citationCount: 0 },
+        content: {
+          avgConfidence: 0.5,
+          confidenceVariance: 0.1,
+          toolCallsPerAgent: {},
+          citationCount: 0,
+        },
         consensus: { agreementLevel: 0.3, convergenceRound: null, groupthinkWarning: false },
       });
       const variant = createMetrics({
-        content: { avgConfidence: 0.9, confidenceVariance: 0.01, toolCallsPerAgent: {}, citationCount: 10 },
+        content: {
+          avgConfidence: 0.9,
+          confidenceVariance: 0.01,
+          toolCallsPerAgent: {},
+          citationCount: 10,
+        },
         consensus: { agreementLevel: 0.8, convergenceRound: 2, groupthinkWarning: false },
       });
 
@@ -330,11 +340,21 @@ describe('BenchmarkRunner', () => {
 
       const baseline = createMetrics({
         latency: { totalMs: 1000, perRoundMs: [], perAgentMs: {} },
-        content: { avgConfidence: 0.8, confidenceVariance: 0.01, toolCallsPerAgent: {}, citationCount: 5 },
+        content: {
+          avgConfidence: 0.8,
+          confidenceVariance: 0.01,
+          toolCallsPerAgent: {},
+          citationCount: 5,
+        },
       });
       const variant = createMetrics({
         latency: { totalMs: 5000, perRoundMs: [], perAgentMs: {} }, // 5x slower
-        content: { avgConfidence: 0.3, confidenceVariance: 0.1, toolCallsPerAgent: {}, citationCount: 0 },
+        content: {
+          avgConfidence: 0.3,
+          confidenceVariance: 0.1,
+          toolCallsPerAgent: {},
+          citationCount: 0,
+        },
         consensus: { agreementLevel: 0.1, convergenceRound: null, groupthinkWarning: false },
       });
 
@@ -351,7 +371,12 @@ describe('BenchmarkRunner', () => {
       });
       const variant = createMetrics({
         latency: { totalMs: 1200, perRoundMs: [], perAgentMs: {} }, // Slightly slower
-        content: { avgConfidence: 0.8, confidenceVariance: 0.01, toolCallsPerAgent: {}, citationCount: 5 },
+        content: {
+          avgConfidence: 0.8,
+          confidenceVariance: 0.01,
+          toolCallsPerAgent: {},
+          citationCount: 5,
+        },
         interaction: { crossReferenceCount: 1, rebuttalDepth: 0, questionResponsePairs: 0 }, // Lower interaction
       });
 
@@ -406,14 +431,24 @@ describe('BenchmarkRunner', () => {
       const baseline: BenchmarkMetrics = {
         latency: { totalMs: 0, perRoundMs: [], perAgentMs: {} },
         interaction: { crossReferenceCount: 0, rebuttalDepth: 0, questionResponsePairs: 0 },
-        content: { avgConfidence: 0, confidenceVariance: 0, toolCallsPerAgent: {}, citationCount: 0 },
+        content: {
+          avgConfidence: 0,
+          confidenceVariance: 0,
+          toolCallsPerAgent: {},
+          citationCount: 0,
+        },
         consensus: { agreementLevel: 0, convergenceRound: null, groupthinkWarning: false },
       };
 
       const variant: BenchmarkMetrics = {
         latency: { totalMs: 100, perRoundMs: [100], perAgentMs: {} },
         interaction: { crossReferenceCount: 1, rebuttalDepth: 1, questionResponsePairs: 0 },
-        content: { avgConfidence: 0.8, confidenceVariance: 0.01, toolCallsPerAgent: {}, citationCount: 2 },
+        content: {
+          avgConfidence: 0.8,
+          confidenceVariance: 0.01,
+          toolCallsPerAgent: {},
+          citationCount: 2,
+        },
         consensus: { agreementLevel: 0.7, convergenceRound: 1, groupthinkWarning: false },
       };
 
@@ -431,14 +466,24 @@ describe('BenchmarkRunner', () => {
       const baseline: BenchmarkMetrics = {
         latency: { totalMs: 100, perRoundMs: [100], perAgentMs: {} },
         interaction: { crossReferenceCount: 0, rebuttalDepth: 0, questionResponsePairs: 0 },
-        content: { avgConfidence: 0.8, confidenceVariance: 0.01, toolCallsPerAgent: {}, citationCount: 0 },
+        content: {
+          avgConfidence: 0.8,
+          confidenceVariance: 0.01,
+          toolCallsPerAgent: {},
+          citationCount: 0,
+        },
         consensus: { agreementLevel: 0.7, convergenceRound: null, groupthinkWarning: false },
       };
 
       const variant: BenchmarkMetrics = {
         latency: { totalMs: 200, perRoundMs: [200], perAgentMs: {} }, // 2x slower
         interaction: { crossReferenceCount: 0, rebuttalDepth: 0, questionResponsePairs: 0 },
-        content: { avgConfidence: 0.8, confidenceVariance: 0.01, toolCallsPerAgent: {}, citationCount: 0 },
+        content: {
+          avgConfidence: 0.8,
+          confidenceVariance: 0.01,
+          toolCallsPerAgent: {},
+          citationCount: 0,
+        },
         consensus: { agreementLevel: 0.7, convergenceRound: null, groupthinkWarning: false },
       };
 

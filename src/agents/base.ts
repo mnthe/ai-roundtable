@@ -247,11 +247,17 @@ export abstract class BaseAgent {
    * Subclasses should implement performHealthCheck() for provider-specific API calls.
    */
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    logger.debug({ agentId: this.id, agentName: this.name, provider: this.provider }, 'Starting health check');
+    logger.debug(
+      { agentId: this.id, agentName: this.name, provider: this.provider },
+      'Starting health check'
+    );
 
     try {
       await this.performHealthCheck();
-      logger.info({ agentId: this.id, agentName: this.name, provider: this.provider }, 'Health check passed');
+      logger.info(
+        { agentId: this.id, agentName: this.name, provider: this.provider },
+        'Health check passed'
+      );
       return { healthy: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -303,7 +309,10 @@ export abstract class BaseAgent {
    * @param userMessage - User message containing the synthesis prompt
    * @returns Raw synthesis response text
    */
-  protected async generateSynthesisInternal(systemPrompt: string, userMessage: string): Promise<string> {
+  protected async generateSynthesisInternal(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
     logger.info({ agentId: this.id, agentName: this.name }, 'Starting synthesis generation');
 
     try {
@@ -388,7 +397,9 @@ Be respectful of other participants' views while clearly articulating your own p
     // Include provided context results if available (responses to previous context requests)
     if (context.contextResults && context.contextResults.length > 0) {
       parts.push('=== PROVIDED CONTEXT ===');
-      parts.push('The following information was provided in response to your previous context requests:\n');
+      parts.push(
+        'The following information was provided in response to your previous context requests:\n'
+      );
       for (const result of context.contextResults) {
         parts.push(`[Request ID: ${result.requestId}]`);
         if (result.success && result.result) {

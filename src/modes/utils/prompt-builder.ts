@@ -145,7 +145,7 @@ export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, reado
   ],
   collaborative: [
     'Did I identify specific points of agreement with others?',
-    'Did I build on others\' ideas constructively?',
+    "Did I build on others' ideas constructively?",
   ],
   adversarial: [
     'Did I directly address and counter the previous arguments?',
@@ -164,7 +164,6 @@ export const MODE_SPECIFIC_VERIFICATION_CHECKS: Partial<Record<DebateMode, reado
     'Did I provide concrete evidence for my position?',
   ],
 } as const;
-
 
 /**
  * Build the Role Anchor layer (Layer 1)
@@ -217,9 +216,7 @@ export function buildBehavioralContract(
 
   const mustItems = allMustBehaviors.map((b) => `□ ${b}`).join('\n');
   const mustNotItems = allMustNotBehaviors.map((b) => `✗ ${b}`).join('\n');
-  const priorities = config.priorityHierarchy
-    .map((p, i) => `${i + 1}. ${p}`)
-    .join('\n');
+  const priorities = config.priorityHierarchy.map((p, i) => `${i + 1}. ${p}`).join('\n');
 
   let prompt = `
 ${PROMPT_SEPARATOR}
@@ -284,9 +281,7 @@ function buildStructuralEnforcement(
   context: DebateContext
 ): string {
   const isFirstRound = context.previousResponses.length === 0;
-  const sections = isFirstRound
-    ? config.firstRoundSections
-    : config.subsequentRoundSections;
+  const sections = isFirstRound ? config.firstRoundSections : config.subsequentRoundSections;
 
   const roundLabel = isFirstRound ? ' (First Round)' : '';
 
@@ -322,10 +317,7 @@ ${PROMPT_SEPARATOR}
  * @param config - Verification loop configuration
  * @param mode - Optional debate mode for mode-specific verification checks
  */
-export function buildVerificationLoop(
-  config: VerificationLoopConfig,
-  mode?: DebateMode
-): string {
+export function buildVerificationLoop(config: VerificationLoopConfig, mode?: DebateMode): string {
   // Combine mode-specific checks with tool usage checks (unless disabled)
   const includeToolChecks = config.includeToolUsageChecks !== false;
 

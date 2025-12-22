@@ -13,16 +13,8 @@ describe('AgentRegistry', () => {
   beforeEach(() => {
     registry = new AgentRegistry();
     // Register mock provider
-    registry.registerProvider(
-      'anthropic',
-      (config) => new MockAgent(config),
-      'claude-3-opus'
-    );
-    registry.registerProvider(
-      'openai',
-      (config) => new MockAgent(config),
-      'gpt-4'
-    );
+    registry.registerProvider('anthropic', (config) => new MockAgent(config), 'claude-3-opus');
+    registry.registerProvider('openai', (config) => new MockAgent(config), 'gpt-4');
   });
 
   describe('registerProvider', () => {
@@ -30,11 +22,7 @@ describe('AgentRegistry', () => {
       const newRegistry = new AgentRegistry();
       expect(newRegistry.hasProvider('anthropic')).toBe(false);
 
-      newRegistry.registerProvider(
-        'anthropic',
-        (config) => new MockAgent(config),
-        'claude-3'
-      );
+      newRegistry.registerProvider('anthropic', (config) => new MockAgent(config), 'claude-3');
 
       expect(newRegistry.hasProvider('anthropic')).toBe(true);
     });
@@ -97,7 +85,9 @@ describe('AgentRegistry', () => {
 
       registry.createAgent(config);
 
-      expect(() => registry.createAgent(config)).toThrow('Agent with ID "duplicate" already exists');
+      expect(() => registry.createAgent(config)).toThrow(
+        'Agent with ID "duplicate" already exists'
+      );
     });
 
     it('should store created agent', () => {
@@ -442,11 +432,7 @@ describe('Global Registry', () => {
 
   it('should reset properly', () => {
     const registry1 = getGlobalRegistry();
-    registry1.registerProvider(
-      'anthropic',
-      (config) => new MockAgent(config),
-      'claude'
-    );
+    registry1.registerProvider('anthropic', (config) => new MockAgent(config), 'claude');
 
     resetGlobalRegistry();
 
