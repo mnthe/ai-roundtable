@@ -684,4 +684,236 @@ describe('SQLiteStorage', () => {
       expect(responses[0]?.toolCalls?.[0]?.timestamp).toBeInstanceOf(Date);
     });
   });
+
+  describe('LIKE pattern escaping', () => {
+    it('should escape % character in topic filter', async () => {
+      const session1: Session = {
+        id: 'session-percent',
+        topic: 'Topic with 100% confidence',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const session2: Session = {
+        id: 'session-normal',
+        topic: 'Normal topic here',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session1);
+      await storage.createSession(session2);
+
+      // Search for literal % character - should only find session-percent
+      const results = await storage.listSessions({ topic: '100%' });
+      expect(results).toHaveLength(1);
+      expect(results[0]?.id).toBe('session-percent');
+    });
+
+    it('should escape _ character in topic filter', async () => {
+      const session1: Session = {
+        id: 'session-underscore',
+        topic: 'Topic with user_name pattern',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const session2: Session = {
+        id: 'session-username',
+        topic: 'Topic with username pattern',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session1);
+      await storage.createSession(session2);
+
+      // Search for literal _ character - should only find session-underscore
+      // Without escaping, _ would match any single character
+      const results = await storage.listSessions({ topic: 'user_name' });
+      expect(results).toHaveLength(1);
+      expect(results[0]?.id).toBe('session-underscore');
+    });
+
+    it('should escape backslash in topic filter', async () => {
+      const session1: Session = {
+        id: 'session-backslash',
+        topic: 'Topic with C:\\path\\file',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session1);
+
+      // Search for literal backslash
+      const results = await storage.listSessions({ topic: 'C:\\path' });
+      expect(results).toHaveLength(1);
+      expect(results[0]?.id).toBe('session-backslash');
+    });
+  });
+
+  describe('batch loading optimization', () => {
+    it('should load responses for multiple sessions efficiently', async () => {
+      // Create multiple sessions
+      const session1: Session = {
+        id: 'batch-session-1',
+        topic: 'Batch topic 1',
+        mode: 'collaborative',
+        agentIds: ['agent-1', 'agent-2'],
+        status: 'active',
+        currentRound: 1,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(Date.now() - 2000),
+        updatedAt: new Date(Date.now() - 2000),
+      };
+
+      const session2: Session = {
+        id: 'batch-session-2',
+        topic: 'Batch topic 2',
+        mode: 'adversarial',
+        agentIds: ['agent-1', 'agent-2'],
+        status: 'active',
+        currentRound: 1,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(Date.now() - 1000),
+        updatedAt: new Date(Date.now() - 1000),
+      };
+
+      const session3: Session = {
+        id: 'batch-session-3',
+        topic: 'Batch topic 3',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'completed',
+        currentRound: 3,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session1);
+      await storage.createSession(session2);
+      await storage.createSession(session3);
+
+      // Add responses to each session
+      const response1: AgentResponse = {
+        agentId: 'agent-1',
+        agentName: 'Agent One',
+        position: 'Position for session 1',
+        reasoning: 'Reasoning 1',
+        confidence: 0.8,
+        timestamp: new Date(Date.now() - 2000),
+      };
+
+      const response2: AgentResponse = {
+        agentId: 'agent-2',
+        agentName: 'Agent Two',
+        position: 'Position for session 1',
+        reasoning: 'Reasoning 2',
+        confidence: 0.9,
+        timestamp: new Date(Date.now() - 1500),
+      };
+
+      const response3: AgentResponse = {
+        agentId: 'agent-1',
+        agentName: 'Agent One',
+        position: 'Position for session 2',
+        reasoning: 'Reasoning 3',
+        confidence: 0.7,
+        timestamp: new Date(Date.now() - 1000),
+      };
+
+      await storage.addResponse('batch-session-1', response1, 1);
+      await storage.addResponse('batch-session-1', response2, 1);
+      await storage.addResponse('batch-session-2', response3, 1);
+
+      // List all sessions - should have responses included
+      const sessions = await storage.listSessions();
+      expect(sessions).toHaveLength(3);
+
+      // Find each session and verify responses
+      const s1 = sessions.find((s) => s.id === 'batch-session-1');
+      const s2 = sessions.find((s) => s.id === 'batch-session-2');
+      const s3 = sessions.find((s) => s.id === 'batch-session-3');
+
+      expect(s1?.responses).toHaveLength(2);
+      expect(s1?.responses[0]?.agentId).toBe('agent-1');
+      expect(s1?.responses[1]?.agentId).toBe('agent-2');
+
+      expect(s2?.responses).toHaveLength(1);
+      expect(s2?.responses[0]?.agentId).toBe('agent-1');
+
+      expect(s3?.responses).toHaveLength(0);
+    });
+
+    it('should handle sessions with no responses in batch', async () => {
+      const session1: Session = {
+        id: 'empty-session-1',
+        topic: 'Empty topic 1',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const session2: Session = {
+        id: 'empty-session-2',
+        topic: 'Empty topic 2',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(session1);
+      await storage.createSession(session2);
+
+      // List sessions - should work even with no responses
+      const sessions = await storage.listSessions();
+      expect(sessions).toHaveLength(2);
+      expect(sessions[0]?.responses).toEqual([]);
+      expect(sessions[1]?.responses).toEqual([]);
+    });
+  });
 });

@@ -27,6 +27,14 @@ import type { Storage } from './index.js';
 
 const logger = createLogger('SQLiteStorage');
 
+/**
+ * Escape special characters in LIKE patterns to prevent SQL injection
+ * Characters: % (wildcard), _ (single char), \ (escape char)
+ */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_\\]/g, '\\$&');
+}
+
 export interface SQLiteStorageOptions {
   filename?: string; // Use ':memory:' for in-memory database (default)
 }
@@ -212,7 +220,9 @@ export class SQLiteStorage implements Storage {
 
     try {
       const row = StoredSessionRowSchema.parse(rawRow) as StoredSession;
-      return this.mapStoredSessionToSession(row);
+      // Load responses for single session
+      const responses = await this.getResponses(sessionId);
+      return this.mapStoredSessionToSession(row, responses);
     } catch (error) {
       if (error instanceof ZodError) {
         logger.error(
@@ -327,8 +337,8 @@ export class SQLiteStorage implements Storage {
     const params: (string | number)[] = [];
 
     if (filters?.topic) {
-      conditions.push('topic LIKE ?');
-      params.push(`%${filters.topic}%`);
+      conditions.push("topic LIKE ? ESCAPE '\\'");
+      params.push(`%${escapeLikePattern(filters.topic)}%`);
     }
 
     if (filters?.mode) {
@@ -362,7 +372,8 @@ export class SQLiteStorage implements Storage {
       params.push(filters.limit);
     }
 
-    const results: Session[] = [];
+    // First, collect all valid stored sessions
+    const storedSessions: StoredSession[] = [];
     const stmt = db.prepare(sql);
     if (params.length > 0) {
       stmt.bind(params);
@@ -372,7 +383,7 @@ export class SQLiteStorage implements Storage {
       const rawRow = stmt.getAsObject();
       try {
         const row = StoredSessionRowSchema.parse(rawRow) as StoredSession;
-        results.push(await this.mapStoredSessionToSession(row));
+        storedSessions.push(row);
       } catch (error) {
         if (error instanceof ZodError) {
           logger.warn(
@@ -385,6 +396,17 @@ export class SQLiteStorage implements Storage {
       }
     }
     stmt.free();
+
+    // Batch load all responses for these sessions (single query instead of N queries)
+    const sessionIds = storedSessions.map((s) => s.id);
+    const responseMap = this.getResponsesForSessionIds(sessionIds);
+
+    // Map stored sessions to Session type with pre-loaded responses
+    const results: Session[] = [];
+    for (const stored of storedSessions) {
+      const responses = responseMap.get(stored.id) ?? [];
+      results.push(this.mapStoredSessionToSession(stored, responses));
+    }
 
     return results;
   }
@@ -510,10 +532,63 @@ export class SQLiteStorage implements Storage {
   }
 
   /**
-   * Map stored session to Session type
+   * Batch load responses for multiple session IDs
+   * Returns a Map of sessionId -> AgentResponse[]
    */
-  private async mapStoredSessionToSession(stored: StoredSession): Promise<Session> {
-    const responses = await this.getResponses(stored.id);
+  private getResponsesForSessionIds(sessionIds: string[]): Map<string, AgentResponse[]> {
+    const responseMap = new Map<string, AgentResponse[]>();
+
+    if (sessionIds.length === 0) {
+      return responseMap;
+    }
+
+    // Initialize empty arrays for all session IDs
+    for (const id of sessionIds) {
+      responseMap.set(id, []);
+    }
+
+    const db = this.getDb();
+    const placeholders = sessionIds.map(() => '?').join(', ');
+    const stmt = db.prepare(
+      `SELECT * FROM responses WHERE session_id IN (${placeholders}) ORDER BY timestamp ASC`
+    );
+    stmt.bind(sessionIds);
+
+    while (stmt.step()) {
+      const rawRow = stmt.getAsObject();
+      try {
+        const row = StoredResponseRowSchema.parse(rawRow) as StoredResponse;
+        const response = this.mapStoredResponseToAgentResponse(row);
+        const sessionResponses = responseMap.get(row.session_id);
+        if (sessionResponses) {
+          sessionResponses.push(response);
+        }
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { rawRow, error: error.issues },
+            'Skipping invalid response row in batch load'
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+    stmt.free();
+
+    return responseMap;
+  }
+
+  /**
+   * Map stored session to Session type
+   * @param stored The stored session row
+   * @param preloadedResponses Optional pre-loaded responses (for batch optimization)
+   */
+  private mapStoredSessionToSession(
+    stored: StoredSession,
+    preloadedResponses?: AgentResponse[]
+  ): Session {
+    const responses = preloadedResponses ?? [];
 
     // Parse and validate agent_ids JSON
     let agentIds: string[];
