@@ -63,6 +63,10 @@ describe('DebateEngine with AI Consensus', () => {
     getTools: () => [];
     executeTool: () => Promise<object>;
     setContext: () => void;
+    setCurrentAgentId: (agentId: string) => void;
+    getPendingContextRequests: () => [];
+    clearPendingRequests: () => void;
+    hasPendingRequests: () => boolean;
   };
 
   beforeEach(() => {
@@ -71,6 +75,10 @@ describe('DebateEngine with AI Consensus', () => {
       getTools: () => [],
       executeTool: async () => ({}),
       setContext: () => {},
+      setCurrentAgentId: () => {},
+      getPendingContextRequests: () => [],
+      clearPendingRequests: () => {},
+      hasPendingRequests: () => false,
     };
 
     // Register mock agent
