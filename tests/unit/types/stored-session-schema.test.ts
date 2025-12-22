@@ -11,6 +11,8 @@ import {
   StoredSessionRowSchema,
   DebateModeSchema,
   SessionStatusSchema,
+  CitationSchema,
+  StoredCitationsArraySchema,
 } from '../../../src/types/schemas.js';
 
 describe('StoredSessionRowSchema', () => {
@@ -197,5 +199,124 @@ describe('SessionStatusSchema', () => {
     expect(statuses).toContain('completed');
     expect(statuses).toContain('error');
     expect(statuses).toHaveLength(4);
+  });
+});
+
+describe('CitationSchema', () => {
+  it('should accept valid citation with URL', () => {
+    const citation = {
+      title: 'Test Article',
+      url: 'https://example.com/article',
+      snippet: 'This is a test snippet',
+    };
+
+    const result = CitationSchema.parse(citation);
+    expect(result.title).toBe('Test Article');
+    expect(result.url).toBe('https://example.com/article');
+    expect(result.snippet).toBe('This is a test snippet');
+  });
+
+  it('should accept citation without snippet', () => {
+    const citation = {
+      title: 'Test Article',
+      url: 'https://example.com/article',
+    };
+
+    const result = CitationSchema.parse(citation);
+    expect(result.title).toBe('Test Article');
+    expect(result.url).toBe('https://example.com/article');
+    expect(result.snippet).toBeUndefined();
+  });
+
+  it('should reject invalid URL', () => {
+    const citation = {
+      title: 'Test Article',
+      url: 'not-a-valid-url',
+    };
+
+    expect(() => CitationSchema.parse(citation)).toThrow(ZodError);
+  });
+
+  it('should reject empty URL', () => {
+    const citation = {
+      title: 'Test Article',
+      url: '',
+    };
+
+    expect(() => CitationSchema.parse(citation)).toThrow(ZodError);
+  });
+});
+
+describe('StoredCitationsArraySchema', () => {
+  it('should accept valid citations array with URLs', () => {
+    const citations = [
+      {
+        title: 'Article 1',
+        url: 'https://example.com/1',
+        snippet: 'Snippet 1',
+      },
+      {
+        title: 'Article 2',
+        url: 'https://example.com/2',
+      },
+    ];
+
+    const result = StoredCitationsArraySchema.parse(citations);
+    expect(result).toHaveLength(2);
+    expect(result[0].url).toBe('https://example.com/1');
+    expect(result[1].url).toBe('https://example.com/2');
+  });
+
+  it('should accept empty array', () => {
+    const result = StoredCitationsArraySchema.parse([]);
+    expect(result).toHaveLength(0);
+  });
+
+  it('should reject citation with invalid URL', () => {
+    const citations = [
+      {
+        title: 'Valid Article',
+        url: 'https://example.com/valid',
+      },
+      {
+        title: 'Invalid Article',
+        url: 'not-a-url',
+      },
+    ];
+
+    expect(() => StoredCitationsArraySchema.parse(citations)).toThrow(ZodError);
+  });
+
+  it('should reject citation with empty URL', () => {
+    const citations = [
+      {
+        title: 'Article',
+        url: '',
+      },
+    ];
+
+    expect(() => StoredCitationsArraySchema.parse(citations)).toThrow(ZodError);
+  });
+
+  it('should have consistent URL validation with CitationSchema', () => {
+    // Both schemas should accept the same valid URLs
+    const validCitation = {
+      title: 'Test',
+      url: 'https://example.com/path?query=value',
+    };
+
+    const singleResult = CitationSchema.parse(validCitation);
+    const arrayResult = StoredCitationsArraySchema.parse([validCitation]);
+
+    expect(singleResult.url).toBe(arrayResult[0].url);
+
+    // Both schemas should reject the same invalid URLs
+    const invalidCitation = {
+      title: 'Test',
+      url: 'invalid-url',
+    };
+
+    expect(() => CitationSchema.parse(invalidCitation)).toThrow(ZodError);
+    expect(() => StoredCitationsArraySchema.parse([invalidCitation])).toThrow(ZodError);
   });
 });

@@ -251,12 +251,14 @@ export const AgentIdsArraySchema = z.array(z.string());
 
 /**
  * Schema for citations array parsed from JSON in storage
- * More lenient than CitationSchema to handle various stored formats
+ * Uses same URL validation as CitationSchema for consistency.
+ * Invalid citations are handled gracefully by the storage layer
+ * (logged as warning and skipped).
  */
 export const StoredCitationsArraySchema = z.array(
   z.object({
     title: z.string(),
-    url: z.string(),
+    url: z.string().url(),
     snippet: z.string().optional(),
   })
 );
