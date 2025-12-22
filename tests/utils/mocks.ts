@@ -80,10 +80,13 @@ export function createMockAnthropicClientWithToolUse(
 
 /**
  * Extended mock response metadata for Perplexity
+ * Matches the official @perplexity-ai/perplexity_ai SDK types:
+ * - citations: Array of string URLs (deprecated field)
+ * - search_results: Array of objects with url, title, date, snippet (new field)
  */
 export interface MockPerplexityMetadata {
-  citations?: Array<string | { url: string; title?: string }>;
-  search_results?: Array<{ url: string; title?: string; date?: string }>;
+  citations?: Array<string>;
+  search_results?: Array<{ url: string; title?: string; date?: string; snippet?: string }>;
 }
 
 /**

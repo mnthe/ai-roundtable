@@ -114,10 +114,11 @@ describe('PerplexityAgent', () => {
 
     it('should extract citations from Perplexity response (deprecated citations field)', async () => {
       const mockResponse = '{"position":"test [1] [2]","reasoning":"test","confidence":0.5}';
+      // Deprecated citations field is an array of string URLs (not objects)
       const metadata: MockPerplexityMetadata = {
         citations: [
-          { url: 'https://example.com/1', title: 'Source 1' },
-          { url: 'https://example.com/2', title: 'Source 2' },
+          'https://example.com/article1',
+          'https://example.com/article2',
         ],
       };
 
@@ -129,8 +130,9 @@ describe('PerplexityAgent', () => {
       const response = await agent.generateResponse(defaultContext);
 
       expect(response.citations).toHaveLength(2);
-      expect(response.citations?.[0]?.title).toBe('Source 1');
-      expect(response.citations?.[0]?.url).toBe('https://example.com/1');
+      // Title is extracted from domain for deprecated string citations
+      expect(response.citations?.[0]?.title).toBe('example.com');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/article1');
       // Should record perplexity_search tool call when citations are returned
       expect(response.toolCalls?.some((tc) => tc.toolName === 'perplexity_search')).toBe(true);
     });
@@ -159,8 +161,9 @@ describe('PerplexityAgent', () => {
     it('should filter citations to only those referenced in response text', async () => {
       // Response only references [1] and [3], not [2]
       const mockResponse = '{"position":"According to [1], this is true. Also see [3].","reasoning":"test","confidence":0.5}';
+      // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
-        citations: [
+        search_results: [
           { url: 'https://example.com/1', title: 'Source 1' },
           { url: 'https://example.com/2', title: 'Source 2' },
           { url: 'https://example.com/3', title: 'Source 3' },
@@ -183,8 +186,9 @@ describe('PerplexityAgent', () => {
     it('should include all citations when no reference markers found', async () => {
       // Response has no citation markers like [1], [2]
       const mockResponse = '{"position":"AI should be regulated","reasoning":"For safety reasons","confidence":0.5}';
+      // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
-        citations: [
+        search_results: [
           { url: 'https://example.com/1', title: 'Source 1' },
           { url: 'https://example.com/2', title: 'Source 2' },
         ],
@@ -203,8 +207,9 @@ describe('PerplexityAgent', () => {
 
     it('should handle comma-separated citation markers like [1,2,3]', async () => {
       const mockResponse = '{"position":"Multiple sources agree [1, 2, 3]","reasoning":"test","confidence":0.5}';
+      // Use search_results (new SDK field) for objects with url/title
       const metadata: MockPerplexityMetadata = {
-        citations: [
+        search_results: [
           { url: 'https://example.com/1', title: 'Source 1' },
           { url: 'https://example.com/2', title: 'Source 2' },
           { url: 'https://example.com/3', title: 'Source 3' },
@@ -573,8 +578,9 @@ describe('search options', () => {
     await agent.generateResponse(defaultContext);
 
     const callArgs = mockClient.chat.completions.create.mock.calls[0]?.[0];
-    expect(callArgs).not.toHaveProperty('search_recency_filter');
-    expect(callArgs).not.toHaveProperty('search_domain_filter');
+    // When no search options are set, values should be null (SDK allows null for optional params)
+    expect(callArgs?.search_recency_filter).toBeNull();
+    expect(callArgs?.search_domain_filter).toBeNull();
   });
 });
 
