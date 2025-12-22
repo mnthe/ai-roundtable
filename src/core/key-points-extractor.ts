@@ -11,7 +11,7 @@ import type { AgentRegistry } from '../agents/registry.js';
 import { AgentError } from '../errors/index.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
-import { selectPreferredAgent, createLightAgentFromBase } from './utils/light-agent-selector.js';
+import { selectPreferredAgent, createLightAgentFromBase } from '../agents/utils/light-agent-selector.js';
 
 const logger = createLogger('KeyPointsExtractor');
 

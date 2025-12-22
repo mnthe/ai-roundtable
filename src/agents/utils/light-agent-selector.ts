@@ -5,12 +5,9 @@
  * and creating light model variants for analysis tasks.
  */
 
-import type { BaseAgent } from '../../agents/base.js';
-import type { AgentRegistry } from '../../agents/registry.js';
-import {
-  createLightModelAgent,
-  type LightModelAgentOptions,
-} from '../../agents/utils/light-model-factory.js';
+import type { BaseAgent } from '../base.js';
+import type { AgentRegistry } from '../registry.js';
+import { createLightModelAgent, type LightModelAgentOptions } from './light-model-factory.js';
 import type { AIProvider } from '../../types/index.js';
 
 /**

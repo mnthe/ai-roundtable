@@ -11,7 +11,7 @@ import { ConfigurationError } from '../errors/index.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import { parseAIConsensusResponse } from './utils/json-parser.js';
-import { selectPreferredAgent, createLightAgentFromBase } from './utils/light-agent-selector.js';
+import { selectPreferredAgent, createLightAgentFromBase } from '../agents/utils/light-agent-selector.js';
 
 const logger = createLogger('AIConsensusAnalyzer');
 
