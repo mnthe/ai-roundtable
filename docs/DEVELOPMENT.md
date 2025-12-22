@@ -33,10 +33,17 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  │DefaultAgentToolkit│      │   SQLiteStorage      │    │
 │  │ ├─ get_context    │      │                      │    │
 │  │ ├─ submit_response│      │                      │    │
-│  │ ├─ search_web     │      │                      │    │
-│  │ ├─ fact_check     │      │                      │    │
-│  │ └─ perplexity_    │      │                      │    │
-│  │    search         │      │                      │    │
+│  │ └─ fact_check     │      │                      │    │
+│  │                   │      │                      │    │
+│  │Native Web Search: │      │                      │    │
+│  │ ├─ Claude:        │      │                      │    │
+│  │ │   web_search    │      │                      │    │
+│  │ ├─ ChatGPT:       │      │                      │    │
+│  │ │   Responses API │      │                      │    │
+│  │ ├─ Gemini:        │      │                      │    │
+│  │ │   grounding     │      │                      │    │
+│  │ └─ Perplexity:    │      │                      │    │
+│  │     built-in      │      │                      │    │
 │  └───────────────────┘      └──────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```

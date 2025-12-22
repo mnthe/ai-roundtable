@@ -131,6 +131,8 @@ describe('PerplexityAgent', () => {
       expect(response.citations).toHaveLength(2);
       expect(response.citations?.[0]?.title).toBe('Source 1');
       expect(response.citations?.[0]?.url).toBe('https://example.com/1');
+      // Should record perplexity_search tool call when citations are returned
+      expect(response.toolCalls?.some((tc) => tc.toolName === 'perplexity_search')).toBe(true);
     });
 
     it('should extract domain from URL when citation is a string (deprecated format)', async () => {
@@ -335,6 +337,47 @@ describe('PerplexityAgent', () => {
       expect(response.relatedQuestions).toHaveLength(2);
       expect(response.relatedQuestions?.[0]).toBe('What are the benefits of AI?');
       expect(response.relatedQuestions?.[1]).toBe('How is AI used in healthcare?');
+    });
+
+    it('should record built-in web search as perplexity_search tool call', async () => {
+      const mockResponse = '{"position":"test [1]","reasoning":"test","confidence":0.5}';
+      const metadata: MockPerplexityMetadata = {
+        search_results: [
+          { url: 'https://example.com/ai', title: 'AI Article' },
+        ],
+      };
+
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', metadata);
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should record the built-in search as a tool call for consistency
+      const searchToolCall = response.toolCalls?.find((tc) => tc.toolName === 'perplexity_search');
+      expect(searchToolCall).toBeDefined();
+      expect(searchToolCall?.input).toEqual({ query: 'Should AI be regulated?' });
+      expect(searchToolCall?.output).toEqual({
+        success: true,
+        data: {
+          results: [{ title: 'AI Article', url: 'https://example.com/ai' }],
+        },
+      });
+    });
+
+    it('should not record perplexity_search tool call when no citations returned', async () => {
+      const mockResponse = '{"position":"test","reasoning":"test","confidence":0.5}';
+      // No metadata (no citations)
+      const mockClient = createMockPerplexityClient(mockResponse, 'stop', {});
+      const agent = new PerplexityAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof PerplexityAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should not have perplexity_search tool call
+      expect(response.toolCalls?.some((tc) => tc.toolName === 'perplexity_search')).toBeFalsy();
     });
 
     it('should include previous responses in user message', async () => {

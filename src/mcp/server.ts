@@ -11,7 +11,7 @@ import { AIConsensusAnalyzer } from '../core/ai-consensus-analyzer.js';
 import { KeyPointsExtractor } from '../core/key-points-extractor.js';
 import { AgentRegistry } from '../agents/registry.js';
 import { setupAgents, getAvailabilityReport, type ApiKeyConfig } from '../agents/setup.js';
-import { DefaultAgentToolkit } from '../tools/toolkit.js';
+import { DefaultAgentToolkit, createSessionManagerAdapter } from '../tools/index.js';
 import { TOOLS, createErrorResponse, type ToolResponse } from './tools.js';
 import {
   handleStartRoundtable,
@@ -55,7 +55,10 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
   // Initialize dependencies
   const sessionManager = options.sessionManager || new SessionManager();
   const agentRegistry = options.agentRegistry || new AgentRegistry();
-  const toolkit = new DefaultAgentToolkit();
+
+  // Create toolkit with SessionManagerAdapter for fact_check evidence
+  const sessionDataProvider = createSessionManagerAdapter(sessionManager);
+  const toolkit = new DefaultAgentToolkit(sessionDataProvider);
 
   // Initialize AI-based consensus analyzer (will be set up after agents are registered)
   let aiConsensusAnalyzer: AIConsensusAnalyzer | null = null;

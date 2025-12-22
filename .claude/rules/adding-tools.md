@@ -268,15 +268,24 @@ describe('my_tool', () => {
 | `synthesize_debate` | AI-powered debate synthesis | export.ts |
 | `get_agents` | List available agents | agents.ts |
 
-### Agent Tools
+### Agent Tools (Toolkit)
 
 | Tool | Description |
 |------|-------------|
 | `get_context` | Get current debate context |
 | `submit_response` | Submit structured response with validation |
-| `search_web` | Basic web search for evidence |
-| `fact_check` | Verify claims with web and debate evidence |
-| `perplexity_search` | Advanced search with recency/domain filters |
+| `fact_check` | Verify claims with debate history |
+
+### Native Web Search (Provider-Specific)
+
+Each agent uses its provider's native web search capability:
+
+| Agent | Web Search Method |
+|-------|-------------------|
+| Claude | Anthropic `web_search` tool |
+| ChatGPT | OpenAI Responses API with `web_search` tool |
+| Gemini | Google Search grounding |
+| Perplexity | Built-in search (always on) |
 
 ## Checklist
 

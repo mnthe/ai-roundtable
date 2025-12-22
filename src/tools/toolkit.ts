@@ -9,19 +9,13 @@ import type {
 } from './types.js';
 import type {
   DebateContext,
-  AgentResponse,
-  SearchResult,
-  SearchOptions,
   ToolResult,
   ContextRequest,
   ContextRequestPriority,
 } from '../types/index.js';
 import {
   validateToolInput,
-  type SubmitResponseInput,
-  type SearchWebInput,
   type FactCheckInput,
-  type PerplexitySearchInput as PerplexitySearchInputSchema,
   type RequestContextInput,
 } from './schemas.js';
 
@@ -29,54 +23,21 @@ import {
 export type { AgentTool, AgentToolkit, ToolDefinition, ToolExecutor } from './types.js';
 
 /**
- * Interface for web search provider
- */
-export interface WebSearchProvider {
-  search(query: string, options?: SearchOptions): Promise<SearchResult[]>;
-}
-
-/**
- * Perplexity search options for detailed search control
- */
-export interface PerplexitySearchInput {
-  query: string;
-  recency_filter?: 'hour' | 'day' | 'week' | 'month';
-  domain_filter?: string[];
-  return_images?: boolean;
-  return_related_questions?: boolean;
-}
-
-/**
- * Perplexity search result with extended metadata
- */
-export interface PerplexitySearchResult {
-  answer: string;
-  citations?: Array<{ title: string; url: string; snippet?: string }>;
-  images?: Array<{ url: string; description?: string }>;
-  related_questions?: string[];
-}
-
-/**
- * Interface for Perplexity search provider
- */
-export interface PerplexitySearchProvider {
-  search(input: PerplexitySearchInput): Promise<PerplexitySearchResult>;
-}
-
-/**
- * Interface for session data provider (to get context)
+ * Interface for retrieving debate evidence from sessions
  */
 export interface SessionDataProvider {
-  getSession(sessionId: string): Promise<{
-    topic: string;
-    mode: string;
-    currentRound: number;
-    responses: AgentResponse[];
-    consensusPoints?: string[];
-  } | null>;
-  findRelatedEvidence(claim: string): Promise<Array<{
+  /**
+   * Get all evidence from a debate session for fact checking
+   * Returns all agent responses - AI will determine relevance to the claim
+   *
+   * @param sessionId - The session ID to retrieve evidence from
+   * @returns Array of evidence from all agents in the session
+   */
+  getDebateEvidence(sessionId: string): Promise<Array<{
+    agentId: string;
     agentName: string;
-    evidence: string;
+    position: string;
+    reasoning: string;
     confidence: number;
   }>>;
 }
@@ -96,12 +57,15 @@ function generateRequestId(): string {
  * Default toolkit implementation
  *
  * Provides:
- * - get_context: Get current debate context
- * - submit_response: Submit structured response (validation)
- * - search_web: Search the web for information
- * - fact_check: Request fact checking on a claim
- * - perplexity_search: Advanced search with Perplexity AI (recency, domain filters, images)
+ * - fact_check: Verify claims with debate evidence
  * - request_context: Request additional context from caller (SOTA AI)
+ *
+ * Note: Web search is handled by each AI provider's native capabilities
+ * (Claude: web_search, ChatGPT: web_search, Gemini: google_search grounding, Perplexity: built-in)
+ *
+ * Note: get_context and submit_response were removed as redundant:
+ * - Context is already included in the system prompt via buildSystemPrompt() and buildUserMessage()
+ * - Response parsing is handled by BaseAgent.extractResponseFromToolCallsOrText()
  */
 export class DefaultAgentToolkit implements AgentToolkit {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -110,9 +74,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
   private currentAgentId: string = 'unknown';
 
   constructor(
-    private webSearchProvider?: WebSearchProvider,
-    private sessionDataProvider?: SessionDataProvider,
-    private perplexitySearchProvider?: PerplexitySearchProvider
+    private sessionDataProvider?: SessionDataProvider
   ) {
     this.registerDefaultTools();
   }
@@ -156,127 +118,29 @@ export class DefaultAgentToolkit implements AgentToolkit {
    * Register default tools
    */
   private registerDefaultTools(): void {
-    // Tool 1: Get Context
-    this.registerTool({
-      tool: {
-        name: 'get_context',
-        description:
-          'Get the current debate context including topic, round number, and previous responses from other participants.',
-        parameters: {},
-      },
-      executor: async () => this.executeGetContext(),
-    });
-
-    // Tool 2: Submit Response
-    this.registerTool({
-      tool: {
-        name: 'submit_response',
-        description:
-          'Submit your structured response with position, reasoning, confidence level, and optional stance.',
-        parameters: {
-          stance: {
-            type: 'string',
-            description:
-              'Your stance on the topic: "YES" (support/affirmative), "NO" (oppose/negative), or "NEUTRAL" (evaluator/balanced). ' +
-              'Required for devils-advocate mode where each role has a mandatory stance.',
-          },
-          position: {
-            type: 'string',
-            description: 'Your clear position statement on the topic',
-          },
-          reasoning: {
-            type: 'string',
-            description: 'Your detailed reasoning and arguments',
-          },
-          confidence: {
-            type: 'number',
-            description: 'Your confidence level from 0.0 to 1.0',
-          },
-        },
-      },
-      executor: async (input) => this.executeSubmitResponse(input),
-    });
-
-    // Tool 3: Search Web
-    this.registerTool({
-      tool: {
-        name: 'search_web',
-        description:
-          'Search the web for relevant information to support your arguments. Returns titles, URLs, and snippets.',
-        parameters: {
-          query: {
-            type: 'string',
-            description: 'The search query',
-          },
-          max_results: {
-            type: 'number',
-            description: 'Maximum number of results (default: 5, max: 10)',
-          },
-        },
-      },
-      executor: async (input) => this.executeSearchWeb(input),
-    });
-
-    // Tool 4: Fact Check
+    // Tool 1: Fact Check
     this.registerTool({
       tool: {
         name: 'fact_check',
         description:
-          'Request fact checking on a specific claim made by another participant. Returns supporting/contradicting evidence.',
+          'Check claims against evidence from the current debate. ' +
+          'Returns all positions and reasoning from other participants. ' +
+          'Use this to verify claims made by other agents.',
         parameters: {
           claim: {
             type: 'string',
-            description: 'The claim to fact check',
+            description: 'The claim to verify',
           },
           source_agent: {
             type: 'string',
-            description: 'The name/ID of the agent who made the claim',
+            description: 'Agent who made the claim (will be excluded from results)',
           },
         },
       },
       executor: async (input) => this.executeFactCheck(input),
     });
 
-    // Tool 5: Perplexity Search (Advanced)
-    this.registerTool({
-      tool: {
-        name: 'perplexity_search',
-        description:
-          'Advanced web search using Perplexity AI with detailed control over search parameters. ' +
-          'Use this when you need: recent information (news, events), domain-specific sources (academic, news sites), ' +
-          'or visual content (images). Returns comprehensive answer with citations.',
-        parameters: {
-          query: {
-            type: 'string',
-            description: 'The search query - be specific and detailed for better results',
-          },
-          recency_filter: {
-            type: 'string',
-            description:
-              'Filter by time: "hour" (last hour), "day" (last 24h), "week" (last 7 days), "month" (last 30 days). ' +
-              'Use for current events or recent news.',
-          },
-          domain_filter: {
-            type: 'array',
-            items: { type: 'string' },
-            description:
-              'Limit search to specific domains (max 3). Examples: ["arxiv.org", "nature.com"] for academic, ' +
-              '["reuters.com", "bbc.com"] for news. Omit to search all sources.',
-          },
-          return_images: {
-            type: 'boolean',
-            description: 'Set true to include relevant images in results. Useful for visual topics.',
-          },
-          return_related_questions: {
-            type: 'boolean',
-            description: 'Set true to get related follow-up questions. Useful for exploring topics deeper.',
-          },
-        },
-      },
-      executor: async (input) => this.executePerplexitySearch(input),
-    });
-
-    // Tool 6: Request Context (External Context Integration)
+    // Tool 2: Request Context (External Context Integration)
     this.registerTool({
       tool: {
         name: 'request_context',
@@ -359,197 +223,52 @@ export class DefaultAgentToolkit implements AgentToolkit {
   }
 
   /**
-   * Execute get_context tool
-   */
-  private async executeGetContext(): Promise<ToolResult<{
-    topic: string;
-    mode: string;
-    currentRound: number;
-    totalRounds: number;
-    previousResponses: Array<{
-      agentName: string;
-      position: string;
-      confidence: number;
-    }>;
-    focusQuestion?: string;
-  }>> {
-    if (!this.currentContext) {
-      return {
-        success: false,
-        error: 'No debate context available',
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        topic: this.currentContext.topic,
-        mode: this.currentContext.mode,
-        currentRound: this.currentContext.currentRound,
-        totalRounds: this.currentContext.totalRounds,
-        previousResponses: this.currentContext.previousResponses.map((r) => ({
-          agentName: r.agentName,
-          position: r.position,
-          confidence: r.confidence,
-        })),
-        focusQuestion: this.currentContext.focusQuestion,
-      },
-    };
-  }
-
-  /**
-   * Execute submit_response tool (validation only)
-   *
-   * Note: Input is pre-validated by Zod schema in executeTool()
-   */
-  private async executeSubmitResponse(input: unknown): Promise<ToolResult<{
-    stance?: 'YES' | 'NO' | 'NEUTRAL';
-    position: string;
-    reasoning: string;
-    confidence: number;
-  }>> {
-    // Input is already validated by Zod schema
-    const data = input as SubmitResponseInput;
-
-    return {
-      success: true,
-      data: {
-        stance: data.stance,
-        position: data.position,
-        reasoning: data.reasoning,
-        confidence: data.confidence,
-      },
-    };
-  }
-
-  /**
-   * Execute search_web tool
-   *
-   * Note: Input is pre-validated by Zod schema in executeTool()
-   */
-  private async executeSearchWeb(input: unknown): Promise<ToolResult<{
-    results: SearchResult[];
-  }>> {
-    if (!this.webSearchProvider) {
-      return {
-        success: false,
-        error: 'Web search is not available',
-      };
-    }
-
-    // Input is already validated by Zod schema
-    const data = input as SearchWebInput;
-
-    try {
-      const results = await this.webSearchProvider.search(data.query, {
-        maxResults: data.max_results,
-      });
-
-      return {
-        success: true,
-        data: { results },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Search failed',
-      };
-    }
-  }
-
-  /**
    * Execute fact_check tool
+   *
+   * Returns all debate evidence from other participants for the AI to evaluate
+   * relevance to the claim being checked.
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
    */
   private async executeFactCheck(input: unknown): Promise<ToolResult<{
     claim: string;
     sourceAgent: string;
-    webEvidence: SearchResult[];
     debateEvidence: Array<{
+      agentId: string;
       agentName: string;
-      evidence: string;
+      position: string;
+      reasoning: string;
       confidence: number;
     }>;
   }>> {
     // Input is already validated by Zod schema
     const data = input as FactCheckInput;
 
-    // Get web evidence if search provider is available
-    let webEvidence: SearchResult[] = [];
-    if (this.webSearchProvider) {
-      try {
-        webEvidence = await this.webSearchProvider.search(
-          `fact check: ${data.claim}`,
-          { maxResults: 3 }
-        );
-      } catch {
-        // Ignore search errors for fact check
-      }
+    if (!this.sessionDataProvider || !this.currentContext) {
+      return {
+        success: false,
+        error: 'Session context not available for fact checking',
+      };
     }
 
-    // Get debate evidence if session provider is available
-    let debateEvidence: Array<{
-      agentName: string;
-      evidence: string;
-      confidence: number;
-    }> = [];
-    if (this.sessionDataProvider) {
-      try {
-        debateEvidence = await this.sessionDataProvider.findRelatedEvidence(data.claim);
-      } catch {
-        // Ignore session errors
-      }
-    }
+    // Get all evidence from the session via interface
+    const allEvidence = await this.sessionDataProvider.getDebateEvidence(
+      this.currentContext.sessionId
+    );
+
+    // Exclude the source agent's own evidence
+    const debateEvidence = allEvidence.filter(
+      (e) => e.agentId !== data.source_agent && e.agentName !== data.source_agent
+    );
 
     return {
       success: true,
       data: {
         claim: data.claim,
         sourceAgent: data.source_agent,
-        webEvidence,
         debateEvidence,
       },
     };
-  }
-
-  /**
-   * Execute perplexity_search tool
-   *
-   * Note: Input is pre-validated by Zod schema in executeTool()
-   */
-  private async executePerplexitySearch(
-    input: unknown
-  ): Promise<ToolResult<PerplexitySearchResult>> {
-    if (!this.perplexitySearchProvider) {
-      return {
-        success: false,
-        error: 'Perplexity search is not available. Use search_web as an alternative.',
-      };
-    }
-
-    // Input is already validated by Zod schema
-    const data = input as PerplexitySearchInputSchema;
-
-    try {
-      const result = await this.perplexitySearchProvider.search({
-        query: data.query,
-        recency_filter: data.recency_filter,
-        domain_filter: data.domain_filter,
-        return_images: data.return_images,
-        return_related_questions: data.return_related_questions,
-      });
-
-      return {
-        success: true,
-        data: result,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Perplexity search failed',
-      };
-    }
   }
 
   /**
@@ -591,12 +310,10 @@ export class DefaultAgentToolkit implements AgentToolkit {
 }
 
 /**
- * Create a default toolkit with optional providers
+ * Create a default toolkit with optional session data provider
  */
 export function createDefaultToolkit(
-  webSearchProvider?: WebSearchProvider,
-  sessionDataProvider?: SessionDataProvider,
-  perplexitySearchProvider?: PerplexitySearchProvider
+  sessionDataProvider?: SessionDataProvider
 ): DefaultAgentToolkit {
-  return new DefaultAgentToolkit(webSearchProvider, sessionDataProvider, perplexitySearchProvider);
+  return new DefaultAgentToolkit(sessionDataProvider);
 }

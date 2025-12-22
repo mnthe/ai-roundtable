@@ -2,12 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   DefaultAgentToolkit,
   createDefaultToolkit,
-  type WebSearchProvider,
   type SessionDataProvider,
-  type PerplexitySearchProvider,
-  type PerplexitySearchResult,
 } from '../../../src/tools/toolkit.js';
-import type { DebateContext, SearchResult } from '../../../src/types/index.js';
+import type { DebateContext } from '../../../src/types/index.js';
 
 describe('DefaultAgentToolkit', () => {
   let toolkit: DefaultAgentToolkit;
@@ -39,12 +36,8 @@ describe('DefaultAgentToolkit', () => {
     it('should return default tools', () => {
       const tools = toolkit.getTools();
 
-      expect(tools).toHaveLength(6);
-      expect(tools.map((t) => t.name)).toContain('get_context');
-      expect(tools.map((t) => t.name)).toContain('submit_response');
-      expect(tools.map((t) => t.name)).toContain('search_web');
+      expect(tools).toHaveLength(2);
       expect(tools.map((t) => t.name)).toContain('fact_check');
-      expect(tools.map((t) => t.name)).toContain('perplexity_search');
       expect(tools.map((t) => t.name)).toContain('request_context');
     });
 
@@ -69,222 +62,10 @@ describe('DefaultAgentToolkit', () => {
     });
   });
 
-  describe('get_context tool', () => {
-    it('should return error when no context is set', async () => {
-      const result = await toolkit.executeTool('get_context', {});
-
-      expect(result).toEqual({
-        success: false,
-        error: 'No debate context available',
-      });
-    });
-
-    it('should return context when set', async () => {
-      toolkit.setContext(defaultContext);
-
-      const result = (await toolkit.executeTool('get_context', {})) as {
-        success: boolean;
-        data?: {
-          topic: string;
-          mode: string;
-          currentRound: number;
-          totalRounds: number;
-          previousResponses: Array<{
-            agentName: string;
-            position: string;
-            confidence: number;
-          }>;
-          focusQuestion?: string;
-        };
-      };
-
-      expect(result.success).toBe(true);
-      expect(result.data?.topic).toBe('Should AI be regulated?');
-      expect(result.data?.mode).toBe('collaborative');
-      expect(result.data?.currentRound).toBe(2);
-      expect(result.data?.totalRounds).toBe(3);
-      expect(result.data?.focusQuestion).toBe('What about innovation?');
-      expect(result.data?.previousResponses).toHaveLength(1);
-      expect(result.data?.previousResponses[0]?.agentName).toBe('Agent One');
-    });
-  });
-
-  describe('submit_response tool', () => {
-    it('should validate and return response', async () => {
-      const input = {
-        position: 'Test position',
-        reasoning: 'Test reasoning',
-        confidence: 0.85,
-      };
-
-      const result = (await toolkit.executeTool('submit_response', input)) as {
-        success: boolean;
-        data?: {
-          position: string;
-          reasoning: string;
-          confidence: number;
-        };
-      };
-
-      expect(result.success).toBe(true);
-      expect(result.data?.position).toBe('Test position');
-      expect(result.data?.reasoning).toBe('Test reasoning');
-      expect(result.data?.confidence).toBe(0.85);
-    });
-
-    it('should reject missing position', async () => {
-      const input = {
-        reasoning: 'Test reasoning',
-        confidence: 0.5,
-      };
-
-      const result = (await toolkit.executeTool('submit_response', input)) as {
-        success: boolean;
-        error?: string;
-      };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('position');
-    });
-
-    it('should reject missing reasoning', async () => {
-      const input = {
-        position: 'Test position',
-        confidence: 0.5,
-      };
-
-      const result = (await toolkit.executeTool('submit_response', input)) as {
-        success: boolean;
-        error?: string;
-      };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('reasoning');
-    });
-
-    it('should reject confidence out of valid range', async () => {
-      const input = {
-        position: 'Test',
-        reasoning: 'Test',
-        confidence: 1.5,
-      };
-
-      const result = (await toolkit.executeTool('submit_response', input)) as {
-        success: boolean;
-        error?: string;
-      };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('confidence');
-    });
-
-    it('should use default confidence when not provided', async () => {
-      const input = {
-        position: 'Test',
-        reasoning: 'Test',
-      };
-
-      const result = (await toolkit.executeTool('submit_response', input)) as {
-        success: boolean;
-        data?: { confidence: number };
-      };
-
-      expect(result.success).toBe(true);
-      expect(result.data?.confidence).toBe(0.5);
-    });
-  });
-
-  describe('search_web tool', () => {
-    it('should return error when no search provider', async () => {
-      const result = await toolkit.executeTool('search_web', {
-        query: 'test',
-      });
-
-      expect(result).toEqual({
-        success: false,
-        error: 'Web search is not available',
-      });
-    });
-
-    it('should return error for missing query', async () => {
-      const mockProvider: WebSearchProvider = {
-        search: vi.fn(),
-      };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('search_web', {})) as {
-        success: boolean;
-        error?: string;
-      };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('query');
-    });
-
-    it('should search and return results', async () => {
-      const mockResults: SearchResult[] = [
-        {
-          title: 'Test Article',
-          url: 'https://example.com',
-          snippet: 'Test snippet',
-        },
-      ];
-
-      const mockProvider: WebSearchProvider = {
-        search: vi.fn().mockResolvedValue(mockResults),
-      };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('search_web', {
-        query: 'AI regulation',
-        max_results: 5,
-      })) as {
-        success: boolean;
-        data?: { results: SearchResult[] };
-      };
-
-      expect(result.success).toBe(true);
-      expect(result.data?.results).toHaveLength(1);
-      expect(mockProvider.search).toHaveBeenCalledWith('AI regulation', {
-        maxResults: 5,
-      });
-    });
-
-    it('should reject max_results over 10', async () => {
-      const mockProvider: WebSearchProvider = {
-        search: vi.fn().mockResolvedValue([]),
-      };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('search_web', {
-        query: 'test',
-        max_results: 100,
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('max_results');
-      expect(mockProvider.search).not.toHaveBeenCalled();
-    });
-
-    it('should handle search errors', async () => {
-      const mockProvider: WebSearchProvider = {
-        search: vi.fn().mockRejectedValue(new Error('Search failed')),
-      };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = await toolkitWithSearch.executeTool('search_web', {
-        query: 'test',
-      });
-
-      expect(result).toEqual({
-        success: false,
-        error: 'Search failed',
-      });
-    });
-  });
-
   describe('fact_check tool', () => {
     it('should return error for missing claim', async () => {
+      toolkit.setContext(defaultContext);
+
       const result = (await toolkit.executeTool('fact_check', {})) as {
         success: boolean;
         error?: string;
@@ -294,90 +75,135 @@ describe('DefaultAgentToolkit', () => {
       expect(result.error).toContain('claim');
     });
 
-    it('should return basic result without providers', async () => {
+    it('should return error when session context is not available', async () => {
+      // No context set and no session data provider
       const result = (await toolkit.executeTool('fact_check', {
         claim: 'AI will replace all jobs',
         source_agent: 'Agent One',
       })) as {
         success: boolean;
-        data?: {
-          claim: string;
-          sourceAgent: string;
-          webEvidence: SearchResult[];
-          debateEvidence: unknown[];
-        };
+        error?: string;
       };
 
-      expect(result.success).toBe(true);
-      expect(result.data?.claim).toBe('AI will replace all jobs');
-      expect(result.data?.sourceAgent).toBe('Agent One');
-      expect(result.data?.webEvidence).toEqual([]);
-      expect(result.data?.debateEvidence).toEqual([]);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Session context not available for fact checking');
     });
 
-    it('should include web evidence when provider available', async () => {
-      const mockResults: SearchResult[] = [
-        {
-          title: 'Fact Check: AI Jobs',
-          url: 'https://factcheck.com',
-          snippet: 'Actually...',
-        },
-      ];
-
-      const mockProvider: WebSearchProvider = {
-        search: vi.fn().mockResolvedValue(mockResults),
-      };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('fact_check', {
-        claim: 'AI will replace jobs',
-      })) as {
-        success: boolean;
-        data?: { webEvidence: SearchResult[] };
-      };
-
-      expect(result.success).toBe(true);
-      expect(result.data?.webEvidence).toHaveLength(1);
-      expect(mockProvider.search).toHaveBeenCalledWith(
-        'fact check: AI will replace jobs',
-        { maxResults: 3 }
-      );
-    });
-
-    it('should include debate evidence when provider available', async () => {
-      const mockEvidence = [
-        {
-          agentName: 'Agent Two',
-          evidence: 'Related argument',
-          confidence: 0.7,
-        },
-      ];
-
+    it('should return debate evidence excluding source agent', async () => {
       const mockSessionProvider: SessionDataProvider = {
-        getSession: vi.fn(),
-        findRelatedEvidence: vi.fn().mockResolvedValue(mockEvidence),
+        getDebateEvidence: vi.fn().mockResolvedValue([
+          {
+            agentId: 'agent-1',
+            agentName: 'Claude',
+            position: 'Position 1',
+            reasoning: 'Reasoning 1',
+            confidence: 0.8,
+          },
+          {
+            agentId: 'agent-2',
+            agentName: 'ChatGPT',
+            position: 'Position 2',
+            reasoning: 'Reasoning 2',
+            confidence: 0.7,
+          },
+        ]),
       };
-      const toolkitWithSession = new DefaultAgentToolkit(
-        undefined,
-        mockSessionProvider
-      );
+
+      const toolkitWithSession = new DefaultAgentToolkit(mockSessionProvider);
+      toolkitWithSession.setContext(defaultContext);
 
       const result = (await toolkitWithSession.executeTool('fact_check', {
         claim: 'Test claim',
+        source_agent: 'agent-1',
       })) as {
         success: boolean;
         data?: {
+          claim: string;
+          sourceAgent: string;
           debateEvidence: Array<{
+            agentId: string;
             agentName: string;
-            evidence: string;
+            position: string;
+            reasoning: string;
             confidence: number;
           }>;
         };
       };
 
       expect(result.success).toBe(true);
+      expect(result.data?.claim).toBe('Test claim');
+      expect(result.data?.sourceAgent).toBe('agent-1');
       expect(result.data?.debateEvidence).toHaveLength(1);
-      expect(result.data?.debateEvidence[0]?.agentName).toBe('Agent Two');
+      expect(result.data?.debateEvidence[0]?.agentId).toBe('agent-2');
+      expect(mockSessionProvider.getDebateEvidence).toHaveBeenCalledWith('session-1');
+    });
+
+    it('should exclude by agent name as well', async () => {
+      const mockSessionProvider: SessionDataProvider = {
+        getDebateEvidence: vi.fn().mockResolvedValue([
+          {
+            agentId: 'agent-1',
+            agentName: 'Claude',
+            position: 'Position 1',
+            reasoning: 'Reasoning 1',
+            confidence: 0.8,
+          },
+          {
+            agentId: 'agent-2',
+            agentName: 'ChatGPT',
+            position: 'Position 2',
+            reasoning: 'Reasoning 2',
+            confidence: 0.7,
+          },
+        ]),
+      };
+
+      const toolkitWithSession = new DefaultAgentToolkit(mockSessionProvider);
+      toolkitWithSession.setContext(defaultContext);
+
+      const result = (await toolkitWithSession.executeTool('fact_check', {
+        claim: 'Test claim',
+        source_agent: 'Claude',
+      })) as {
+        success: boolean;
+        data?: {
+          debateEvidence: Array<{ agentName: string }>;
+        };
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.data?.debateEvidence).toHaveLength(1);
+      expect(result.data?.debateEvidence[0]?.agentName).toBe('ChatGPT');
+    });
+
+    it('should reject empty claim string', async () => {
+      toolkit.setContext(defaultContext);
+
+      const result = (await toolkit.executeTool('fact_check', {
+        claim: '',
+      })) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('claim');
+    });
+
+    it('should use default source_agent when not provided', async () => {
+      const mockSessionProvider: SessionDataProvider = {
+        getDebateEvidence: vi.fn().mockResolvedValue([]),
+      };
+
+      const toolkitWithSession = new DefaultAgentToolkit(mockSessionProvider);
+      toolkitWithSession.setContext(defaultContext);
+
+      const result = (await toolkitWithSession.executeTool('fact_check', {
+        claim: 'Test claim',
+      })) as {
+        success: boolean;
+        data?: { sourceAgent: string };
+      };
+
+      expect(result.success).toBe(true);
+      expect(result.data?.sourceAgent).toBe('unknown');
     });
   });
 
@@ -411,147 +237,19 @@ describe('DefaultAgentToolkit', () => {
   });
 });
 
-describe('perplexity_search tool', () => {
-  const defaultContext: DebateContext = {
-    sessionId: 'session-1',
-    topic: 'AI regulation',
-    mode: 'collaborative',
-    currentRound: 1,
-    totalRounds: 3,
-    previousResponses: [],
-  };
-
-  it('should return error when provider is not available', async () => {
-    const toolkit = new DefaultAgentToolkit();
-    toolkit.setContext(defaultContext);
-
-    const result = (await toolkit.executeTool('perplexity_search', {
-      query: 'test query',
-    })) as { success: boolean; error?: string };
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('not available');
-  });
-
-  it('should return error when query is missing', async () => {
-    const mockProvider: PerplexitySearchProvider = {
-      search: vi.fn(),
-    };
-    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-    toolkit.setContext(defaultContext);
-
-    const result = (await toolkit.executeTool('perplexity_search', {})) as {
-      success: boolean;
-      error?: string;
-    };
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('query');
-  });
-
-  it('should return error for invalid recency_filter', async () => {
-    const mockProvider: PerplexitySearchProvider = {
-      search: vi.fn(),
-    };
-    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-    toolkit.setContext(defaultContext);
-
-    const result = (await toolkit.executeTool('perplexity_search', {
-      query: 'test',
-      recency_filter: 'invalid',
-    })) as { success: boolean; error?: string };
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('recency_filter');
-  });
-
-  it('should execute search with all options', async () => {
-    const mockResult: PerplexitySearchResult = {
-      answer: 'AI regulation is important because...',
-      citations: [{ title: 'Source 1', url: 'https://example.com' }],
-      images: [{ url: 'https://example.com/img.jpg' }],
-      related_questions: ['What are the benefits?'],
-    };
-
-    const mockProvider: PerplexitySearchProvider = {
-      search: vi.fn().mockResolvedValue(mockResult),
-    };
-    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-    toolkit.setContext(defaultContext);
-
-    const result = (await toolkit.executeTool('perplexity_search', {
-      query: 'AI regulation 2024',
-      recency_filter: 'week',
-      domain_filter: ['reuters.com', 'bbc.com'],
-      return_images: true,
-      return_related_questions: true,
-    })) as { success: boolean; data?: PerplexitySearchResult };
-
-    expect(result.success).toBe(true);
-    expect(result.data?.answer).toBe('AI regulation is important because...');
-    expect(result.data?.citations).toHaveLength(1);
-    expect(result.data?.images).toHaveLength(1);
-    expect(result.data?.related_questions).toHaveLength(1);
-
-    expect(mockProvider.search).toHaveBeenCalledWith({
-      query: 'AI regulation 2024',
-      recency_filter: 'week',
-      domain_filter: ['reuters.com', 'bbc.com'],
-      return_images: true,
-      return_related_questions: true,
-    });
-  });
-
-  it('should reject domain_filter with more than 3 domains', async () => {
-    const mockProvider: PerplexitySearchProvider = {
-      search: vi.fn().mockResolvedValue({ answer: 'test' }),
-    };
-    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-    toolkit.setContext(defaultContext);
-
-    const result = (await toolkit.executeTool('perplexity_search', {
-      query: 'test',
-      domain_filter: ['a.com', 'b.com', 'c.com', 'd.com', 'e.com'],
-    })) as { success: boolean; error?: string };
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('domain_filter');
-    expect(mockProvider.search).not.toHaveBeenCalled();
-  });
-
-  it('should handle provider errors gracefully', async () => {
-    const mockProvider: PerplexitySearchProvider = {
-      search: vi.fn().mockRejectedValue(new Error('API error')),
-    };
-    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-    toolkit.setContext(defaultContext);
-
-    const result = (await toolkit.executeTool('perplexity_search', {
-      query: 'test',
-    })) as { success: boolean; error?: string };
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('API error');
-  });
-});
-
 describe('createDefaultToolkit', () => {
   it('should create toolkit without providers', () => {
     const toolkit = createDefaultToolkit();
-    expect(toolkit.getTools()).toHaveLength(6);
+    expect(toolkit.getTools()).toHaveLength(2);
   });
 
-  it('should create toolkit with providers', () => {
-    const mockSearchProvider: WebSearchProvider = {
-      search: vi.fn(),
-    };
+  it('should create toolkit with session data provider', () => {
     const mockSessionProvider: SessionDataProvider = {
-      getSession: vi.fn(),
-      findRelatedEvidence: vi.fn(),
+      getDebateEvidence: vi.fn(),
     };
 
-    const toolkit = createDefaultToolkit(mockSearchProvider, mockSessionProvider);
-    expect(toolkit.getTools()).toHaveLength(6);
+    const toolkit = createDefaultToolkit(mockSessionProvider);
+    expect(toolkit.getTools()).toHaveLength(2);
   });
 });
 
@@ -854,172 +552,6 @@ describe('Zod Schema Validation', () => {
 
   beforeEach(() => {
     toolkit = new DefaultAgentToolkit();
-  });
-
-  describe('submit_response validation', () => {
-    it('should reject empty position string', async () => {
-      const result = (await toolkit.executeTool('submit_response', {
-        position: '',
-        reasoning: 'Valid reasoning',
-        confidence: 0.5,
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('position');
-    });
-
-    it('should reject empty reasoning string', async () => {
-      const result = (await toolkit.executeTool('submit_response', {
-        position: 'Valid position',
-        reasoning: '',
-        confidence: 0.5,
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('reasoning');
-    });
-
-    it('should reject negative confidence', async () => {
-      const result = (await toolkit.executeTool('submit_response', {
-        position: 'Valid position',
-        reasoning: 'Valid reasoning',
-        confidence: -0.5,
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('confidence');
-    });
-
-    it('should reject non-numeric confidence', async () => {
-      const result = (await toolkit.executeTool('submit_response', {
-        position: 'Valid position',
-        reasoning: 'Valid reasoning',
-        confidence: 'high',
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('confidence');
-    });
-  });
-
-  describe('search_web validation', () => {
-    it('should reject empty query string', async () => {
-      const mockProvider: WebSearchProvider = { search: vi.fn() };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('search_web', {
-        query: '',
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('query');
-    });
-
-    it('should reject non-integer max_results', async () => {
-      const mockProvider: WebSearchProvider = { search: vi.fn() };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('search_web', {
-        query: 'test',
-        max_results: 5.5,
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('max_results');
-    });
-
-    it('should reject zero max_results', async () => {
-      const mockProvider: WebSearchProvider = { search: vi.fn() };
-      const toolkitWithSearch = new DefaultAgentToolkit(mockProvider);
-
-      const result = (await toolkitWithSearch.executeTool('search_web', {
-        query: 'test',
-        max_results: 0,
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('max_results');
-    });
-  });
-
-  describe('fact_check validation', () => {
-    it('should reject empty claim string', async () => {
-      const result = (await toolkit.executeTool('fact_check', {
-        claim: '',
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('claim');
-    });
-
-    it('should use default source_agent when not provided', async () => {
-      const result = (await toolkit.executeTool('fact_check', {
-        claim: 'Test claim',
-      })) as {
-        success: boolean;
-        data?: { sourceAgent: string };
-      };
-
-      expect(result.success).toBe(true);
-      expect(result.data?.sourceAgent).toBe('unknown');
-    });
-  });
-
-  describe('perplexity_search validation', () => {
-    it('should reject empty query string', async () => {
-      const mockProvider: PerplexitySearchProvider = { search: vi.fn() };
-      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-
-      const result = (await toolkitWithPerplexity.executeTool('perplexity_search', {
-        query: '',
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('query');
-    });
-
-    it('should accept valid recency_filter values', async () => {
-      const mockProvider: PerplexitySearchProvider = {
-        search: vi.fn().mockResolvedValue({ answer: 'test' }),
-      };
-      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-
-      for (const filter of ['hour', 'day', 'week', 'month']) {
-        const result = await toolkitWithPerplexity.executeTool('perplexity_search', {
-          query: 'test',
-          recency_filter: filter,
-        });
-
-        expect((result as { success: boolean }).success).toBe(true);
-      }
-    });
-
-    it('should reject empty domain strings in domain_filter', async () => {
-      const mockProvider: PerplexitySearchProvider = { search: vi.fn() };
-      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-
-      const result = (await toolkitWithPerplexity.executeTool('perplexity_search', {
-        query: 'test',
-        domain_filter: ['valid.com', ''],
-      })) as { success: boolean; error?: string };
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('domain_filter');
-    });
-
-    it('should accept exactly 3 domains', async () => {
-      const mockProvider: PerplexitySearchProvider = {
-        search: vi.fn().mockResolvedValue({ answer: 'test' }),
-      };
-      const toolkitWithPerplexity = new DefaultAgentToolkit(undefined, undefined, mockProvider);
-
-      const result = await toolkitWithPerplexity.executeTool('perplexity_search', {
-        query: 'test',
-        domain_filter: ['a.com', 'b.com', 'c.com'],
-      });
-
-      expect((result as { success: boolean }).success).toBe(true);
-    });
   });
 
   describe('custom tools bypass validation', () => {

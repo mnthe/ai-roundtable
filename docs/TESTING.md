@@ -237,38 +237,32 @@ describe('AdversarialMode', () => {
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
-import {
-  DefaultAgentToolkit,
-  type PerplexitySearchProvider,
-} from '../../../src/tools/toolkit.js';
+import { DefaultAgentToolkit } from '../../../src/tools/toolkit.js';
 
-describe('perplexity_search tool', () => {
-  it('should execute search with options', async () => {
-    const mockResult = {
-      answer: 'AI regulation is important...',
-      citations: [{ title: 'Source', url: 'https://example.com' }],
+describe('fact_check tool', () => {
+  it('should execute fact_check with debate evidence', async () => {
+    const mockSessionData = {
+      responses: [
+        { agentName: 'Claude', position: 'AI should be regulated', confidence: 0.8 },
+      ],
     };
 
-    const mockProvider: PerplexitySearchProvider = {
-      search: vi.fn().mockResolvedValue(mockResult),
+    const mockSessionDataProvider = {
+      getSession: vi.fn().mockResolvedValue(mockSessionData),
+      findRelatedEvidence: vi.fn().mockResolvedValue([
+        { agentName: 'Claude', evidence: 'Supports regulation', confidence: 0.8 },
+      ]),
     };
 
-    const toolkit = new DefaultAgentToolkit(undefined, undefined, mockProvider);
+    const toolkit = new DefaultAgentToolkit(mockSessionDataProvider);
     toolkit.setContext(defaultContext);
 
-    const result = await toolkit.executeTool('perplexity_search', {
-      query: 'AI regulation',
-      recency_filter: 'week',
-      domain_filter: ['reuters.com'],
+    const result = await toolkit.executeTool('fact_check', {
+      claim: 'AI should be regulated',
     });
 
     expect(result.success).toBe(true);
-    expect(result.data.answer).toBe('AI regulation is important...');
-    expect(mockProvider.search).toHaveBeenCalledWith({
-      query: 'AI regulation',
-      recency_filter: 'week',
-      domain_filter: ['reuters.com'],
-    });
+    expect(result.data.debateEvidence).toBeDefined();
   });
 });
 ```

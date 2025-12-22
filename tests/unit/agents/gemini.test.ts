@@ -197,31 +197,58 @@ describe('GeminiAgent', () => {
   });
 
   describe('tool use', () => {
-    it('should handle function calling', async () => {
-      let callCount = 0;
+    it('should handle function calling in Two-Phase approach', async () => {
+      // Two-Phase approach: Phase 1 (Google Search) -> Phase 2 (Function Calling)
+      // This test verifies Phase 2 function calling works correctly
+      let chatCreateCount = 0;
+
       const mockClient = {
         chats: {
-          create: vi.fn().mockReturnValue({
-            sendMessage: vi.fn().mockImplementation(() => {
-              callCount++;
-              if (callCount === 1) {
-                return Promise.resolve({
-                  text: '',
-                  functionCalls: [
-                    { id: 'call-1', name: 'search_web', args: { query: 'AI regulation' } },
+          create: vi.fn().mockImplementation(() => {
+            chatCreateCount++;
+
+            if (chatCreateCount === 1) {
+              // Phase 1: Google Search grounding
+              return {
+                sendMessage: vi.fn().mockResolvedValue({
+                  text: 'Phase 1 search results about AI regulation',
+                  candidates: [
+                    {
+                      groundingMetadata: {
+                        groundingChunks: [
+                          { web: { title: 'AI Policy', uri: 'https://ai-policy.com' } },
+                        ],
+                        webSearchQueries: ['AI regulation'],
+                      },
+                    },
                   ],
-                });
-              }
-              return Promise.resolve({
-                text: createJsonResponse({
-                  position: 'Based on research',
-                  reasoning: 'Found relevant sources',
-                  confidence: 0.9,
                 }),
-                functionCalls: undefined,
-              });
-            }),
-            getHistory: vi.fn().mockReturnValue([]),
+              };
+            }
+
+            // Phase 2: Function calling
+            let phase2CallCount = 0;
+            return {
+              sendMessage: vi.fn().mockImplementation(() => {
+                phase2CallCount++;
+                if (phase2CallCount === 1) {
+                  return Promise.resolve({
+                    text: '',
+                    functionCalls: [
+                      { id: 'call-1', name: 'fact_check', args: { claim: 'AI regulation helps' } },
+                    ],
+                  });
+                }
+                return Promise.resolve({
+                  text: createJsonResponse({
+                    position: 'Based on research and verification',
+                    reasoning: 'Found and verified sources',
+                    confidence: 0.9,
+                  }),
+                  functionCalls: undefined,
+                });
+              }),
+            };
           }),
         },
         models: {
@@ -232,18 +259,14 @@ describe('GeminiAgent', () => {
       const mockToolkit: AgentToolkit = createMockToolkit({
         tools: [
           {
-            name: 'search_web',
-            description: 'Search the web',
-            parameters: { query: { type: 'string', description: 'Search query' } },
+            name: 'fact_check',
+            description: 'Verify claims',
+            parameters: { claim: { type: 'string', description: 'Claim to verify' } },
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
           success: true,
-          data: {
-            results: [
-              { title: 'AI News', url: 'https://example.com', snippet: 'Recent developments...' },
-            ],
-          },
+          data: { verified: true, sources: ['https://source.com'] },
         }),
       });
 
@@ -254,38 +277,61 @@ describe('GeminiAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
-        query: 'AI regulation',
+      // Verify Two-Phase: 2 chat sessions created
+      expect(mockClient.chats.create).toHaveBeenCalledTimes(2);
+
+      // Verify function was called in Phase 2
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('fact_check', {
+        claim: 'AI regulation helps',
       });
-      expect(response.toolCalls).toHaveLength(1);
-      expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
-      expect(response.citations).toHaveLength(1);
-      expect(response.citations?.[0]?.title).toBe('AI News');
+
+      // Verify toolCalls includes both google_search (Phase 1) and fact_check (Phase 2)
+      expect(response.toolCalls?.some((tc) => tc.toolName === 'google_search')).toBe(true);
+      expect(response.toolCalls?.some((tc) => tc.toolName === 'fact_check')).toBe(true);
+
+      // Verify citations from Phase 1 grounding
+      expect(response.citations?.some((c) => c.title === 'AI Policy')).toBe(true);
     });
 
-    it('should handle tool execution errors', async () => {
-      let callCount = 0;
+    it('should handle tool execution errors in Two-Phase', async () => {
+      let chatCreateCount = 0;
+
       const mockClient = {
         chats: {
-          create: vi.fn().mockReturnValue({
-            sendMessage: vi.fn().mockImplementation(() => {
-              callCount++;
-              if (callCount === 1) {
-                return Promise.resolve({
-                  text: '',
-                  functionCalls: [{ id: 'call-1', name: 'failing_tool', args: { input: 'test' } }],
-                });
-              }
-              return Promise.resolve({
-                text: createJsonResponse({
-                  position: 'Handled error',
-                  reasoning: 'Continued despite tool failure',
-                  confidence: 0.6,
+          create: vi.fn().mockImplementation(() => {
+            chatCreateCount++;
+
+            if (chatCreateCount === 1) {
+              // Phase 1: Google Search grounding
+              return {
+                sendMessage: vi.fn().mockResolvedValue({
+                  text: 'Phase 1 results',
+                  candidates: [{ groundingMetadata: {} }],
                 }),
-                functionCalls: undefined,
-              });
-            }),
-            getHistory: vi.fn().mockReturnValue([]),
+              };
+            }
+
+            // Phase 2: Function calling with error
+            let phase2CallCount = 0;
+            return {
+              sendMessage: vi.fn().mockImplementation(() => {
+                phase2CallCount++;
+                if (phase2CallCount === 1) {
+                  return Promise.resolve({
+                    text: '',
+                    functionCalls: [{ id: 'call-1', name: 'failing_tool', args: { input: 'test' } }],
+                  });
+                }
+                return Promise.resolve({
+                  text: createJsonResponse({
+                    position: 'Handled error',
+                    reasoning: 'Continued despite tool failure',
+                    confidence: 0.6,
+                  }),
+                  functionCalls: undefined,
+                });
+              }),
+            };
           }),
         },
         models: {
@@ -310,39 +356,59 @@ describe('GeminiAgent', () => {
       agent.setToolkit(mockToolkit);
 
       const response = await agent.generateResponse(defaultContext);
-      expect(response.toolCalls?.[0]?.output).toEqual({ error: 'Tool failed' });
+
+      // Find the failing_tool call (not google_search)
+      const failingToolCall = response.toolCalls?.find((tc) => tc.toolName === 'failing_tool');
+      expect(failingToolCall?.output).toEqual({ error: 'Tool failed' });
     });
 
-    it('should extract position/reasoning from submit_response tool call', async () => {
-      let callCount = 0;
+    it('should extract position/reasoning from submit_response tool call in Two-Phase', async () => {
+      let chatCreateCount = 0;
+
       const mockClient = {
         chats: {
-          create: vi.fn().mockReturnValue({
-            sendMessage: vi.fn().mockImplementation(() => {
-              callCount++;
-              if (callCount === 1) {
-                return Promise.resolve({
-                  text: '',
-                  functionCalls: [
-                    {
-                      id: 'call-1',
-                      name: 'submit_response',
-                      args: {
-                        position: 'AI should be carefully regulated to balance innovation and safety',
-                        reasoning:
-                          'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
-                        confidence: 0.85,
+          create: vi.fn().mockImplementation(() => {
+            chatCreateCount++;
+
+            if (chatCreateCount === 1) {
+              // Phase 1: Google Search grounding
+              return {
+                sendMessage: vi.fn().mockResolvedValue({
+                  text: 'Phase 1 research on AI regulation',
+                  candidates: [{ groundingMetadata: {} }],
+                }),
+              };
+            }
+
+            // Phase 2: Function calling with submit_response
+            let phase2CallCount = 0;
+            return {
+              sendMessage: vi.fn().mockImplementation(() => {
+                phase2CallCount++;
+                if (phase2CallCount === 1) {
+                  return Promise.resolve({
+                    text: '',
+                    functionCalls: [
+                      {
+                        id: 'call-1',
+                        name: 'submit_response',
+                        args: {
+                          position:
+                            'AI should be carefully regulated to balance innovation and safety',
+                          reasoning:
+                            'Regulation is necessary to prevent misuse while ensuring technological progress continues.',
+                          confidence: 0.85,
+                        },
                       },
-                    },
-                  ],
+                    ],
+                  });
+                }
+                return Promise.resolve({
+                  text: '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.',
+                  functionCalls: undefined,
                 });
-              }
-              return Promise.resolve({
-                text: '제 입장을 제출했습니다. 요약하면 AI 규제는 신중하게 접근해야 한다는 것입니다.',
-                functionCalls: undefined,
-              });
-            }),
-            getHistory: vi.fn().mockReturnValue([]),
+              }),
+            };
           }),
         },
         models: {
@@ -389,9 +455,358 @@ describe('GeminiAgent', () => {
       );
       expect(response.confidence).toBe(0.85);
 
-      // Should record the tool call
+      // Should record the submit_response tool call (Phase 2)
+      const submitResponseCall = response.toolCalls?.find(
+        (tc) => tc.toolName === 'submit_response'
+      );
+      expect(submitResponseCall).toBeDefined();
+    });
+  });
+
+  describe('google search grounding', () => {
+    it('should include google_search tool by default', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'AI regulation needed',
+        reasoning: 'Based on research',
+        confidence: 0.85,
+      });
+
+      let capturedConfig: Record<string, unknown> | undefined;
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedConfig = params?.config;
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: undefined,
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Should include google_search in tools by default
+      expect(capturedConfig?.tools).toBeDefined();
+      const tools = capturedConfig?.tools as Array<{ googleSearch?: object }>;
+      const hasGoogleSearch = tools.some((t) => t.googleSearch !== undefined);
+      expect(hasGoogleSearch).toBe(true);
+    });
+
+    it('should allow disabling google_search', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.8,
+      });
+
+      let capturedConfig: Record<string, unknown> | undefined;
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedConfig = params?.config;
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: undefined,
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+        googleSearch: { enabled: false },
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Should NOT include google_search when disabled
+      const tools = capturedConfig?.tools as Array<{ googleSearch?: object }> | undefined;
+      if (tools) {
+        const hasGoogleSearch = tools.some((t) => t.googleSearch !== undefined);
+        expect(hasGoogleSearch).toBe(false);
+      }
+    });
+
+    it('should extract citations from grounding metadata', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'AI needs regulation',
+        reasoning: 'Based on web research',
+        confidence: 0.9,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [
+                {
+                  groundingMetadata: {
+                    webSearchQueries: ['AI regulation 2025'],
+                    groundingChunks: [
+                      {
+                        web: {
+                          title: 'AI Regulation Guide',
+                          uri: 'https://example.com/ai-regulation',
+                        },
+                      },
+                      {
+                        web: {
+                          title: 'Policy Update',
+                          uri: 'https://example.com/policy',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should extract citations from grounding metadata
+      expect(response.citations).toHaveLength(2);
+      expect(response.citations?.[0]?.title).toBe('AI Regulation Guide');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/ai-regulation');
+      expect(response.citations?.[1]?.title).toBe('Policy Update');
+      expect(response.citations?.[1]?.url).toBe('https://example.com/policy');
+    });
+
+    it('should record google_search tool call from grounding metadata', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.8,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [
+                {
+                  groundingMetadata: {
+                    webSearchQueries: ['test query'],
+                    groundingChunks: [
+                      {
+                        web: {
+                          title: 'Test Result',
+                          uri: 'https://test.com',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should record google_search tool call
       expect(response.toolCalls).toHaveLength(1);
-      expect(response.toolCalls?.[0]?.toolName).toBe('submit_response');
+      expect(response.toolCalls?.[0]?.toolName).toBe('google_search');
+      expect(response.toolCalls?.[0]?.input).toEqual({ queries: ['test query'] });
+      expect(response.toolCalls?.[0]?.output).toEqual({
+        success: true,
+        data: {
+          results: [{ title: 'Test Result', url: 'https://test.com' }],
+        },
+      });
+    });
+
+    it('should handle grounding metadata without chunks', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.7,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [
+                {
+                  groundingMetadata: {
+                    webSearchQueries: ['query'],
+                    groundingChunks: [],
+                  },
+                },
+              ],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should handle empty grounding chunks gracefully
+      expect(response.citations?.length ?? 0).toBe(0);
+      expect(response.toolCalls?.length ?? 0).toBe(0);
+    });
+
+    it('should handle missing grounding metadata', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.7,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [{ groundingMetadata: undefined }],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should handle missing grounding metadata gracefully
+      expect(response.citations?.length ?? 0).toBe(0);
+      expect(response.toolCalls?.length ?? 0).toBe(0);
+    });
+
+    it('should use light model for Phase 1 by default', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.8,
+      });
+
+      const capturedModels: string[] = [];
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedModels.push(params?.model);
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: [{ groundingMetadata: {} }],
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+        // useLightModelForSearch defaults to true
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Phase 1 should use light model (gemini-2.5-flash-lite)
+      expect(capturedModels[0]).toBe('gemini-2.5-flash-lite');
+    });
+
+    it('should use heavy model for Phase 1 when useLightModelForSearch is false', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.8,
+      });
+
+      const capturedModels: string[] = [];
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedModels.push(params?.model);
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: [{ groundingMetadata: {} }],
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+        useLightModelForSearch: false,
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Phase 1 should use heavy model when disabled
+      expect(capturedModels[0]).toBe('gemini-3-flash-preview');
     });
   });
 });

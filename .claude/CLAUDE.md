@@ -29,28 +29,31 @@ AI Roundtable is an MCP server that enables structured debates between multiple 
 │              ExitCriteriaChecker (automatic termination)        │
 │              KeyPointsExtractor (for 4-layer responses)         │
 ├─────────────────────────────────────────────────────────────────┤
-│       Agents Layer             │        Modes Layer             │
-│  BaseAgent (Template Method)   │   BaseModeStrategy (Hooks)     │
-│  ├── ClaudeAgent               │   ├── CollaborativeMode        │
-│  ├── ChatGPTAgent              │   ├── AdversarialMode          │
-│  ├── GeminiAgent               │   ├── SocraticMode             │
-│  └── PerplexityAgent           │   ├── ExpertPanelMode          │
-│                                │   ├── DevilsAdvocateMode       │
-│  agents/utils/                 │   ├── DelphiMode               │
-│  ├── openai-completion.ts      │   └── RedTeamBlueTeamMode      │
-│  ├── error-converter.ts        │                                │
-│  ├── tool-converters.ts        │   Mode Extensions:             │
-│  └── light-model-factory.ts    │   ├── processors/ (context)    │
-│                                │   ├── validators/ (response)   │
-│                                │   └── tool-policy.ts           │
+│       Agents Layer              │        Modes Layer             │
+│  BaseAgent (Template Method)    │   BaseModeStrategy (Hooks)     │
+│  ├── ClaudeAgent (web_search)  │   ├── CollaborativeMode        │
+│  ├── ChatGPTAgent (Responses)  │   ├── AdversarialMode          │
+│  ├── GeminiAgent (grounding)   │   ├── SocraticMode             │
+│  └── PerplexityAgent (builtin) │   ├── ExpertPanelMode          │
+│                                 │   ├── DevilsAdvocateMode       │
+│  agents/utils/                  │   ├── DelphiMode               │
+│  ├── openai-responses.ts       │   └── RedTeamBlueTeamMode       │
+│  ├── error-converter.ts        │                                 │
+│  ├── tool-converters.ts        │   Mode Extensions:              │
+│  └── light-model-factory.ts    │   ├── processors/ (context)     │
+│                                 │   ├── validators/ (response)    │
+│                                 │   └── tool-policy.ts            │
 ├─────────────────────────────────────────────────────────────────┤
-│       Tools Layer              │       Storage Layer            │
-│  DefaultAgentToolkit           │   SQLiteStorage                │
-│  ├── get_context               │   (sql.js WebAssembly)         │
-│  ├── submit_response           │                                │
-│  ├── search_web                │   Tables: sessions, responses  │
-│  ├── fact_check                │                                │
-│  └── perplexity_search         │                                │
+│       Tools Layer              │       Storage Layer             │
+│  DefaultAgentToolkit           │   SQLiteStorage                 │
+│  ├── fact_check                │   (sql.js WebAssembly)          │
+│  └── request_context           │                                 │
+│                                 │   Tables: sessions, responses   │
+│  Native Web Search (per-agent) │                                 │
+│  ├── Claude: web_search tool   │                                 │
+│  ├── ChatGPT: Responses API    │                                 │
+│  ├── Gemini: Google grounding  │                                 │
+│  └── Perplexity: built-in      │                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -228,13 +231,30 @@ ROUNDTABLE_EXIT_CONFIDENCE_THRESHOLD=0.85
 
 ## Agent Tools (During Debates)
 
-| Tool                | Description                                 |
-| ------------------- | ------------------------------------------- |
-| `get_context`       | Get current debate context                  |
-| `submit_response`   | Submit structured response (validation)     |
-| `search_web`        | Basic web search for evidence               |
-| `fact_check`        | Verify claims with web and debate evidence  |
-| `perplexity_search` | Advanced search with recency/domain filters |
+### Toolkit Tools (All Agents)
+
+| Tool              | Description                                     |
+| ----------------- | ----------------------------------------------- |
+| `fact_check`      | Verify claims with debate history               |
+| `request_context` | Request additional context from caller (SOTA AI)|
+
+Note: `get_context` and `submit_response` were removed as redundant:
+- Context is already in system prompt via `buildSystemPrompt()` and `buildUserMessage()`
+- Response parsing is handled by `BaseAgent.extractResponseFromToolCallsOrText()`
+
+### Native Web Search (Provider-Specific)
+
+Each agent uses its provider's native web search capability for evidence gathering:
+
+| Agent      | Web Search Method              | Citation Format     |
+| ---------- | ------------------------------ | ------------------- |
+| Claude     | Anthropic `web_search` tool    | URL citations       |
+| ChatGPT    | OpenAI Responses API           | URL annotations     |
+| Gemini     | Google Search grounding        | Grounding metadata  |
+| Perplexity | Built-in search (always on)    | search_results      |
+
+This architecture ensures each agent uses its provider's optimized search capabilities,
+resulting in more accurate citations and better search results.
 
 ## Debate Modes Quick Reference
 

@@ -239,6 +239,145 @@ export function createMockPerplexityClientWithToolUse(
 }
 
 // =============================================================================
+// Mock OpenAI Responses API Client (ChatGPT with native web search)
+// =============================================================================
+
+/**
+ * Creates a mock OpenAI Responses API client for ChatGPT agent tests
+ * The Responses API uses `client.responses.create()` instead of `chat.completions.create()`
+ */
+export function createMockResponsesClient(
+  responseText: string,
+  urlCitations?: Array<{ title: string; url: string }>
+) {
+  const annotations = urlCitations?.map((c) => ({
+    type: 'url_citation' as const,
+    title: c.title,
+    url: c.url,
+    start_index: 0,
+    end_index: 10,
+  })) ?? [];
+
+  return {
+    responses: {
+      create: vi.fn().mockResolvedValue({
+        id: 'resp-1',
+        output_text: responseText,
+        output: [
+          {
+            type: 'message',
+            role: 'assistant',
+            status: 'completed',
+            content: [
+              {
+                type: 'output_text',
+                text: responseText,
+                annotations,
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  };
+}
+
+/**
+ * Creates a mock OpenAI Responses API client with web search results
+ */
+export function createMockResponsesClientWithWebSearch(
+  responseText: string,
+  webSearchResults: Array<{ title: string; url: string }>
+) {
+  const annotations = webSearchResults.map((r) => ({
+    type: 'url_citation' as const,
+    title: r.title,
+    url: r.url,
+    start_index: 0,
+    end_index: 10,
+  }));
+
+  return {
+    responses: {
+      create: vi.fn().mockResolvedValue({
+        id: 'resp-1',
+        output_text: responseText,
+        output: [
+          {
+            type: 'web_search_call',
+            id: 'ws-1',
+            status: 'completed',
+          },
+          {
+            type: 'message',
+            role: 'assistant',
+            status: 'completed',
+            content: [
+              {
+                type: 'output_text',
+                text: responseText,
+                annotations,
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  };
+}
+
+/**
+ * Creates a mock OpenAI Responses API client that simulates function tool calls
+ */
+export function createMockResponsesClientWithToolCalls(
+  toolCallName: string,
+  toolCallArgs: Record<string, unknown>,
+  finalResponse: string
+) {
+  let callCount = 0;
+  return {
+    responses: {
+      create: vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            id: 'resp-1',
+            output_text: '',
+            output: [
+              {
+                type: 'function_call',
+                id: 'call-1',
+                name: toolCallName,
+                arguments: JSON.stringify(toolCallArgs),
+                status: 'completed',
+              },
+            ],
+          });
+        }
+        return Promise.resolve({
+          id: 'resp-2',
+          output_text: finalResponse,
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              status: 'completed',
+              content: [
+                {
+                  type: 'output_text',
+                  text: finalResponse,
+                  annotations: [],
+                },
+              ],
+            },
+          ],
+        });
+      }),
+    },
+  };
+}
+
+// =============================================================================
 // Mock Google/Gemini Client
 // =============================================================================
 

@@ -414,10 +414,31 @@ The `src/agents/utils/` directory contains reusable utilities:
 
 | File | Purpose | Use For |
 |------|---------|---------|
-| `openai-completion.ts` | OpenAI SDK completion helpers | Agents using OpenAI SDK (ChatGPT, Perplexity-style) |
+| `openai-responses.ts` | OpenAI Responses API with native web search | ChatGPT with web search |
 | `error-converter.ts` | SDK error → RoundtableError | All agents (update for new provider) |
 | `tool-converters.ts` | Toolkit → provider format | Agents with tool support |
 | `light-model-factory.ts` | Create light model agents | AI consensus analysis |
+
+## Native Web Search
+
+Each agent should use its provider's native web search capability:
+
+| Provider | Recommended Approach | Example Agent |
+|----------|---------------------|---------------|
+| Anthropic | `web_search` tool type | ClaudeAgent |
+| OpenAI | Responses API with `web_search` tool | ChatGPTAgent |
+| Google | Google Search grounding | GeminiAgent |
+| Perplexity | Built-in search (always on) | PerplexityAgent |
+
+Record web search as a `ToolCallRecord` for consistency:
+```typescript
+toolCalls.push({
+  toolName: 'web_search',  // or 'google_search', 'perplexity_search'
+  input: { query: context.topic },
+  output: { success: true, data: { results: citations } },
+  timestamp: new Date(),
+});
+```
 
 ## Template Method Pattern
 
@@ -447,6 +468,10 @@ BaseAgent.healthCheck() [TEMPLATE - DO NOT OVERRIDE]
 - [ ] Tool use supported (if SDK supports it)
 - [ ] `withRetry()` wrapper used for API calls
 - [ ] Citations extracted using `extractCitationsFromToolResult()`
+- [ ] Native web search implemented (if supported):
+  - [ ] Use provider's native search capability
+  - [ ] Record search as `ToolCallRecord` for consistency
+  - [ ] Extract citations from provider-specific format
 - [ ] Type added to `AIProvider`
 - [ ] Registered in `setup.ts`:
   - [ ] `DEFAULT_MODELS` (heavy model for debate)

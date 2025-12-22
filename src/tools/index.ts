@@ -9,25 +9,21 @@ export type { AgentTool, AgentToolkit, ToolExecutor, ToolDefinition } from './ty
 export {
   DefaultAgentToolkit,
   createDefaultToolkit,
-  type WebSearchProvider,
   type SessionDataProvider,
-  type PerplexitySearchProvider,
-  type PerplexitySearchInput,
-  type PerplexitySearchResult,
 } from './toolkit.js';
 
 // Export validation schemas and utilities
 export {
   validateToolInput,
   TOOL_INPUT_SCHEMAS,
-  GetContextInputSchema,
-  SubmitResponseInputSchema,
-  SearchWebInputSchema,
   FactCheckInputSchema,
-  PerplexitySearchInputSchema,
-  type GetContextInput,
-  type SubmitResponseInput,
-  type SearchWebInput,
+  RequestContextInputSchema,
   type FactCheckInput,
-  type PerplexitySearchInput as PerplexitySearchInputValidated,
+  type RequestContextInput,
 } from './schemas.js';
+
+// Export providers
+export {
+  SessionManagerAdapter,
+  createSessionManagerAdapter,
+} from './providers/index.js';
