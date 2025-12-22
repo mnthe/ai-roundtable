@@ -768,9 +768,7 @@ Default implementation with standard tools.
 ```typescript
 class DefaultAgentToolkit implements AgentToolkit {
   constructor(
-    webSearchProvider?: WebSearchProvider,
-    sessionDataProvider?: SessionDataProvider,
-    perplexitySearchProvider?: PerplexitySearchProvider
+    sessionDataProvider?: SessionDataProvider
   );
 
   setContext(context: DebateContext): void;
@@ -780,13 +778,11 @@ class DefaultAgentToolkit implements AgentToolkit {
 }
 
 function createDefaultToolkit(
-  webSearchProvider?: WebSearchProvider,
-  sessionDataProvider?: SessionDataProvider,
-  perplexitySearchProvider?: PerplexitySearchProvider
+  sessionDataProvider?: SessionDataProvider
 ): DefaultAgentToolkit;
 ```
 
-### Built-in Tools
+### Toolkit Tools (All Agents)
 
 #### get_context
 
@@ -835,34 +831,9 @@ Submit structured response (validation only).
 }
 ```
 
-#### search_web
-
-Basic web search.
-
-```typescript
-// Input:
-{
-  query: string;        // Required
-  max_results?: number; // Default: 5, max: 10
-}
-
-// Output:
-{
-  success: true,
-  data: {
-    results: Array<{
-      title: string;
-      url: string;
-      snippet: string;
-      publishedDate?: string;
-    }>;
-  }
-}
-```
-
 #### fact_check
 
-Verify claims with evidence.
+Verify claims with debate history.
 
 ```typescript
 // Input:
@@ -877,7 +848,6 @@ Verify claims with evidence.
   data: {
     claim: string;
     sourceAgent: string;
-    webEvidence: SearchResult[];
     debateEvidence: Array<{
       agentName: string;
       evidence: string;
@@ -887,43 +857,20 @@ Verify claims with evidence.
 }
 ```
 
-#### perplexity_search
+### Native Web Search (Provider-Specific)
 
-Advanced search with Perplexity AI.
+Each agent uses its provider's native web search capability:
 
-```typescript
-// Input:
-{
-  query: string;              // Required
-  recency_filter?: 'hour' | 'day' | 'week' | 'month';
-  domain_filter?: string[];   // Max 3 domains
-  return_images?: boolean;
-  return_related_questions?: boolean;
-}
-
-// Output:
-{
-  success: true,
-  data: {
-    answer: string;
-    citations?: Array<{ title: string; url: string; snippet?: string }>;
-    images?: Array<{ url: string; description?: string }>;
-    related_questions?: string[];
-  }
-}
-```
+| Agent      | Web Search Method              | Citation Format     |
+| ---------- | ------------------------------ | ------------------- |
+| Claude     | Anthropic `web_search` tool    | URL citations       |
+| ChatGPT    | OpenAI Responses API           | URL annotations     |
+| Gemini     | Google Search grounding        | Grounding metadata  |
+| Perplexity | Built-in search (always on)    | search_results      |
 
 ### Provider Interfaces
 
 ```typescript
-interface WebSearchProvider {
-  search(query: string, options?: SearchOptions): Promise<SearchResult[]>;
-}
-
-interface PerplexitySearchProvider {
-  search(input: PerplexitySearchInput): Promise<PerplexitySearchResult>;
-}
-
 interface SessionDataProvider {
   getSession(sessionId: string): Promise<SessionData | null>;
   findRelatedEvidence(claim: string): Promise<Evidence[]>;

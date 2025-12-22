@@ -13,7 +13,7 @@ AI Roundtable orchestrates debates between multiple AI models using various disc
 - **4-Layer Response Structure**: Optimized for agentic workflows with progressive detail levels
 - **AI-Powered Analysis**: Semantic consensus analysis using lightweight AI models
 - **Health Check System**: Automatic agent health verification on startup
-- **Tool Support**: Agents can use web search, fact-checking, and Perplexity's advanced search
+- **Native Web Search**: Each agent uses its provider's native search (Claude web_search, ChatGPT Responses API, Gemini grounding, Perplexity built-in)
 - **In-Memory Storage**: SQLite-based session storage (sql.js WebAssembly)
 - **MCP Protocol**: Standard MCP server interface for integration with Claude Desktop and other MCP clients
 
@@ -257,10 +257,17 @@ Control session execution state.
 │  │DefaultAgentToolkit│      │    SQLiteStorage     │    │
 │  │ ├─ get_context    │      │                      │    │
 │  │ ├─ submit_response│      │                      │    │
-│  │ ├─ search_web     │      │                      │    │
-│  │ ├─ fact_check     │      │                      │    │
-│  │ └─ perplexity_    │      │                      │    │
-│  │    search         │      │                      │    │
+│  │ └─ fact_check     │      │                      │    │
+│  │                   │      │                      │    │
+│  │Native Web Search: │      │                      │    │
+│  │ ├─ Claude:        │      │                      │    │
+│  │ │   web_search    │      │                      │    │
+│  │ ├─ ChatGPT:       │      │                      │    │
+│  │ │   Responses API │      │                      │    │
+│  │ ├─ Gemini:        │      │                      │    │
+│  │ │   grounding     │      │                      │    │
+│  │ └─ Perplexity:    │      │                      │    │
+│  │     built-in      │      │                      │    │
 │  └───────────────────┘      └──────────────────────┘    │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -307,7 +314,7 @@ src/
 │   ├── registry.ts       # Agent registry
 │   ├── setup.ts          # Auto-configuration with API key detection
 │   └── utils/            # Shared agent utilities
-│       ├── openai-completion.ts  # OpenAI SDK helpers
+│       ├── openai-responses.ts   # OpenAI Responses API (native web search)
 │       ├── error-converter.ts    # SDK → RoundtableError
 │       ├── tool-converters.ts    # Toolkit → provider format
 │       └── light-model-factory.ts
@@ -455,27 +462,26 @@ See [.claude/rules/adding-modes.md](.claude/rules/adding-modes.md) for complete 
 
 ## Agent Tools
 
-During debates, agents have access to these tools:
+### Toolkit Tools (All Agents)
 
-| Tool                | Description                                                            |
-| ------------------- | ---------------------------------------------------------------------- |
-| `get_context`       | Get current debate context (topic, round, previous responses)          |
-| `submit_response`   | Submit structured response with position, reasoning, confidence        |
-| `search_web`        | Basic web search for evidence                                          |
-| `fact_check`        | Verify claims with web and debate evidence                             |
-| `perplexity_search` | Advanced search with recency/domain filters, images, related questions |
+| Tool              | Description                                               |
+| ----------------- | --------------------------------------------------------- |
+| `get_context`     | Get current debate context (topic, round, previous)       |
+| `submit_response` | Submit structured response with position, reasoning       |
+| `fact_check`      | Verify claims with debate history                         |
 
-### Perplexity Search Options
+### Native Web Search (Provider-Specific)
 
-```typescript
-{
-  query: string;
-  recency_filter?: 'hour' | 'day' | 'week' | 'month';
-  domain_filter?: string[];  // Max 3 domains
-  return_images?: boolean;
-  return_related_questions?: boolean;
-}
-```
+Each agent uses its provider's native web search capability for evidence gathering:
+
+| Agent      | Web Search Method              | Citation Format     |
+| ---------- | ------------------------------ | ------------------- |
+| Claude     | Anthropic `web_search` tool    | URL citations       |
+| ChatGPT    | OpenAI Responses API           | URL annotations     |
+| Gemini     | Google Search grounding        | Grounding metadata  |
+| Perplexity | Built-in search (always on)    | search_results      |
+
+This architecture ensures each agent uses its provider's optimized search capabilities.
 
 ## Key Design Decisions
 

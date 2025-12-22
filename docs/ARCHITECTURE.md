@@ -181,8 +181,8 @@ sequenceDiagram
 │                     Yes   ▼           No    ▼                               │
 │              ┌─────────────────┐  ┌─────────────────┐                       │
 │              │  Execute Tools  │  │  Parse Response │                       │
-│              │  - web_search   │  │                 │                       │
 │              │  - fact_check   │  │                 │                       │
+│              │  - native search│  │                 │                       │
 │              │  - submit_resp  │  │                 │                       │
 │              └────────┬────────┘  └────────┬────────┘                       │
 │                       │                    │                                │
@@ -797,7 +797,7 @@ src/
 │   ├── registry.ts      # Agent registration & health tracking
 │   ├── setup.ts         # Auto-setup with API keys
 │   └── utils/           # Shared agent utilities
-│       ├── openai-completion.ts  # OpenAI SDK helpers
+│       ├── openai-responses.ts   # OpenAI Responses API (native web search)
 │       ├── error-converter.ts    # SDK → RoundtableError
 │       ├── tool-converters.ts    # Toolkit → provider format
 │       └── light-model-factory.ts
