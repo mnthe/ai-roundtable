@@ -14,7 +14,8 @@
 import OpenAI from 'openai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { withRetry } from '../../utils/retry.js';
-import { convertSDKError, buildResponsesFunctionTools } from '../utils/index.js';
+import { convertSDKError } from '../utils/index.js';
+import { buildResponsesFunctionTools } from './utils.js';
 import { executeResponsesCompletion, executeSimpleResponsesCompletion } from './responses.js';
 import type { AgentConfig, DebateContext } from '../../types/index.js';
 import type {

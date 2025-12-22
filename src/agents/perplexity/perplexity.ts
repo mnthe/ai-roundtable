@@ -19,6 +19,7 @@ import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js
 import { withRetry } from '../../utils/retry.js';
 import { createLogger } from '../../utils/logger.js';
 import { convertSDKError } from '../utils/index.js';
+import { buildPerplexityTools } from './utils.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import type { PerplexitySearchOptions, PerplexityAgentOptions } from './types.js';
 
@@ -89,7 +90,7 @@ export class PerplexityAgent extends BaseAgent {
     const citations: Citation[] = [];
 
     // Build tools if toolkit is available (Perplexity supports function calling)
-    const tools = this.buildPerplexityTools();
+    const tools = buildPerplexityTools(this.toolkit);
 
     // Make the API call with Perplexity-specific search options and retry logic
     let response: StreamChunk = await withRetry(
@@ -201,28 +202,6 @@ export class PerplexityAgent extends BaseAgent {
           ? this.searchOptions.domainFilter.slice(0, 3)
           : null,
     };
-  }
-
-  /**
-   * Build Perplexity-format tool definitions from toolkit
-   */
-  private buildPerplexityTools(): CompletionCreateParams.Tool[] {
-    if (!this.toolkit) {
-      return [];
-    }
-
-    return this.toolkit.getTools().map((tool) => ({
-      type: 'function' as const,
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: {
-          type: 'object',
-          properties: tool.parameters,
-          required: Object.keys(tool.parameters),
-        },
-      },
-    }));
   }
 
   /**
@@ -341,10 +320,15 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
-   * Perform synthesis by calling Perplexity API directly with synthesis-specific prompts
+   * Execute a simple completion without tools
+   * Centralizes common API call pattern for synthesis and raw completion
    */
-  protected override async performSynthesis(systemPrompt: string, userMessage: string): Promise<string> {
-    logger.debug({ agentId: this.id }, 'Performing synthesis');
+  private async executeSimpleCompletion(
+    systemPrompt: string,
+    userMessage: string,
+    operation: string
+  ): Promise<string> {
+    logger.debug({ agentId: this.id }, `Executing ${operation}`);
 
     try {
       const response = await withRetry(
@@ -364,41 +348,25 @@ export class PerplexityAgent extends BaseAgent {
       return this.extractContentText(response.choices[0]?.message);
     } catch (error) {
       const convertedError = this.convertError(error);
-      logger.error({ err: convertedError, agentId: this.id }, 'Failed to perform synthesis');
+      logger.error({ err: convertedError, agentId: this.id }, `Failed to execute ${operation}`);
       throw convertedError;
     }
+  }
+
+  /**
+   * Perform synthesis by calling Perplexity API directly with synthesis-specific prompts
+   */
+  protected override async performSynthesis(systemPrompt: string, userMessage: string): Promise<string> {
+    return this.executeSimpleCompletion(systemPrompt, userMessage, 'synthesis');
   }
 
   /**
    * Generate a raw text completion without parsing into structured format
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    logger.debug({ agentId: this.id }, 'Generating raw completion');
-
-    try {
-      const response = await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            messages: [
-              {
-                role: 'system',
-                content: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-              },
-              { role: 'user', content: prompt },
-            ],
-            temperature: this.temperature,
-          }),
-        { maxRetries: 3 }
-      );
-
-      return this.extractContentText(response.choices[0]?.message);
-    } catch (error) {
-      const convertedError = this.convertError(error);
-      logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
-      throw convertedError;
-    }
+    const effectiveSystemPrompt =
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+    return this.executeSimpleCompletion(effectiveSystemPrompt, prompt, 'raw completion');
   }
 
   /**
