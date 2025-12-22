@@ -42,21 +42,21 @@ Represents a request for additional information made by an agent.
 ```typescript
 interface ContextRequest {
   /** Unique identifier for this request */
-  requestId: string;
+  id: string;
 
-  /** The agent that made this request */
+  /** ID of the agent that made this request */
   agentId: string;
 
   /** Natural language description of what information is needed */
   query: string;
 
-  /** Why this information is needed for the debate */
+  /** Why this information is needed (for audit and context) */
   reason: string;
 
-  /** Priority level of the request */
-  priority: 'required' | 'helpful' | 'optional';
+  /** Whether this information is required to continue */
+  priority: 'required' | 'optional';
 
-  /** When the request was made */
+  /** Timestamp when the request was made */
   timestamp: Date;
 }
 ```
@@ -95,11 +95,11 @@ Agents can use the `request_context` tool during debates to request external inf
 
 ### Parameters
 
-| Parameter | Type                                  | Required | Description                                                |
-| --------- | ------------------------------------- | -------- | ---------------------------------------------------------- |
-| query     | string                                | Yes      | Natural language description of what information is needed |
-| reason    | string                                | Yes      | Explanation of why this information is important           |
-| priority  | 'required' \| 'helpful' \| 'optional' | No       | Priority level (default: 'helpful')                        |
+| Parameter   | Type                        | Required | Description                                                |
+| ----------- | --------------------------- | -------- | ---------------------------------------------------------- |
+| query       | string                      | Yes      | Natural language description of what information is needed |
+| reason      | string                      | Yes      | Why this information is needed for the debate              |
+| priority    | 'required' \| 'optional'    | No       | Priority level (default: 'required')                       |
 
 ### Example Usage
 
@@ -108,7 +108,7 @@ Agents can use the `request_context` tool during debates to request external inf
   "name": "request_context",
   "arguments": {
     "query": "What are the current EU AI Act compliance requirements for general-purpose AI systems?",
-    "reason": "Need accurate regulatory details to provide informed analysis on AI governance",
+    "reason": "Need regulatory context to assess AI governance implications",
     "priority": "required"
   }
 }
@@ -263,8 +263,7 @@ interface AgentToolkit {
 2. **Explain Why**: Always include a reason so the caller understands importance
 3. **Use Appropriate Priority**:
    - `required`: Cannot provide meaningful response without this
-   - `helpful`: Would improve response quality
-   - `optional`: Nice to have but not critical
+   - `optional`: Would improve response quality but not critical
 
 ### For MCP Clients
 

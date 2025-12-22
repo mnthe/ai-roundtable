@@ -31,9 +31,8 @@ AI Roundtable follows a modular architecture with clear separation of concerns:
 │  Tools Layer                    Storage Layer           │
 │  ┌───────────────────┐      ┌──────────────────────┐    │
 │  │DefaultAgentToolkit│      │   SQLiteStorage      │    │
-│  │ ├─ get_context    │      │                      │    │
-│  │ ├─ submit_response│      │                      │    │
-│  │ └─ fact_check     │      │                      │    │
+│  │ ├─ fact_check     │      │                      │    │
+│  │ └─ request_context│      │                      │    │
 │  │                   │      │                      │    │
 │  │Native Web Search: │      │                      │    │
 │  │ ├─ Claude:        │      │                      │    │

@@ -205,7 +205,7 @@ Control session execution state.
 | **Expert Panel**       | Parallel   | Independent expert assessments                  |
 | **Devil's Advocate**   | Sequential | Structured opposition: propose/oppose/evaluate  |
 | **Delphi**             | Parallel   | Anonymized iterative consensus building         |
-| **Red Team/Blue Team** | Parallel   | Attack/defense team dynamics                    |
+| **Red Team/Blue Team** | Hybrid     | Attack/defense team dynamics                    |
 
 ### Mode Details
 
@@ -232,13 +232,13 @@ Control session execution state.
 ├─────────────────────────────────────────────────────────┤
 │                    Core Layer                           │
 │  ┌─────────────┐  ┌──────────────┐  ┌─────────────────┐ │
-│  │DebateEngine │  │SessionManager│  │ConsensusAnalyzer│ │
-│  └─────────────┘  └──────────────┘  └───────┬─────────┘ │
-│                                             │           │
-│                            ┌────────────────┴────────┐  │
-│                            │  AIConsensusAnalyzer    │  │
-│                            │  (semantic AI analysis) │  │
-│                            └─────────────────────────┘  │
+│  │DebateEngine │  │SessionManager│  │ExitCriteria     │ │
+│  └─────────────┘  └──────────────┘  └─────────────────┘ │
+│                                                         │
+│  ┌────────────────────────┐  ┌────────────────────────┐ │
+│  │  AIConsensusAnalyzer   │  │   KeyPointsExtractor   │ │
+│  │  (semantic AI analysis)│  │   (4-layer responses)  │ │
+│  └────────────────────────┘  └────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │         Agents Layer              Modes Layer           │
 │  ┌──────────────────┐      ┌──────────────────────┐     │
@@ -255,9 +255,8 @@ Control session execution state.
 │  Tools Layer                    Storage Layer           │
 │  ┌───────────────────┐      ┌──────────────────────┐    │
 │  │DefaultAgentToolkit│      │    SQLiteStorage     │    │
-│  │ ├─ get_context    │      │                      │    │
-│  │ ├─ submit_response│      │                      │    │
-│  │ └─ fact_check     │      │                      │    │
+│  │ ├─ fact_check     │      │                      │    │
+│  │ └─ request_context│      │                      │    │
 │  │                   │      │                      │    │
 │  │Native Web Search: │      │                      │    │
 │  │ ├─ Claude:        │      │                      │    │
@@ -305,64 +304,22 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed structure.
 
 ```
 src/
-├── agents/           # AI Agent implementations
-│   ├── base.ts           # BaseAgent abstract class (Template Method)
-│   ├── claude.ts         # Anthropic Claude
-│   ├── chatgpt.ts        # OpenAI ChatGPT
-│   ├── gemini.ts         # Google Gemini
-│   ├── perplexity.ts     # Perplexity AI
-│   ├── registry.ts       # Agent registry
-│   ├── setup.ts          # Auto-configuration with API key detection
-│   └── utils/            # Shared agent utilities
-│       ├── openai-responses.ts   # OpenAI Responses API (native web search)
-│       ├── error-converter.ts    # SDK → RoundtableError
-│       ├── tool-converters.ts    # Toolkit → provider format
-│       └── light-model-factory.ts
-├── core/             # Core debate logic
-│   ├── debate-engine.ts        # Main orchestrator
-│   ├── session-manager.ts
-│   ├── consensus-analyzer.ts   # Rule-based fallback
-│   ├── ai-consensus-analyzer.ts  # AI semantic analysis
-│   └── key-points-extractor.ts # For 4-layer responses
-├── modes/            # Debate mode strategies
-│   ├── base.ts           # BaseModeStrategy abstract class
-│   ├── collaborative.ts
-│   ├── adversarial.ts
-│   ├── socratic.ts
-│   ├── expert-panel.ts
-│   ├── devils-advocate.ts
-│   ├── delphi.ts
-│   ├── red-team-blue-team.ts
-│   ├── registry.ts
-│   └── utils/            # Prompt builder utilities
-│       ├── prompt-builder.ts  # 4-layer prompt structure
-│       └── index.ts           # Module exports
-├── tools/            # Agent toolkit
-│   ├── toolkit.ts        # DefaultAgentToolkit
-│   ├── schemas.ts        # Zod validation schemas
-│   └── types.ts          # AgentToolkit interface
-├── storage/          # Persistence layer
-│   └── sqlite.ts         # sql.js implementation
+├── agents/           # AI Agent implementations (Claude, ChatGPT, Gemini, Perplexity)
+│   └── utils/        # Shared utilities (error converter, tool converters)
+├── benchmark/        # Benchmark framework for debate performance metrics
+├── config/           # Configuration (exit criteria settings)
+├── core/             # Core logic (DebateEngine, SessionManager, AIConsensusAnalyzer)
+├── modes/            # Debate mode strategies (7 modes)
+│   ├── processors/   # Context processors (anonymization, statistics)
+│   ├── validators/   # Response validators (stance, confidence)
+│   └── utils/        # Prompt builder utilities
+├── tools/            # Agent toolkit (fact_check, request_context)
+├── storage/          # Persistence layer (SQLite via sql.js)
 ├── mcp/              # MCP server interface
-│   ├── server.ts         # Server setup and routing
-│   ├── tools.ts          # Tool definitions (JSON Schema)
-│   └── handlers/         # Domain-specific handlers
-│       ├── session.ts    # start, continue, control, list
-│       ├── query.ts      # consensus, round_details, citations
-│       ├── export.ts     # export_session, synthesize_debate
-│       ├── agents.ts     # get_agents
-│       └── utils.ts      # 4-layer response builder
-├── types/            # TypeScript types
-│   ├── index.ts          # Core type definitions
-│   └── schemas.ts        # Zod schemas for MCP inputs
-├── utils/            # Utilities
-│   ├── logger.ts         # pino-based structured logging
-│   ├── retry.ts          # withRetry utility
-│   ├── env.ts            # Environment variable utilities
-│   └── index.ts          # Module exports
-├── errors/           # Custom error types
-│   └── index.ts          # RoundtableError hierarchy
-└── index.ts          # Entry point
+│   └── handlers/     # Domain handlers (session, query, export, agents)
+├── types/            # TypeScript types and Zod schemas
+├── utils/            # Utilities (logger, retry, env)
+└── errors/           # Custom error types (RoundtableError hierarchy)
 ```
 
 ## Development
@@ -466,9 +423,10 @@ See [.claude/rules/adding-modes.md](.claude/rules/adding-modes.md) for complete 
 
 | Tool              | Description                                               |
 | ----------------- | --------------------------------------------------------- |
-| `get_context`     | Get current debate context (topic, round, previous)       |
-| `submit_response` | Submit structured response with position, reasoning       |
 | `fact_check`      | Verify claims with debate history                         |
+| `request_context` | Request additional context from caller (SOTA AI)          |
+
+Note: `get_context` and `submit_response` were removed as redundant - context is already in system prompt, response parsing is handled by BaseAgent.
 
 ### Native Web Search (Provider-Specific)
 

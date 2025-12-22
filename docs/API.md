@@ -103,6 +103,7 @@ interface DebateContext {
   previousResponses: AgentResponse[];
   focusQuestion?: string;
   modePrompt?: string;    // Mode-specific prompt additions (set by mode strategy)
+  contextResults?: ContextResult[];  // Results from previous context requests
 }
 ```
 
@@ -133,19 +134,16 @@ Configuration for automatic debate termination.
 ```typescript
 interface ExitCriteria {
   /** Minimum consensus level to exit (default: 0.9) */
-  consensusThreshold: number;
+  consensusThreshold?: number;
 
   /** Rounds with stable positions to exit (default: 2) */
-  convergenceRounds: number;
+  convergenceRounds?: number;
 
   /** Minimum confidence for all agents to exit (default: 0.85) */
-  confidenceThreshold: number;
+  confidenceThreshold?: number;
 
-  /** Maximum rounds (fallback termination) */
+  /** Maximum rounds (fallback termination) - required */
   maxRounds: number;
-
-  /** Whether exit criteria checking is enabled */
-  enabled: boolean;
 }
 
 interface ExitCheckResult {
@@ -163,7 +161,6 @@ type ExitReason = 'consensus' | 'convergence' | 'confidence' | 'max_rounds';
 | `ROUNDTABLE_EXIT_ENABLED` | `true` | Enable/disable exit criteria |
 | `ROUNDTABLE_EXIT_CONSENSUS_THRESHOLD` | `0.9` | Consensus level threshold |
 | `ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS` | `2` | Position stability rounds |
-| `ROUNDTABLE_EXIT_CONFIDENCE_THRESHOLD` | `0.85` | Confidence threshold |
 
 ### ConsensusResult
 
@@ -271,6 +268,12 @@ type ConsensusLevel = 'high' | 'medium' | 'low';
 type ActionRecommendationType = 'proceed' | 'verify' | 'query_detail';
 ```
 
+### RoundtableStatus
+
+```typescript
+type RoundtableStatus = 'completed' | 'needs_context' | 'in_progress';
+```
+
 ### RoundtableResponse
 
 Main 4-layer response structure.
@@ -283,10 +286,12 @@ interface RoundtableResponse {
   roundNumber: number;
   totalRounds: number;
 
+  status: RoundtableStatus;          // Response status ('completed' | 'needs_context' | 'in_progress')
   decision: DecisionLayer;           // Layer 1: Quick decision info
   agentResponses: AgentResponseSummary[];  // Layer 2: Per-agent summaries
   evidence: EvidenceLayer;           // Layer 3: Aggregated evidence
   metadata: MetadataLayer;           // Layer 4: Deep dive references
+  contextRequests?: ContextRequest[];  // Present when status is 'needs_context'
 }
 ```
 
@@ -313,6 +318,7 @@ Per-agent reasoning information.
 interface AgentResponseSummary {
   agentId: string;
   agentName: string;
+  stance?: 'YES' | 'NO' | 'NEUTRAL';  // Logical stance in structured debate modes
   position: string;
   keyPoints: string[];              // 2-3 key reasoning points
   confidence: number;
@@ -784,52 +790,7 @@ function createDefaultToolkit(
 
 ### Toolkit Tools (All Agents)
 
-#### get_context
-
-Get current debate context.
-
-```typescript
-// Input: none
-// Output:
-{
-  success: true,
-  data: {
-    topic: string;
-    mode: string;
-    currentRound: number;
-    totalRounds: number;
-    previousResponses: Array<{
-      agentName: string;
-      position: string;
-      confidence: number;
-    }>;
-    focusQuestion?: string;
-  }
-}
-```
-
-#### submit_response
-
-Submit structured response (validation only).
-
-```typescript
-// Input:
-{
-  position: string;     // Required
-  reasoning: string;    // Required
-  confidence: number;   // 0.0-1.0
-}
-
-// Output:
-{
-  success: true,
-  data: {
-    position: string;
-    reasoning: string;
-    confidence: number;  // Clamped to 0-1
-  }
-}
-```
+Note: `get_context` and `submit_response` were removed as redundant - context is already in system prompt via `buildSystemPrompt()` and `buildUserMessage()`, response parsing is handled by `BaseAgent.extractResponseFromToolCallsOrText()`.
 
 #### fact_check
 
@@ -856,6 +817,33 @@ Verify claims with debate history.
   }
 }
 ```
+
+#### request_context
+
+Request additional context from the caller (SOTA AI). This tool enables the Context Request Pattern for agent-caller communication.
+
+```typescript
+// Input:
+{
+  type: string;         // Required: Type of context needed (e.g., 'clarification', 'data', 'verification')
+  description: string;  // Required: What context is needed
+  priority: 'required' | 'optional';  // Default: 'optional'
+}
+
+// Output:
+{
+  success: true,
+  data: {
+    id: string;         // Request ID
+    type: string;
+    description: string;
+    priority: string;
+    requestedAt: Date;
+  }
+}
+```
+
+See [CONTEXT_REQUEST_PATTERN.md](./CONTEXT_REQUEST_PATTERN.md) for detailed usage.
 
 ### Native Web Search (Provider-Specific)
 
@@ -924,6 +912,7 @@ interface RoundResult {
   roundNumber: number;
   responses: AgentResponse[];
   consensus: ConsensusResult;
+  contextRequests?: ContextRequest[];  // Context requests made by agents during this round
 }
 ```
 
@@ -935,48 +924,100 @@ Manages debate sessions.
 
 ```typescript
 interface SessionManagerOptions {
-  storage?: StorageProvider;  // Optional - uses in-memory SQLiteStorage if not provided
+  storage?: Storage;           // Custom storage implementation
+  storageFilename?: string;    // Filename for SQLite (ignored if storage provided)
 }
 
 class SessionManager {
   constructor(options?: SessionManagerOptions);
 
+  // Session lifecycle
   createSession(config: DebateConfig): Promise<Session>;
-  getSession(id: string): Promise<Session | null>;
+  getSession(sessionId: string): Promise<Session | null>;
+  deleteSession(sessionId: string): Promise<void>;
+  listSessions(): Promise<Session[]>;
+
+  // Session updates
   updateSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
   updateSessionRound(sessionId: string, round: number): Promise<void>;
-  addResponse(sessionId: string, response: AgentResponse): Promise<void>;
-  listSessions(): Promise<Session[]>;
-  deleteSession(id: string): Promise<void>;
+
+  // Response management
+  addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void>;
+  getResponses(sessionId: string): Promise<AgentResponse[]>;
+  getResponsesForRound(sessionId: string, round: number): Promise<AgentResponse[]>;
+
+  // Cleanup
+  close(): void;
 }
 ```
+
+**Note:** For filtering sessions, use `Storage.listSessions(filters)` directly. SessionManager's `listSessions()` returns all sessions.
 
 ---
 
 ## Storage
 
-### SQLiteStorage
+### Storage Interface
 
-SQLite-based persistence.
+Interface for session and response persistence. Implement this to create custom storage backends.
 
 ```typescript
-class SQLiteStorage implements StorageProvider {
-  constructor(options?: SQLiteStorageOptions);  // Default: ':memory:' (in-memory database)
-
-  // Session operations
+interface Storage {
+  /** Create a new session */
   createSession(session: Session): Promise<void>;
-  getSession(id: string): Promise<Session | null>;
-  listSessions(): Promise<Session[]>;
-  deleteSession(id: string): Promise<void>;
-  updateSessionStatus(sessionId: string, status: SessionStatus): Promise<void>;
-  updateSessionRound(sessionId: string, round: number): Promise<void>;
 
-  // Response operations
-  addResponse(sessionId: string, response: AgentResponse): Promise<void>;
+  /** Get a session by ID */
+  getSession(sessionId: string): Promise<Session | null>;
+
+  /** Update session properties */
+  updateSession(sessionId: string, updates: Partial<Session>): Promise<void>;
+
+  /** Delete a session and its responses */
+  deleteSession(sessionId: string): Promise<void>;
+
+  /** List sessions with optional filters */
+  listSessions(filters?: SessionFilter): Promise<Session[]>;
+
+  /** Add a response to a session */
+  addResponse(sessionId: string, response: AgentResponse, roundNumber: number): Promise<void>;
+
+  /** Get all responses for a session */
   getResponses(sessionId: string): Promise<AgentResponse[]>;
 
-  // Maintenance
+  /** Get responses for a specific round */
+  getResponsesForRound(sessionId: string, round: number): Promise<AgentResponse[]>;
+
+  /** Close the storage connection */
   close(): void;
+}
+```
+
+### SessionFilter
+
+Options for filtering session lists.
+
+```typescript
+interface SessionFilter {
+  topic?: string;           // Search by topic keyword
+  mode?: DebateMode;        // Filter by debate mode
+  status?: SessionStatus;   // Filter by session status
+  fromDate?: Date;          // Sessions created after this date
+  toDate?: Date;            // Sessions created before this date
+  limit?: number;           // Maximum number of results
+}
+```
+
+### SQLiteStorage
+
+Default SQLite implementation using sql.js (WebAssembly).
+
+```typescript
+class SQLiteStorage implements Storage {
+  constructor(options?: SQLiteStorageOptions);  // Default: ':memory:' (in-memory database)
+}
+
+interface SQLiteStorageOptions {
+  filename?: string;  // Use ':memory:' for in-memory database (default)
 }
 ```
 
@@ -998,7 +1039,7 @@ Start a new AI debate roundtable.
   topic: string;        // Required: Debate topic
   mode?: DebateMode;    // Default: 'collaborative'
   agents?: string[];    // Default: all available
-  rounds?: number;      // Default: 3, min: 1, max: 10
+  rounds?: number;      // Default: 3, min: 1
 }
 
 // Returns: RoundtableResponse (4-layer structure)
@@ -1006,17 +1047,24 @@ Start a new AI debate roundtable.
 
 #### continue_roundtable
 
-Continue an existing debate with additional rounds.
+Continue an existing debate with additional rounds. Supports the Context Request Pattern for providing additional context requested by agents.
 
 ```typescript
 // Input schema
 {
-  sessionId: string;    // Required
-  rounds?: number;      // Default: 1, min: 1, max: 10
+  sessionId: string;      // Required
+  rounds?: number;        // Default: 1, min: 1
   focusQuestion?: string;
+  contextResults?: Array<{  // Results for pending context requests
+    requestId: string;      // ID of the original ContextRequest
+    success: boolean;
+    result?: string;        // The context data (when success is true)
+    error?: string;         // Error message (when success is false)
+  }>;
 }
 
 // Returns: RoundtableResponse (4-layer structure)
+// If status is 'needs_context', includes contextRequests array
 ```
 
 #### get_consensus

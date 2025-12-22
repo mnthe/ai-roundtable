@@ -272,9 +272,12 @@ describe('my_tool', () => {
 
 | Tool | Description |
 |------|-------------|
-| `get_context` | Get current debate context |
-| `submit_response` | Submit structured response with validation |
 | `fact_check` | Verify claims with debate history |
+| `request_context` | Request additional context from caller (MCP client) |
+
+Note: `get_context` and `submit_response` were removed as redundant:
+- Context is provided in system prompt via `buildSystemPrompt()` and `buildUserMessage()`
+- Response parsing is handled by `BaseAgent.extractResponseFromToolCallsOrText()`
 
 ### Native Web Search (Provider-Specific)
 

@@ -463,17 +463,37 @@ Reusable utilities in `src/modes/` for common mode patterns:
 Pre-built context transformers that can be composed:
 
 ```typescript
-import { AnonymizationProcessor, StatisticsProcessor } from '../processors/index.js';
+import {
+  createAnonymizationProcessor,
+  createStatisticsProcessor,
+  createProcessorChain,
+} from '../processors/index.js';
 
-// In your mode class
+// Option 1: Use processors directly
 protected override transformContext(
   context: DebateContext,
   agent: BaseAgent
 ): DebateContext {
+  const anonymizer = createAnonymizationProcessor();
+  const statistics = createStatisticsProcessor();
+
   let transformed = context;
-  transformed = AnonymizationProcessor.process(transformed);
-  transformed = StatisticsProcessor.process(transformed);
+  transformed = anonymizer.process(transformed, agent);
+  transformed = statistics.process(transformed, agent);
   return transformed;
+}
+
+// Option 2: Use ProcessorChain for cleaner composition
+private processorChain = createProcessorChain([
+  createAnonymizationProcessor(),
+  createStatisticsProcessor(),
+]);
+
+protected override transformContext(
+  context: DebateContext,
+  agent: BaseAgent
+): DebateContext {
+  return this.processorChain.process(context, agent);
 }
 ```
 
@@ -487,36 +507,66 @@ protected override transformContext(
 Post-response validation and correction:
 
 ```typescript
-import { StanceValidator, ConfidenceRangeValidator } from '../validators/index.js';
+import {
+  createStanceValidator,
+  createConfidenceRangeValidator,
+  createRequiredFieldsValidator,
+  createValidatorChain,
+} from '../validators/index.js';
 
-// In your mode class
+// Option 1: Use validators directly
 protected override validateResponse(
   response: AgentResponse,
   context: DebateContext
 ): AgentResponse {
+  const stanceValidator = createStanceValidator('NEUTRAL'); // or 'YES' / 'NO'
+  const confidenceValidator = createConfidenceRangeValidator();
+  const requiredFieldsValidator = createRequiredFieldsValidator();
+
   let validated = response;
-  validated = StanceValidator.validate(validated, { required: true, defaultStance: 'NEUTRAL' });
-  validated = ConfidenceRangeValidator.validate(validated, { min: 0.1, max: 0.95 });
+  validated = stanceValidator.validate(validated, context);
+  validated = confidenceValidator.validate(validated, context);
+  validated = requiredFieldsValidator.validate(validated, context);
   return validated;
+}
+
+// Option 2: Use ValidatorChain for cleaner composition
+private validatorChain = createValidatorChain([
+  createStanceValidator('NEUTRAL'),
+  createConfidenceRangeValidator(),
+  createRequiredFieldsValidator(),
+]);
+
+protected override validateResponse(
+  response: AgentResponse,
+  context: DebateContext
+): AgentResponse {
+  return this.validatorChain.validate(response, context);
 }
 ```
 
 | Validator | Purpose |
 |-----------|---------|
-| `StanceValidator` | Ensure stance field is present (YES/NO/NEUTRAL) |
-| `ConfidenceRangeValidator` | Clamp confidence to specified range |
-| `RequiredFieldsValidator` | Ensure required fields are non-empty |
+| `StanceValidator` | Validate stance matches expected value and mark violations (does not force-correct) |
+| `ConfidenceRangeValidator` | Clamp confidence to valid range [0, 1] |
+| `RequiredFieldsValidator` | Ensure position and reasoning fields are non-empty |
 
 ### Tool Policy (`modes/tool-policy.ts`)
 
-Mode-aware guidance for agent tool usage:
+Mode-aware guidance for agent tool usage based on execution pattern:
 
 ```typescript
-import { getToolPolicy } from '../tool-policy.js';
+import { getToolPolicy, isSequentialMode, getToolGuidanceForMode } from '../tool-policy.js';
 
-// Get recommended tool usage for a mode
+// Get tool usage limits for a mode
 const policy = getToolPolicy('adversarial');
-// Returns: { encouraged: ['fact_check'], discouraged: ['search_web'], reason: '...' }
+// Returns: { minCalls: 1, maxCalls: 5, guidance: 'Leverage previous responses...' }
+
+// Check if mode is sequential (should limit tool usage)
+if (isSequentialMode(mode)) {
+  // Inject tool guidance into prompt
+  const guidance = getToolGuidanceForMode(mode);
+}
 ```
 
 ## needsGroupthinkDetection Property
@@ -537,8 +587,11 @@ export class MyMode extends BaseModeStrategy {
 |------|--------------------------|-----------|
 | collaborative | true (default) | Consensus-seeking, risk of groupthink |
 | adversarial | false | Built-in opposition |
+| socratic | false | Question-based inquiry, not consensus-seeking |
+| expert-panel | true (default) | Independent experts may still converge |
 | devils-advocate | false | Structural role-based opposition |
 | delphi | true (default) | Anonymous consensus, risk of conformity |
+| red-team-blue-team | false | Structural team opposition |
 
 ## Checklist
 

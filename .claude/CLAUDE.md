@@ -80,43 +80,22 @@ Detailed implementation guides are in `.claude/rules/`:
 
 ```
 src/
-├── agents/           # AI Agent abstraction
-│   ├── base.ts          # BaseAgent abstract class (Template Method)
-│   ├── claude.ts        # Anthropic Claude implementation
-│   ├── chatgpt.ts       # OpenAI ChatGPT implementation
-│   ├── gemini.ts        # Google Gemini implementation
-│   ├── perplexity.ts    # Perplexity implementation
-│   ├── registry.ts      # AgentRegistry for provider management
-│   ├── setup.ts         # Auto-setup with API key detection
-│   └── utils/           # Shared utilities
-├── benchmark/        # Benchmark framework
-│   ├── benchmark-runner.ts  # Runs benchmark scenarios
-│   ├── metrics-collector.ts # Collects debate performance metrics
-│   └── types.ts             # BenchmarkMetrics, BenchmarkScenario
-├── config/           # Configuration
-│   └── exit-criteria.ts     # Exit criteria environment config
-├── core/             # Core logic
-│   ├── debate-engine.ts        # Main orchestrator
-│   ├── session-manager.ts      # Session CRUD operations
-│   ├── ai-consensus-analyzer.ts # AI-based consensus analysis
-│   ├── exit-criteria.ts        # Exit criteria logic
-│   └── key-points-extractor.ts # Key points for 4-layer response
-├── modes/            # Debate mode strategies
-│   ├── base.ts              # BaseModeStrategy with hooks
-│   ├── registry.ts          # ModeRegistry
-│   ├── tool-policy.ts       # Mode-aware tool usage policy
-│   ├── processors/          # Context processors
-│   ├── validators/          # Response validators
-│   └── utils/               # Prompt builder utilities
-├── tools/            # Agent toolkit
+├── agents/           # AI Agent implementations (Claude, ChatGPT, Gemini, Perplexity)
+│   └── utils/        # Shared utilities (error converter, tool converters)
+├── benchmark/        # Benchmark framework for debate performance metrics
+├── config/           # Configuration (exit criteria settings)
+├── core/             # Core logic (DebateEngine, SessionManager, AIConsensusAnalyzer)
+├── modes/            # Debate mode strategies (7 modes)
+│   ├── processors/   # Context processors (anonymization, statistics)
+│   ├── validators/   # Response validators (stance, confidence)
+│   └── utils/        # Prompt builder utilities
+├── tools/            # Agent toolkit (fact_check, request_context)
+├── storage/          # Persistence layer (SQLite via sql.js)
 ├── mcp/              # MCP server interface
-│   ├── server.ts        # Server setup and tool routing
-│   ├── tools.ts         # MCP tool definitions
-│   └── handlers/        # Domain-specific handlers
-├── storage/          # SQLite persistence
-├── types/            # TypeScript types
-├── utils/            # Utilities
-└── errors/           # Custom error types
+│   └── handlers/     # Domain handlers (session, query, export, agents)
+├── types/            # TypeScript types and Zod schemas
+├── utils/            # Utilities (logger, retry, env)
+└── errors/           # Custom error types (RoundtableError hierarchy)
 ```
 
 ## Core Types
@@ -142,6 +121,8 @@ interface AgentResponse {
   stance?: 'YES' | 'NO' | 'NEUTRAL';  // For devils-advocate mode
   citations?: Citation[];
   toolCalls?: ToolCallRecord[];
+  images?: ImageResult[];    // Perplexity search images
+  relatedQuestions?: string[]; // Perplexity related questions
   timestamp: Date;
 }
 
@@ -154,6 +135,7 @@ interface DebateContext {
   previousResponses: AgentResponse[];
   focusQuestion?: string;
   modePrompt?: string;    // Mode-specific prompt (set by mode strategy)
+  contextResults?: ContextResult[];  // Results from previous context requests
 }
 ```
 
@@ -209,7 +191,6 @@ Automatic debate termination based on configurable criteria:
 ROUNDTABLE_EXIT_ENABLED=true
 ROUNDTABLE_EXIT_CONSENSUS_THRESHOLD=0.9
 ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS=2
-ROUNDTABLE_EXIT_CONFIDENCE_THRESHOLD=0.85
 ```
 
 ## MCP Tools
