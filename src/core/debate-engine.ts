@@ -62,9 +62,12 @@ export class DebateEngine {
    *
    * @param agents - Array of agents participating
    * @param context - Current debate context
-   * @returns Round results with responses and consensus
+   * @returns Round results with responses, consensus, and any context requests
    */
   async executeRound(agents: BaseAgent[], context: DebateContext): Promise<RoundResult> {
+    // Clear any pending context requests from previous operations
+    this.toolkit.clearPendingRequests();
+
     // Get the appropriate mode strategy (local first, then global registry)
     let strategy = this.modeStrategies.get(context.mode);
     if (!strategy) {
@@ -81,10 +84,15 @@ export class DebateEngine {
       const consensus = await this.analyzeConsensusWithAI(responses, context.topic, {
         includeGroupthinkDetection: true,
       });
+
+      // Collect any context requests made during the round
+      const contextRequests = this.toolkit.getPendingContextRequests();
+
       return {
         roundNumber: context.currentRound,
         responses,
         consensus,
+        contextRequests: contextRequests.length > 0 ? contextRequests : undefined,
       };
     }
 
@@ -96,10 +104,14 @@ export class DebateEngine {
       includeGroupthinkDetection,
     });
 
+    // Collect any context requests made during the round
+    const contextRequests = this.toolkit.getPendingContextRequests();
+
     return {
       roundNumber: context.currentRound,
       responses,
       consensus,
+      contextRequests: contextRequests.length > 0 ? contextRequests : undefined,
     };
   }
 
@@ -116,7 +128,8 @@ export class DebateEngine {
     agents: BaseAgent[],
     session: Session,
     numRounds: number,
-    focusQuestion?: string
+    focusQuestion?: string,
+    contextResults?: import('../types/index.js').ContextResult[]
   ): Promise<RoundResult[]> {
     const results: RoundResult[] = [];
     // Store the starting round to calculate correct round numbers
@@ -146,6 +159,9 @@ export class DebateEngine {
         totalRounds: session.totalRounds,
         previousResponses: session.responses,
         focusQuestion,
+        // Only include contextResults in the first round of this batch
+        // (they are responses to requests from the previous batch)
+        contextResults: i === 0 ? contextResults : undefined,
       };
 
       const result = await this.executeRound(agents, context);

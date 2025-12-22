@@ -13,6 +13,8 @@ import type {
   SearchResult,
   SearchOptions,
   ToolResult,
+  ContextRequest,
+  ContextRequestPriority,
 } from '../types/index.js';
 import {
   validateToolInput,
@@ -20,6 +22,7 @@ import {
   type SearchWebInput,
   type FactCheckInput,
   type PerplexitySearchInput as PerplexitySearchInputSchema,
+  type RequestContextInput,
 } from './schemas.js';
 
 // Re-export types from types.ts for backwards compatibility
@@ -78,6 +81,17 @@ export interface SessionDataProvider {
   }>>;
 }
 
+// Counter for generating unique request IDs
+let requestIdCounter = 0;
+
+/**
+ * Generate a unique ID for context requests
+ */
+function generateRequestId(): string {
+  requestIdCounter++;
+  return `ctx-${Date.now()}-${requestIdCounter}`;
+}
+
 /**
  * Default toolkit implementation
  *
@@ -87,10 +101,13 @@ export interface SessionDataProvider {
  * - search_web: Search the web for information
  * - fact_check: Request fact checking on a claim
  * - perplexity_search: Advanced search with Perplexity AI (recency, domain filters, images)
+ * - request_context: Request additional context from caller (SOTA AI)
  */
 export class DefaultAgentToolkit implements AgentToolkit {
   private tools: Map<string, ToolDefinition> = new Map();
   private currentContext?: DebateContext;
+  private pendingContextRequests: ContextRequest[] = [];
+  private currentAgentId: string = 'unknown';
 
   constructor(
     private webSearchProvider?: WebSearchProvider,
@@ -105,6 +122,34 @@ export class DefaultAgentToolkit implements AgentToolkit {
    */
   setContext(context: DebateContext): void {
     this.currentContext = context;
+  }
+
+  /**
+   * Set the current agent ID (called by mode strategy before agent turn)
+   */
+  setCurrentAgentId(agentId: string): void {
+    this.currentAgentId = agentId;
+  }
+
+  /**
+   * Get pending context requests collected during this round
+   */
+  getPendingContextRequests(): ContextRequest[] {
+    return [...this.pendingContextRequests];
+  }
+
+  /**
+   * Clear pending context requests (called at the start of each round)
+   */
+  clearPendingRequests(): void {
+    this.pendingContextRequests = [];
+  }
+
+  /**
+   * Check if there are any pending context requests
+   */
+  hasPendingRequests(): boolean {
+    return this.pendingContextRequests.length > 0;
   }
 
   /**
@@ -229,6 +274,38 @@ export class DefaultAgentToolkit implements AgentToolkit {
         },
       },
       executor: async (input) => this.executePerplexitySearch(input),
+    });
+
+    // Tool 6: Request Context (External Context Integration)
+    this.registerTool({
+      tool: {
+        name: 'request_context',
+        description:
+          'Request additional context or information from the caller (an AI agent like Claude Code). ' +
+          'Describe WHAT you need in natural language - the caller will determine HOW to obtain it.\n\n' +
+          'Examples:\n' +
+          '- "src/auth.ts 파일의 내용을 읽어주세요"\n' +
+          '- "authenticate 함수를 호출하는 코드를 찾아주세요"\n' +
+          '- "이 프로젝트의 테스트 커버리지를 확인해주세요"\n\n' +
+          'Do NOT specify tool names or technical details - just describe what you need. ' +
+          'The result will be available in the next round.',
+        parameters: {
+          query: {
+            type: 'string',
+            description: 'What information do you need? (natural language)',
+          },
+          reason: {
+            type: 'string',
+            description: 'Why do you need this information?',
+          },
+          priority: {
+            type: 'string',
+            description:
+              '"required" if debate cannot continue without it, "optional" if helpful but not essential. Default: "required"',
+          },
+        },
+      },
+      executor: async (input) => this.executeRequestContext(input),
     });
   }
 
@@ -473,6 +550,43 @@ export class DefaultAgentToolkit implements AgentToolkit {
         error: error instanceof Error ? error.message : 'Perplexity search failed',
       };
     }
+  }
+
+  /**
+   * Execute request_context tool
+   *
+   * Queues a context request for the caller to fulfill.
+   * The result will be available in the next round.
+   *
+   * Note: Input is pre-validated by Zod schema in executeTool()
+   */
+  private async executeRequestContext(input: unknown): Promise<ToolResult<{
+    requestId: string;
+    message: string;
+  }>> {
+    // Input is already validated by Zod schema
+    const data = input as RequestContextInput;
+
+    // Create the context request
+    const request: ContextRequest = {
+      id: generateRequestId(),
+      agentId: this.currentAgentId,
+      query: data.query,
+      reason: data.reason,
+      priority: data.priority as ContextRequestPriority,
+      timestamp: new Date(),
+    };
+
+    // Add to pending requests
+    this.pendingContextRequests.push(request);
+
+    return {
+      success: true,
+      data: {
+        requestId: request.id,
+        message: 'Context request queued. The result will be available in the next round.',
+      },
+    };
   }
 }
 

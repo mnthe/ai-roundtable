@@ -164,6 +164,9 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
     const responsePromises = agents.map((agent) => {
       agent.setToolkit(toolkit);
 
+      // Set current agent ID for context request tracking
+      toolkit.setCurrentAgentId(agent.id);
+
       // Apply transformContext hook if defined
       const agentContext = this.transformContext
         ? this.transformContext(baseContext, agent)
@@ -251,6 +254,10 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
           : baseContext;
 
         agent.setToolkit(toolkit);
+
+        // Set current agent ID for context request tracking
+        toolkit.setCurrentAgentId(agent.id);
+
         let response = await agent.generateResponse(agentContext);
 
         // Apply validateResponse hook if defined

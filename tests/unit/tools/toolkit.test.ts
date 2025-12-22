@@ -39,12 +39,13 @@ describe('DefaultAgentToolkit', () => {
     it('should return default tools', () => {
       const tools = toolkit.getTools();
 
-      expect(tools).toHaveLength(5);
+      expect(tools).toHaveLength(6);
       expect(tools.map((t) => t.name)).toContain('get_context');
       expect(tools.map((t) => t.name)).toContain('submit_response');
       expect(tools.map((t) => t.name)).toContain('search_web');
       expect(tools.map((t) => t.name)).toContain('fact_check');
       expect(tools.map((t) => t.name)).toContain('perplexity_search');
+      expect(tools.map((t) => t.name)).toContain('request_context');
     });
 
     it('should have descriptions for all tools', () => {
@@ -537,7 +538,7 @@ describe('perplexity_search tool', () => {
 describe('createDefaultToolkit', () => {
   it('should create toolkit without providers', () => {
     const toolkit = createDefaultToolkit();
-    expect(toolkit.getTools()).toHaveLength(5);
+    expect(toolkit.getTools()).toHaveLength(6);
   });
 
   it('should create toolkit with providers', () => {
@@ -550,7 +551,301 @@ describe('createDefaultToolkit', () => {
     };
 
     const toolkit = createDefaultToolkit(mockSearchProvider, mockSessionProvider);
-    expect(toolkit.getTools()).toHaveLength(5);
+    expect(toolkit.getTools()).toHaveLength(6);
+  });
+});
+
+describe('request_context tool', () => {
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'AI regulation',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  it('should create a context request with required priority', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'What are the latest EU AI regulations?',
+      reason: 'Need current regulatory context for accurate discussion',
+      priority: 'required',
+    })) as { success: boolean; data?: { requestId: string; message: string } };
+
+    expect(result.success).toBe(true);
+    expect(result.data?.requestId).toBeDefined();
+    expect(result.data?.requestId).toMatch(/^ctx-\d+-\d+$/);
+    expect(result.data?.message).toContain('queued');
+  });
+
+  it('should create a context request with optional priority', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'Historical examples of AI regulation',
+      reason: 'Would help but not essential',
+      priority: 'optional',
+    })) as { success: boolean; data?: { requestId: string; message: string } };
+
+    expect(result.success).toBe(true);
+    expect(result.data?.requestId).toBeDefined();
+  });
+
+  it('should default to required priority when not specified', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    await toolkit.executeTool('request_context', {
+      query: 'Test query',
+      reason: 'Test reason',
+    });
+
+    const requests = toolkit.getPendingContextRequests();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.priority).toBe('required');
+  });
+
+  it('should reject missing query', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      reason: 'Need information',
+      priority: 'required',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('query');
+  });
+
+  it('should reject empty query string', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: '',
+      reason: 'Need information',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('query');
+  });
+
+  it('should reject missing reason', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'What is the current policy?',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('reason');
+  });
+
+  it('should reject empty reason string', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'What is the current policy?',
+      reason: '',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('reason');
+  });
+
+  it('should reject query exceeding max length', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'a'.repeat(1001), // Max is 1000
+      reason: 'Test reason',
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('1000');
+  });
+
+  it('should reject reason exceeding max length', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'Test query',
+      reason: 'a'.repeat(501), // Max is 500
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('500');
+  });
+
+  it('should reject invalid priority value', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    const result = (await toolkit.executeTool('request_context', {
+      query: 'Test query',
+      reason: 'Test reason',
+      priority: 'high', // Invalid - should be 'required' or 'optional'
+    })) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('priority');
+  });
+
+  it('should include agentId in context request', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('test-agent-123');
+
+    await toolkit.executeTool('request_context', {
+      query: 'Test query',
+      reason: 'Test reason',
+    });
+
+    const requests = toolkit.getPendingContextRequests();
+    expect(requests[0]?.agentId).toBe('test-agent-123');
+  });
+
+  it('should include timestamp in context request', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    const before = new Date();
+    await toolkit.executeTool('request_context', {
+      query: 'Test query',
+      reason: 'Test reason',
+    });
+    const after = new Date();
+
+    const requests = toolkit.getPendingContextRequests();
+    const timestamp = requests[0]?.timestamp;
+    expect(timestamp).toBeInstanceOf(Date);
+    expect(timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
+  });
+});
+
+describe('context request management', () => {
+  const defaultContext: DebateContext = {
+    sessionId: 'session-1',
+    topic: 'AI regulation',
+    mode: 'collaborative',
+    currentRound: 1,
+    totalRounds: 3,
+    previousResponses: [],
+  };
+
+  it('should accumulate multiple context requests', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    await toolkit.executeTool('request_context', {
+      query: 'First query',
+      reason: 'First reason',
+    });
+    await toolkit.executeTool('request_context', {
+      query: 'Second query',
+      reason: 'Second reason',
+    });
+
+    const requests = toolkit.getPendingContextRequests();
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.query).toBe('First query');
+    expect(requests[1]?.query).toBe('Second query');
+  });
+
+  it('should clear all pending requests', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    await toolkit.executeTool('request_context', {
+      query: 'Query 1',
+      reason: 'Reason 1',
+    });
+    await toolkit.executeTool('request_context', {
+      query: 'Query 2',
+      reason: 'Reason 2',
+    });
+
+    expect(toolkit.getPendingContextRequests()).toHaveLength(2);
+
+    toolkit.clearPendingRequests();
+
+    expect(toolkit.getPendingContextRequests()).toHaveLength(0);
+  });
+
+  it('should report hasPendingRequests correctly', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    expect(toolkit.hasPendingRequests()).toBe(false);
+
+    await toolkit.executeTool('request_context', {
+      query: 'Test query',
+      reason: 'Test reason',
+    });
+
+    expect(toolkit.hasPendingRequests()).toBe(true);
+
+    toolkit.clearPendingRequests();
+
+    expect(toolkit.hasPendingRequests()).toBe(false);
+  });
+
+  it('should generate unique request IDs', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+    toolkit.setCurrentAgentId('agent-1');
+
+    await toolkit.executeTool('request_context', {
+      query: 'Query 1',
+      reason: 'Reason 1',
+    });
+    await toolkit.executeTool('request_context', {
+      query: 'Query 2',
+      reason: 'Reason 2',
+    });
+
+    const requests = toolkit.getPendingContextRequests();
+    const ids = requests.map((r) => r.id);
+    expect(new Set(ids).size).toBe(2); // All IDs should be unique
+  });
+
+  it('should track requests from different agents', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    toolkit.setContext(defaultContext);
+
+    toolkit.setCurrentAgentId('agent-1');
+    await toolkit.executeTool('request_context', {
+      query: 'Query from agent 1',
+      reason: 'Reason 1',
+    });
+
+    toolkit.setCurrentAgentId('agent-2');
+    await toolkit.executeTool('request_context', {
+      query: 'Query from agent 2',
+      reason: 'Reason 2',
+    });
+
+    const requests = toolkit.getPendingContextRequests();
+    expect(requests).toHaveLength(2);
+    expect(requests[0]?.agentId).toBe('agent-1');
+    expect(requests[1]?.agentId).toBe('agent-2');
   });
 });
 

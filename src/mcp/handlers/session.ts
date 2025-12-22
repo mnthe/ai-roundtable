@@ -83,7 +83,13 @@ export async function handleStartRoundtable(
       ? await keyPointsExtractor.extractKeyPointsBatch(firstRound.responses)
       : new Map<string, string[]>();
 
-    const response = buildRoundtableResponse(session, firstRound, [], keyPointsMap);
+    const response = buildRoundtableResponse(
+      session,
+      firstRound,
+      [],
+      keyPointsMap,
+      firstRound.contextRequests ?? []
+    );
     return createSuccessResponse(response);
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -120,13 +126,14 @@ export async function handleContinueRoundtable(
     // Get agents
     const agents = agentRegistry.getAgents(session.agentIds);
 
-    // Execute additional rounds
+    // Execute additional rounds with any provided context results
     const numRounds = input.rounds || 1;
     const roundResults = await debateEngine.executeRounds(
       agents,
       session,
       numRounds,
-      input.focusQuestion
+      input.focusQuestion,
+      input.contextResults
     );
 
     // Update session (session.currentRound is already updated by executeRounds)
@@ -168,7 +175,8 @@ export async function handleContinueRoundtable(
       updatedSession,
       latestRound,
       previousResponses,
-      keyPointsMap
+      keyPointsMap,
+      latestRound.contextRequests ?? []
     );
     return createSuccessResponse(response);
   } catch (error) {

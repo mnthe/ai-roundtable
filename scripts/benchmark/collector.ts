@@ -111,6 +111,8 @@ export class DataCollector {
         durationMs: round.durationMs,
         responses: round.responses.map((r) => this.filterResponse(r)),
         ...(round.consensusSnapshot && { consensusSnapshot: round.consensusSnapshot }),
+        ...(round.contextRequests &&
+          round.contextRequests.length > 0 && { contextRequests: round.contextRequests }),
       };
 
       writeFileSync(

@@ -75,6 +75,32 @@ export const PerplexitySearchInputSchema = z.object({
   return_related_questions: z.boolean().optional(),
 });
 
+/**
+ * Schema for request_context tool input
+ *
+ * Agents use this to request additional information from the caller.
+ * The query should be natural language describing WHAT is needed,
+ * not HOW to get it (the caller decides that).
+ */
+export const RequestContextInputSchema = z.object({
+  query: z
+    .string()
+    .min(1, 'Query is required')
+    .max(1000, 'Query cannot exceed 1000 characters')
+    .describe('Natural language description of what information is needed'),
+  reason: z
+    .string()
+    .min(1, 'Reason is required')
+    .max(500, 'Reason cannot exceed 500 characters')
+    .describe('Why this information is needed for the debate'),
+  priority: z
+    .enum(['required', 'optional'], {
+      error: 'priority must be one of: required, optional',
+    })
+    .default('required')
+    .describe('Whether this information is required to continue'),
+});
+
 // ============================================
 // Inferred Types
 // ============================================
@@ -84,6 +110,7 @@ export type SubmitResponseInput = z.infer<typeof SubmitResponseInputSchema>;
 export type SearchWebInput = z.infer<typeof SearchWebInputSchema>;
 export type FactCheckInput = z.infer<typeof FactCheckInputSchema>;
 export type PerplexitySearchInput = z.infer<typeof PerplexitySearchInputSchema>;
+export type RequestContextInput = z.infer<typeof RequestContextInputSchema>;
 
 // ============================================
 // Schema Registry
@@ -99,6 +126,7 @@ export const TOOL_INPUT_SCHEMAS: Record<string, z.ZodSchema> = {
   search_web: SearchWebInputSchema,
   fact_check: FactCheckInputSchema,
   perplexity_search: PerplexitySearchInputSchema,
+  request_context: RequestContextInputSchema,
 };
 
 /**

@@ -408,6 +408,22 @@ Be respectful of other participants' views while clearly articulating your own p
   protected buildUserMessage(context: DebateContext): string {
     const parts: string[] = [];
 
+    // Include provided context results if available (responses to previous context requests)
+    if (context.contextResults && context.contextResults.length > 0) {
+      parts.push('=== PROVIDED CONTEXT ===');
+      parts.push('The following information was provided in response to your previous context requests:\n');
+      for (const result of context.contextResults) {
+        parts.push(`[Request ID: ${result.requestId}]`);
+        if (result.success && result.result) {
+          parts.push(result.result);
+        } else if (result.error) {
+          parts.push(`[Error: ${result.error}]`);
+        }
+        parts.push('');
+      }
+      parts.push('=== END PROVIDED CONTEXT ===\n');
+    }
+
     if (context.previousResponses.length > 0) {
       parts.push('Previous responses in this round:');
       for (const response of context.previousResponses) {
