@@ -9,7 +9,14 @@ const logger = createLogger('Retry');
 
 export interface RetryOptions {
   /**
-   * Maximum number of retry attempts
+   * Maximum number of retry attempts AFTER the initial attempt.
+   * Total attempts = 1 (initial) + maxRetries.
+   *
+   * @example
+   * - maxRetries=0: 1 attempt total (no retries)
+   * - maxRetries=1: 2 attempts total (1 initial + 1 retry)
+   * - maxRetries=3: 4 attempts total (1 initial + 3 retries)
+   *
    * @default 3
    */
   maxRetries: number;
@@ -114,12 +121,18 @@ function sleep(ms: number): Promise<void> {
  * Execute a function with retry logic
  *
  * @param fn - The async function to execute
- * @param options - Retry options
+ * @param options - Retry options (see {@link RetryOptions})
  * @returns Promise that resolves with the function result
  * @throws The original error if max retries exceeded or error is not retryable
  *
+ * @remarks
+ * The `maxRetries` option specifies the number of retry attempts AFTER the initial attempt.
+ * With `maxRetries=3` (default), the function will be called up to 4 times total:
+ * 1 initial attempt + 3 retries.
+ *
  * @example
  * ```typescript
+ * // Will attempt up to 6 times (1 initial + 5 retries)
  * const result = await withRetry(
  *   async () => await apiCall(),
  *   { maxRetries: 5, baseDelay: 2000 }
