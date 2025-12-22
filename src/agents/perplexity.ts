@@ -13,7 +13,7 @@ import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js'
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
 import { buildOpenAITools, convertSDKError } from './utils/index.js';
-import type { AgentConfig, DebateContext, ToolCallRecord, Citation, ImageResult } from '../types/index.js';
+import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
 
 const logger = createLogger('PerplexityAgent');
 
@@ -30,10 +30,6 @@ interface PerplexityExtendedResponse {
   citations?: Array<string | { url: string; title?: string }>;
   /** New search_results field (2025+) */
   search_results?: Array<{ url: string; title?: string; date?: string }>;
-  /** Images found during search */
-  images?: Array<string | { url: string; description?: string }>;
-  /** Related questions suggested by Perplexity */
-  related_questions?: string[];
 }
 
 /**
@@ -72,27 +68,6 @@ function hasPerplexityExtensions(response: unknown): response is PerplexityExten
     }
   }
 
-  // Check images field
-  if (obj.images !== undefined) {
-    if (!Array.isArray(obj.images)) return false;
-    for (const image of obj.images) {
-      if (typeof image !== 'string') {
-        if (typeof image !== 'object' || image === null) return false;
-        const imageObj = image as Record<string, unknown>;
-        if (typeof imageObj.url !== 'string') return false;
-        if (imageObj.description !== undefined && typeof imageObj.description !== 'string') return false;
-      }
-    }
-  }
-
-  // Check related_questions field
-  if (obj.related_questions !== undefined) {
-    if (!Array.isArray(obj.related_questions)) return false;
-    for (const question of obj.related_questions) {
-      if (typeof question !== 'string') return false;
-    }
-  }
-
   return true;
 }
 
@@ -110,10 +85,6 @@ export interface PerplexitySearchOptions {
   recencyFilter?: SearchRecencyFilter;
   /** Limit search to specific domains (max 3) */
   domainFilter?: string[];
-  /** Include images in results */
-  returnImages?: boolean;
-  /** Include related questions in results */
-  returnRelatedQuestions?: boolean;
 }
 
 /**
@@ -267,10 +238,10 @@ export class PerplexityAgent extends BaseAgent {
     // Extract text from final response
     const rawText = choice?.message?.content ?? '';
 
-    // Extract metadata from Perplexity's response (citations, images, related questions)
-    const perplexityMetadata = this.extractPerplexityMetadata(response, rawText);
-    if (perplexityMetadata.citations.length > 0) {
-      citations.push(...perplexityMetadata.citations);
+    // Extract citations from Perplexity's response
+    const perplexityCitations = this.extractPerplexityCitations(response, rawText);
+    if (perplexityCitations.length > 0) {
+      citations.push(...perplexityCitations);
 
       // Record built-in web search as a tool call for consistency with other agents
       toolCalls.push({
@@ -279,7 +250,7 @@ export class PerplexityAgent extends BaseAgent {
         output: {
           success: true,
           data: {
-            results: perplexityMetadata.citations.map((c) => ({
+            results: perplexityCitations.map((c) => ({
               title: c.title,
               url: c.url,
             })),
@@ -293,8 +264,6 @@ export class PerplexityAgent extends BaseAgent {
       rawText,
       toolCalls,
       citations,
-      images: perplexityMetadata.images,
-      relatedQuestions: perplexityMetadata.relatedQuestions,
     };
   }
 
@@ -319,14 +288,6 @@ export class PerplexityAgent extends BaseAgent {
     if (this.searchOptions.domainFilter && this.searchOptions.domainFilter.length > 0) {
       // Perplexity limits to 3 domains
       params.search_domain_filter = this.searchOptions.domainFilter.slice(0, 3);
-    }
-
-    if (this.searchOptions.returnImages !== undefined) {
-      params.return_images = this.searchOptions.returnImages;
-    }
-
-    if (this.searchOptions.returnRelatedQuestions !== undefined) {
-      params.return_related_questions = this.searchOptions.returnRelatedQuestions;
     }
 
     return params;
@@ -377,28 +338,22 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
-   * Perplexity response metadata structure
+   * Extract citations from Perplexity response metadata
    * NOTE: As of 2025, Perplexity API uses 'search_results' instead of deprecated 'citations' field
    */
-  private extractPerplexityMetadata(
+  private extractPerplexityCitations(
     response: OpenAI.Chat.Completions.ChatCompletion,
     responseText?: string
-  ): {
-    citations: Citation[];
-    images: ImageResult[];
-    relatedQuestions: string[];
-  } {
+  ): Citation[] {
     const allCitations: Citation[] = [];
-    const images: ImageResult[] = [];
-    const relatedQuestions: string[] = [];
 
     // Use type guard to safely validate Perplexity extended fields
     if (!hasPerplexityExtensions(response)) {
       logger.debug(
         { responseId: response.id },
-        'Response does not have valid Perplexity extensions, returning empty metadata'
+        'Response does not have valid Perplexity extensions, returning empty citations'
       );
-      return { citations: [], images: [], relatedQuestions: [] };
+      return [];
     }
 
     const perplexityResponse = response;
@@ -431,40 +386,15 @@ export class PerplexityAgent extends BaseAgent {
     }
 
     // Filter citations to only those actually referenced in the response text
-    let citations: Citation[];
     if (responseText && allCitations.length > 0) {
       const citedIndices = this.extractCitedIndices(responseText);
       if (citedIndices.size > 0) {
         // Only include citations that are actually referenced (1-based index)
-        citations = allCitations.filter((_, index) => citedIndices.has(index + 1));
-      } else {
-        // No citation markers found - include all for backward compatibility
-        citations = allCitations;
-      }
-    } else {
-      citations = allCitations;
-    }
-
-    // Extract images
-    if (perplexityResponse.images) {
-      for (const image of perplexityResponse.images) {
-        if (typeof image === 'string') {
-          images.push({ url: image });
-        } else {
-          images.push({
-            url: image.url,
-            description: image.description,
-          });
-        }
+        return allCitations.filter((_, index) => citedIndices.has(index + 1));
       }
     }
 
-    // Extract related questions
-    if (perplexityResponse.related_questions) {
-      relatedQuestions.push(...perplexityResponse.related_questions);
-    }
-
-    return { citations, images, relatedQuestions };
+    return allCitations;
   }
 
   /**

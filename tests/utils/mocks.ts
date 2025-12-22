@@ -84,8 +84,6 @@ export function createMockAnthropicClientWithToolUse(
 export interface MockPerplexityMetadata {
   citations?: Array<string | { url: string; title?: string }>;
   search_results?: Array<{ url: string; title?: string; date?: string }>;
-  images?: Array<string | { url: string; description?: string }>;
-  related_questions?: string[];
 }
 
 /**
@@ -179,8 +177,6 @@ export function createMockPerplexityClient(
           ],
           citations: metadata?.citations,
           search_results: metadata?.search_results,
-          images: metadata?.images,
-          related_questions: metadata?.related_questions,
         }),
       },
     },

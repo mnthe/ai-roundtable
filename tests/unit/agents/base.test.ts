@@ -746,48 +746,6 @@ describe('buildAgentResponse', () => {
     expect(result.toolCalls).toBeUndefined();
   });
 
-  it('should include images and relatedQuestions for Perplexity', () => {
-    const agent = new TestableAgent(defaultConfig);
-    const images = [{ url: 'https://image.com/1.jpg', description: 'Image 1' }];
-    const relatedQuestions = ['Question 1?', 'Question 2?'];
-
-    const result = agent.testBuildAgentResponse({
-      parsed: {
-        position: 'Position',
-        reasoning: 'Reasoning',
-        confidence: 0.7,
-      },
-      rawText: '',
-      citations: [],
-      toolCalls: [],
-      images,
-      relatedQuestions,
-    });
-
-    expect(result.images).toEqual(images);
-    expect(result.relatedQuestions).toEqual(relatedQuestions);
-  });
-
-  it('should omit empty images and relatedQuestions arrays', () => {
-    const agent = new TestableAgent(defaultConfig);
-
-    const result = agent.testBuildAgentResponse({
-      parsed: {
-        position: 'Position',
-        reasoning: 'Reasoning',
-        confidence: 0.5,
-      },
-      rawText: '',
-      citations: [],
-      toolCalls: [],
-      images: [],
-      relatedQuestions: [],
-    });
-
-    expect(result.images).toBeUndefined();
-    expect(result.relatedQuestions).toBeUndefined();
-  });
-
   it('should use fallback values for empty position/reasoning', () => {
     const agent = new TestableAgent(defaultConfig);
 
