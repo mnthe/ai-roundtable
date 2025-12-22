@@ -1,5 +1,8 @@
 /**
- * ChatGPT Agent - OpenAI ChatGPT implementation
+ * ChatGPT Agent - OpenAI ChatGPT implementation using Responses API
+ *
+ * Uses the Responses API for native web search capabilities with built-in
+ * URL citations, replacing the legacy Chat Completions API.
  */
 
 import OpenAI from 'openai';
@@ -7,11 +10,22 @@ import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js'
 import { withRetry } from '../utils/retry.js';
 import {
   convertSDKError,
-  buildOpenAITools,
-  executeOpenAICompletion,
-  executeSimpleOpenAICompletion,
+  buildResponsesFunctionTools,
+  executeResponsesCompletion,
+  executeSimpleResponsesCompletion,
+  type ResponsesWebSearchConfig,
 } from './utils/index.js';
 import type { AgentConfig, DebateContext } from '../types/index.js';
+
+/**
+ * Web search configuration for ChatGPT Agent
+ */
+export interface ChatGPTWebSearchConfig {
+  /** Enable web search (default: true) */
+  enabled?: boolean;
+  /** Context window space for search: 'low' | 'medium' | 'high' (default: 'medium') */
+  searchContextSize?: 'low' | 'medium' | 'high';
+}
 
 /**
  * Configuration options for ChatGPT Agent
@@ -21,18 +35,22 @@ export interface ChatGPTAgentOptions {
   apiKey?: string;
   /** Custom OpenAI client instance (for testing) */
   client?: OpenAI;
+  /** Web search configuration (default: enabled) */
+  webSearch?: ChatGPTWebSearchConfig;
 }
 
 /**
- * ChatGPT Agent using OpenAI's API
+ * ChatGPT Agent using OpenAI's Responses API
  *
  * Supports:
+ * - Native web search with automatic citations
  * - Function calling (tools)
  * - Structured response parsing
- * - Citation tracking from tool calls
+ * - Citation tracking from web search and tool calls
  */
 export class ChatGPTAgent extends BaseAgent {
   private client: OpenAI;
+  private webSearchConfig: ResponsesWebSearchConfig;
 
   constructor(config: AgentConfig, options?: ChatGPTAgentOptions) {
     super(config);
@@ -44,28 +62,35 @@ export class ChatGPTAgent extends BaseAgent {
         apiKey: options?.apiKey ?? process.env.OPENAI_API_KEY,
       });
     }
+
+    // Web search enabled by default
+    this.webSearchConfig = {
+      enabled: options?.webSearch?.enabled !== false,
+      searchContextSize: options?.webSearch?.searchContextSize ?? 'medium',
+    };
   }
 
   /**
-   * Call OpenAI API to generate a response
+   * Call OpenAI Responses API to generate a response
    *
    * Implements the provider-specific API call for the template method pattern.
-   * Uses the shared executeOpenAICompletion utility for common OpenAI SDK patterns.
+   * Uses the Responses API for native web search with automatic citations.
    */
   protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
     const systemPrompt = this.buildSystemPrompt(context);
     const userMessage = this.buildUserMessage(context);
 
-    return executeOpenAICompletion({
+    return executeResponsesCompletion({
       client: this.client,
       model: this.model,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
-      systemPrompt,
-      userMessage,
-      tools: buildOpenAITools(this.toolkit),
+      instructions: systemPrompt,
+      input: userMessage,
+      functionTools: buildResponsesFunctionTools(this.toolkit),
+      webSearch: this.webSearchConfig,
       executeTool: (name, input) => this.executeTool(name, input),
-      extractCitations: (toolName, result) => this.extractCitationsFromToolResult(toolName, result),
+      extractToolCitations: (toolName, result) => this.extractCitationsFromToolResult(toolName, result),
     });
   }
 
@@ -77,20 +102,20 @@ export class ChatGPTAgent extends BaseAgent {
   }
 
   /**
-   * Perform synthesis by calling OpenAI API directly with synthesis-specific prompts
-   * Uses the shared executeSimpleOpenAICompletion utility.
+   * Perform synthesis by calling OpenAI Responses API directly with synthesis-specific prompts
+   * Uses the Responses API without web search for synthesis.
    */
   protected override async performSynthesis(
     systemPrompt: string,
     userMessage: string
   ): Promise<string> {
-    return executeSimpleOpenAICompletion({
+    return executeSimpleResponsesCompletion({
       client: this.client,
       model: this.model,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
-      systemPrompt,
-      userMessage,
+      instructions: systemPrompt,
+      input: userMessage,
       agentId: this.id,
       convertError: (error) => this.convertError(error),
       debugMessage: 'Performing synthesis',
@@ -99,16 +124,16 @@ export class ChatGPTAgent extends BaseAgent {
 
   /**
    * Generate a raw text completion without parsing into structured format
-   * Uses the shared executeSimpleOpenAICompletion utility.
+   * Uses the Responses API without web search.
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    return executeSimpleOpenAICompletion({
+    return executeSimpleResponsesCompletion({
       client: this.client,
       model: this.model,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
-      systemPrompt: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-      userMessage: prompt,
+      instructions: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      input: prompt,
       agentId: this.id,
       convertError: (error) => this.convertError(error),
       debugMessage: 'Generating raw completion',
@@ -121,15 +146,14 @@ export class ChatGPTAgent extends BaseAgent {
   protected override async performHealthCheck(): Promise<void> {
     await withRetry(
       () =>
-        this.client.chat.completions.create({
+        this.client.responses.create({
           model: this.model,
-          max_completion_tokens: 10,
-          messages: [{ role: 'user', content: 'test' }],
+          max_output_tokens: 10,
+          input: 'test',
         }),
       { maxRetries: 3 }
     );
   }
-
 }
 
 /**

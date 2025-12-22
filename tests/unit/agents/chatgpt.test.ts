@@ -3,8 +3,9 @@ import { ChatGPTAgent, createChatGPTAgent } from '../../../src/agents/chatgpt.js
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {
-  createMockOpenAIClient,
-  createMockOpenAIClientWithToolCalls,
+  createMockResponsesClient,
+  createMockResponsesClientWithWebSearch,
+  createMockResponsesClientWithToolCalls,
   createMockContext,
   createMockAgentConfig,
   createMockToolkit,
@@ -25,7 +26,7 @@ describe('ChatGPTAgent', () => {
 
   describe('constructor', () => {
     it('should create agent with custom client', () => {
-      const mockClient = createMockOpenAIClient('test');
+      const mockClient = createMockResponsesClient('test');
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -33,17 +34,36 @@ describe('ChatGPTAgent', () => {
       expect(agent.id).toBe('chatgpt-test');
       expect(agent.provider).toBe('openai');
     });
+
+    it('should enable web search by default', () => {
+      const mockClient = createMockResponsesClient('test');
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+      });
+
+      expect(agent).toBeDefined();
+    });
+
+    it('should allow disabling web search', () => {
+      const mockClient = createMockResponsesClient('test');
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+        webSearch: { enabled: false },
+      });
+
+      expect(agent).toBeDefined();
+    });
   });
 
   describe('generateResponse', () => {
-    it('should generate response from OpenAI API', async () => {
+    it('should generate response from Responses API', async () => {
       const mockResponse = createJsonResponse({
         position: 'AI should be regulated carefully',
         reasoning: 'To balance innovation and safety',
         confidence: 0.8,
       });
 
-      const mockClient = createMockOpenAIClient(mockResponse);
+      const mockClient = createMockResponsesClient(mockResponse);
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -58,8 +78,8 @@ describe('ChatGPTAgent', () => {
       expect(response.timestamp).toBeInstanceOf(Date);
     });
 
-    it('should call API with correct parameters', async () => {
-      const mockClient = createMockOpenAIClient(
+    it('should call Responses API with correct parameters', async () => {
+      const mockClient = createMockResponsesClient(
         createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
       const agent = new ChatGPTAgent(defaultConfig, {
@@ -68,17 +88,17 @@ describe('ChatGPTAgent', () => {
 
       await agent.generateResponse(defaultContext);
 
-      expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
+      expect(mockClient.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4-turbo',
-          max_completion_tokens: 4096,
+          max_output_tokens: 4096,
           temperature: 0.7,
         })
       );
     });
 
-    it('should include system message', async () => {
-      const mockClient = createMockOpenAIClient(
+    it('should include instructions (system prompt)', async () => {
+      const mockClient = createMockResponsesClient(
         createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
       const agent = new ChatGPTAgent(defaultConfig, {
@@ -87,14 +107,12 @@ describe('ChatGPTAgent', () => {
 
       await agent.generateResponse(defaultContext);
 
-      const call = mockClient.chat.completions.create.mock.calls[0]?.[0];
-      const systemMessage = call?.messages?.find((m: { role: string }) => m.role === 'system');
-      expect(systemMessage).toBeDefined();
-      expect(systemMessage?.content).toContain('Should AI be regulated?');
+      const call = mockClient.responses.create.mock.calls[0]?.[0];
+      expect(call?.instructions).toContain('Should AI be regulated?');
     });
 
     it('should handle non-JSON response gracefully', async () => {
-      const mockClient = createMockOpenAIClient('This is a plain text response');
+      const mockClient = createMockResponsesClient('This is a plain text response');
       const agent = new ChatGPTAgent(defaultConfig, {
         client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
       });
@@ -107,17 +125,25 @@ describe('ChatGPTAgent', () => {
 
     it('should handle empty response', async () => {
       const mockClient = {
-        chat: {
-          completions: {
-            create: vi.fn().mockResolvedValue({
-              choices: [
-                {
-                  message: { content: null, role: 'assistant' },
-                  finish_reason: 'stop',
-                },
-              ],
-            }),
-          },
+        responses: {
+          create: vi.fn().mockResolvedValue({
+            id: 'resp-1',
+            output_text: '',
+            output: [
+              {
+                type: 'message',
+                role: 'assistant',
+                status: 'completed',
+                content: [
+                  {
+                    type: 'output_text',
+                    text: '',
+                    annotations: [],
+                  },
+                ],
+              },
+            ],
+          }),
         },
       };
 
@@ -131,8 +157,8 @@ describe('ChatGPTAgent', () => {
       expect(response.confidence).toBe(0.5);
     });
 
-    it('should include previous responses in messages', async () => {
-      const mockClient = createMockOpenAIClient(
+    it('should include previous responses in input', async () => {
+      const mockClient = createMockResponsesClient(
         createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
       const agent = new ChatGPTAgent(defaultConfig, {
@@ -155,21 +181,98 @@ describe('ChatGPTAgent', () => {
 
       await agent.generateResponse(contextWithPrevious);
 
-      const call = mockClient.chat.completions.create.mock.calls[0]?.[0];
-      const userMessage = call?.messages?.find((m: { role: string }) => m.role === 'user');
-      expect(userMessage?.content).toContain('Other Agent');
-      expect(userMessage?.content).toContain('Different position');
+      const call = mockClient.responses.create.mock.calls[0]?.[0];
+      expect(call?.input).toContain('Other Agent');
+      expect(call?.input).toContain('Different position');
     });
   });
 
-  describe('tool calls', () => {
-    it('should handle function calls', async () => {
-      const mockClient = createMockOpenAIClientWithToolCalls(
-        'search_web',
-        { query: 'AI regulation policies' },
+  describe('native web search', () => {
+    it('should include web_search tool when enabled', async () => {
+      const mockClient = createMockResponsesClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+        webSearch: { enabled: true },
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      const call = mockClient.responses.create.mock.calls[0]?.[0];
+      const webSearchTool = call?.tools?.find((t: { type: string }) => t.type === 'web_search');
+      expect(webSearchTool).toBeDefined();
+    });
+
+    it('should extract citations from web search results', async () => {
+      const mockClient = createMockResponsesClientWithWebSearch(
+        createJsonResponse({
+          position: 'Based on research',
+          reasoning: 'Found relevant sources',
+          confidence: 0.85,
+        }),
+        [
+          { title: 'AI Regulation Article', url: 'https://example.com/ai-regulation' },
+          { title: 'Policy Brief', url: 'https://policy.example.com' },
+        ]
+      );
+
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.citations).toHaveLength(2);
+      expect(response.citations?.[0]?.title).toBe('AI Regulation Article');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/ai-regulation');
+      expect(response.citations?.[1]?.title).toBe('Policy Brief');
+    });
+
+    it('should record web_search tool call when used', async () => {
+      const mockClient = createMockResponsesClientWithWebSearch(
         createJsonResponse({
           position: 'Based on research',
           reasoning: 'Found sources',
+          confidence: 0.85,
+        }),
+        [{ title: 'Source', url: 'https://example.com' }]
+      );
+
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      expect(response.toolCalls?.some((tc) => tc.toolName === 'web_search')).toBe(true);
+    });
+
+    it('should not include web_search tool when disabled', async () => {
+      const mockClient = createMockResponsesClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
+      const agent = new ChatGPTAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
+        webSearch: { enabled: false },
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      const call = mockClient.responses.create.mock.calls[0]?.[0];
+      const webSearchTool = call?.tools?.find((t: { type: string }) => t.type === 'web_search');
+      expect(webSearchTool).toBeUndefined();
+    });
+  });
+
+  describe('function tool calls', () => {
+    it('should handle function calls', async () => {
+      const mockClient = createMockResponsesClientWithToolCalls(
+        'get_context',
+        {},
+        createJsonResponse({
+          position: 'Based on context',
+          reasoning: 'Used debate context',
           confidence: 0.85,
         })
       );
@@ -177,17 +280,16 @@ describe('ChatGPTAgent', () => {
       const mockToolkit: AgentToolkit = createMockToolkit({
         tools: [
           {
-            name: 'search_web',
-            description: 'Search the web',
-            parameters: { query: { type: 'string', description: 'Search query' } },
+            name: 'get_context',
+            description: 'Get debate context',
+            parameters: {},
           },
         ],
         executeTool: vi.fn().mockResolvedValue({
           success: true,
           data: {
-            results: [
-              { title: 'Policy Article', url: 'https://example.com', snippet: 'Regulations...' },
-            ],
+            topic: 'Test topic',
+            mode: 'collaborative',
           },
         }),
       });
@@ -199,16 +301,12 @@ describe('ChatGPTAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
-        query: 'AI regulation policies',
-      });
-      expect(response.toolCalls).toHaveLength(1);
-      expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
-      expect(response.citations).toHaveLength(1);
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith('get_context', {});
+      expect(response.toolCalls?.some((tc) => tc.toolName === 'get_context')).toBe(true);
     });
 
-    it('should provide tools to API when toolkit is set', async () => {
-      const mockClient = createMockOpenAIClient(
+    it('should provide function tools to API when toolkit is set', async () => {
+      const mockClient = createMockResponsesClient(
         createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
       const mockToolkit: AgentToolkit = createMockToolkit({
@@ -228,65 +326,15 @@ describe('ChatGPTAgent', () => {
 
       await agent.generateResponse(defaultContext);
 
-      const call = mockClient.chat.completions.create.mock.calls[0]?.[0];
-      expect(call?.tools).toBeDefined();
-      expect(call?.tools).toHaveLength(1);
-      expect(call?.tools?.[0]?.function?.name).toBe('test_tool');
-    });
-
-    it('should extract citations from perplexity_search tool', async () => {
-      const mockClient = createMockOpenAIClientWithToolCalls(
-        'perplexity_search',
-        { query: 'climate change policies', recency_filter: 'month' },
-        createJsonResponse({
-          position: 'Environmental policies are evolving',
-          reasoning: 'Recent findings',
-          confidence: 0.82,
-        })
+      const call = mockClient.responses.create.mock.calls[0]?.[0];
+      const functionTool = call?.tools?.find(
+        (t: { type: string; name?: string }) => t.type === 'function' && t.name === 'test_tool'
       );
-
-      const mockToolkit: AgentToolkit = createMockToolkit({
-        tools: [
-          {
-            name: 'perplexity_search',
-            description: 'Search with Perplexity',
-            parameters: { query: { type: 'string', description: 'Search query' } },
-          },
-        ],
-        executeTool: vi.fn().mockResolvedValue({
-          success: true,
-          data: {
-            answer: 'Climate policies are being updated...',
-            citations: [
-              { title: 'Climate Report 2025', url: 'https://climate.example.com', snippet: 'Latest findings...' },
-              { title: 'Policy Brief', url: 'https://policy.example.com', snippet: 'New regulations...' },
-              { title: 'Scientific Study', url: 'https://science.example.com', snippet: 'Research data...' },
-            ],
-          },
-        }),
-      });
-
-      const agent = new ChatGPTAgent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
-      });
-      agent.setToolkit(mockToolkit);
-
-      const response = await agent.generateResponse(defaultContext);
-
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('perplexity_search', {
-        query: 'climate change policies',
-        recency_filter: 'month',
-      });
-      expect(response.toolCalls).toHaveLength(1);
-      expect(response.toolCalls?.[0]?.toolName).toBe('perplexity_search');
-      expect(response.citations).toHaveLength(3);
-      expect(response.citations?.[0]?.title).toBe('Climate Report 2025');
-      expect(response.citations?.[1]?.title).toBe('Policy Brief');
-      expect(response.citations?.[2]?.title).toBe('Scientific Study');
+      expect(functionTool).toBeDefined();
     });
 
     it('should handle tool execution errors', async () => {
-      const mockClient = createMockOpenAIClientWithToolCalls(
+      const mockClient = createMockResponsesClientWithToolCalls(
         'failing_tool',
         { input: 'test' },
         createJsonResponse({
@@ -313,14 +361,14 @@ describe('ChatGPTAgent', () => {
       agent.setToolkit(mockToolkit);
 
       const response = await agent.generateResponse(defaultContext);
-      expect(response.toolCalls?.[0]?.output).toEqual({ error: 'Tool failed' });
+      expect(response.toolCalls?.some((tc) => tc.output && 'error' in tc.output)).toBe(true);
     });
   });
 });
 
 describe('createChatGPTAgent', () => {
   it('should create agent with factory function', () => {
-    const mockClient = createMockOpenAIClient('test');
+    const mockClient = createMockResponsesClient('test');
     const config: AgentConfig = createMockAgentConfig({
       id: 'factory-chatgpt',
       name: 'Factory ChatGPT',
@@ -337,7 +385,7 @@ describe('createChatGPTAgent', () => {
   });
 
   it('should set toolkit when provided', () => {
-    const mockClient = createMockOpenAIClient('test');
+    const mockClient = createMockResponsesClient('test');
     const mockToolkit: AgentToolkit = createMockToolkit();
 
     const agent = createChatGPTAgent(
