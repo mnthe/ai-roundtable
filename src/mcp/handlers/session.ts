@@ -15,7 +15,12 @@ import {
   ListSessionsInputSchema,
 } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
-import { buildRoundtableResponse } from './utils.js';
+import {
+  buildRoundtableResponse,
+  getSessionOrError,
+  isSessionError,
+  wrapError,
+} from './utils.js';
 
 /**
  * Handler: start_roundtable
@@ -93,7 +98,7 @@ export async function handleStartRoundtable(
     );
     return createSuccessResponse(response);
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -112,10 +117,11 @@ export async function handleContinueRoundtable(
     const input = ContinueRoundtableInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Check if session is active
     if (session.status !== 'active') {
@@ -181,7 +187,7 @@ export async function handleContinueRoundtable(
     );
     return createSuccessResponse(response);
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -197,10 +203,11 @@ export async function handleControlSession(
     const input = ControlSessionInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Apply control action
     let newStatus: 'active' | 'paused' | 'completed' | 'error';
@@ -254,7 +261,7 @@ export async function handleControlSession(
       session: updatedSession,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -319,6 +326,6 @@ export async function handleListSessions(
       count: summaries.length,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }

@@ -2,6 +2,7 @@
  * Response builder utilities for MCP handlers (4-Layer Structure)
  */
 
+import type { SessionManager } from '../../core/session-manager.js';
 import type {
   AgentResponse,
   RoundResult,
@@ -13,6 +14,70 @@ import type {
   ContextRequest,
   RoundtableStatus,
 } from '../../types/index.js';
+import { createErrorResponse, type ToolResponse } from '../tools.js';
+
+/**
+ * Get session or return error response
+ * Centralizes session existence check across all handlers
+ */
+export async function getSessionOrError(
+  sessionManager: SessionManager,
+  sessionId: string
+): Promise<{ session: Session } | { error: ToolResponse }> {
+  const session = await sessionManager.getSession(sessionId);
+  if (!session) {
+    return { error: createErrorResponse(`Session "${sessionId}" not found`) };
+  }
+  return { session };
+}
+
+/**
+ * Type guard to check if result is an error
+ */
+export function isSessionError(
+  result: { session: Session } | { error: ToolResponse }
+): result is { error: ToolResponse } {
+  return 'error' in result;
+}
+
+/**
+ * Group responses by round number
+ * Calculates round based on response index and agents per round
+ */
+export function groupResponsesByRound<T extends AgentResponse>(
+  responses: T[],
+  agentsPerRound: number
+): Map<number, T[]> {
+  const grouped = new Map<number, T[]>();
+
+  for (let i = 0; i < responses.length; i++) {
+    const response = responses[i];
+    if (!response) continue;
+    const round = Math.floor(i / agentsPerRound) + 1;
+    const existing = grouped.get(round) ?? [];
+    existing.push(response);
+    grouped.set(round, existing);
+  }
+
+  return grouped;
+}
+
+/**
+ * Wrap unknown error as Error object
+ * Safely converts unknown catch errors without unsafe casts
+ */
+export function wrapError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  if (typeof error === 'string') {
+    return new Error(error);
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    return new Error(String((error as { message: unknown }).message));
+  }
+  return new Error(String(error));
+}
 
 /**
  * Classify consensus level from numeric score

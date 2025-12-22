@@ -6,6 +6,7 @@
 import type { AgentRegistry } from '../../agents/registry.js';
 import { GetAgentsInputSchema } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
+import { wrapError } from './utils.js';
 
 /**
  * Handler: get_agents
@@ -26,6 +27,6 @@ export async function handleGetAgents(
       count: agents.length,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }

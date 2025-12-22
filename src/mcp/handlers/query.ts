@@ -15,6 +15,12 @@ import {
   GetThoughtsInputSchema,
 } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
+import {
+  getSessionOrError,
+  isSessionError,
+  groupResponsesByRound,
+  wrapError,
+} from './utils.js';
 
 /**
  * Get whether groupthink detection is needed for a given mode
@@ -38,10 +44,11 @@ export async function handleGetConsensus(
     const input = GetConsensusInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Determine which round to analyze
     // If roundNumber is specified, use it; otherwise use the latest round
@@ -82,7 +89,7 @@ export async function handleGetConsensus(
       totalRounds: session.currentRound,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -99,10 +106,11 @@ export async function handleGetRoundDetails(
     const input = GetRoundDetailsInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Validate round number
     if (input.roundNumber > session.currentRound) {
@@ -148,7 +156,7 @@ export async function handleGetRoundDetails(
       consensus,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -164,10 +172,11 @@ export async function handleGetResponseDetail(
     const input = GetResponseDetailInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
@@ -217,7 +226,7 @@ export async function handleGetResponseDetail(
       })),
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -233,10 +242,11 @@ export async function handleGetCitations(
     const input = GetCitationsInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session: _session } = sessionResult;
 
     // Get responses based on filters
     let responses = await sessionManager.getResponses(input.sessionId);
@@ -284,7 +294,7 @@ export async function handleGetCitations(
       totalCitations: uniqueCitations.length,
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
 
@@ -300,10 +310,11 @@ export async function handleGetThoughts(
     const input = GetThoughtsInputSchema.parse(args);
 
     // Get session
-    const session = await sessionManager.getSession(input.sessionId);
-    if (!session) {
-      return createErrorResponse(`Session "${input.sessionId}" not found`);
+    const sessionResult = await getSessionOrError(sessionManager, input.sessionId);
+    if (isSessionError(sessionResult)) {
+      return sessionResult.error;
     }
+    const { session } = sessionResult;
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
@@ -321,23 +332,14 @@ export async function handleGetThoughts(
     }
 
     // Group responses by round
-    const responsesByRound: Record<number, typeof agentResponses> = {};
-    for (const response of agentResponses) {
-      // Find round number from timestamp order
-      const roundIndex = allResponses.indexOf(response);
-      const round = Math.floor(roundIndex / session.agentIds.length) + 1;
-      if (!responsesByRound[round]) {
-        responsesByRound[round] = [];
-      }
-      responsesByRound[round].push(response);
-    }
+    const responsesByRound = groupResponsesByRound(agentResponses, session.agentIds.length);
 
     return createSuccessResponse({
       sessionId: input.sessionId,
       agentId: input.agentId,
       agentName: agentResponses[0]!.agentName,
       totalResponses: agentResponses.length,
-      rounds: Object.keys(responsesByRound).length,
+      rounds: responsesByRound.size,
       responses: agentResponses.map((r) => ({
         position: r.position,
         reasoning: r.reasoning,
@@ -355,6 +357,6 @@ export async function handleGetThoughts(
       })),
     });
   } catch (error) {
-    return createErrorResponse(error as Error);
+    return createErrorResponse(wrapError(error));
   }
 }
