@@ -298,7 +298,7 @@ export class GeminiAgent extends BaseAgent {
 
     return `${originalMessage}${searchResultsSummary}${previousAnalysis}
 
-Please provide your final response. You have access to additional tools (get_context, fact_check) if you need to verify any claims or get more context.`;
+Please provide your final response. You have access to additional tools (request_context, fact_check) if you need to verify any claims or get more context.`;
   }
 
   /**

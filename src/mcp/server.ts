@@ -154,11 +154,11 @@ export async function createServer(options: ServerOptions = {}): Promise<Server>
           break;
 
         case 'get_agents':
-          result = await handleGetAgents(agentRegistry);
+          result = await handleGetAgents(args, agentRegistry);
           break;
 
         case 'list_sessions':
-          result = await handleListSessions(sessionManager);
+          result = await handleListSessions(args, sessionManager);
           break;
 
         case 'get_thoughts':

@@ -12,6 +12,7 @@ import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
   ControlSessionInputSchema,
+  ListSessionsInputSchema,
 } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
 import { buildRoundtableResponse } from './utils.js';
@@ -260,9 +261,44 @@ export async function handleControlSession(
 /**
  * Handler: list_sessions
  */
-export async function handleListSessions(sessionManager: SessionManager): Promise<ToolResponse> {
+export async function handleListSessions(
+  args: unknown,
+  sessionManager: SessionManager
+): Promise<ToolResponse> {
   try {
-    const sessions = await sessionManager.listSessions();
+    // Validate input
+    const input = ListSessionsInputSchema.parse(args);
+
+    // Get all sessions
+    let sessions = await sessionManager.listSessions();
+
+    // Apply filters
+    if (input.topic) {
+      const topicLower = input.topic.toLowerCase();
+      sessions = sessions.filter((s) => s.topic.toLowerCase().includes(topicLower));
+    }
+
+    if (input.mode) {
+      sessions = sessions.filter((s) => s.mode === input.mode);
+    }
+
+    if (input.status) {
+      sessions = sessions.filter((s) => s.status === input.status);
+    }
+
+    if (input.fromDate) {
+      const fromDate = new Date(input.fromDate);
+      sessions = sessions.filter((s) => s.createdAt >= fromDate);
+    }
+
+    if (input.toDate) {
+      const toDate = new Date(input.toDate);
+      sessions = sessions.filter((s) => s.createdAt <= toDate);
+    }
+
+    // Apply limit
+    const limit = input.limit ?? 50;
+    sessions = sessions.slice(0, limit);
 
     // Create summaries
     const summaries = sessions.map((session) => ({
