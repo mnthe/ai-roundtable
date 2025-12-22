@@ -1,0 +1,91 @@
+/**
+ * Round execution utilities for MCP handlers
+ *
+ * Centralizes the common round execution, saving, and key points extraction logic
+ * that is duplicated across start_roundtable and continue_roundtable handlers.
+ */
+
+import type { DebateEngine } from '../../../core/debate-engine.js';
+import type { SessionManager } from '../../../core/session-manager.js';
+import type { KeyPointsExtractor } from '../../../core/key-points-extractor.js';
+import type { BaseAgent } from '../../../agents/base.js';
+import type { Session, RoundResult, ContextResult } from '../../../types/index.js';
+
+/**
+ * Options for executing rounds
+ */
+export interface ExecuteRoundsOptions {
+  /** Number of rounds to execute (default: 1) */
+  rounds?: number;
+  /** Optional focus question for the rounds */
+  focusQuestion?: string;
+  /** Optional context results from previous requests */
+  contextResults?: ContextResult[];
+}
+
+/**
+ * Result from executing and saving rounds
+ */
+export interface ExecuteRoundsResult {
+  /** The executed round results */
+  roundResults: RoundResult[];
+  /** Map of agent ID to extracted key points */
+  keyPointsMap: Map<string, string[]>;
+}
+
+/**
+ * Execute rounds, save responses, and extract key points
+ *
+ * This function centralizes the common logic used by both start_roundtable
+ * and continue_roundtable handlers:
+ * 1. Execute rounds via debateEngine
+ * 2. Update session round tracking
+ * 3. Save all responses to storage
+ * 4. Extract key points using AI (if available)
+ *
+ * @param debateEngine - The debate engine for executing rounds
+ * @param sessionManager - The session manager for persistence
+ * @param session - The current session
+ * @param agents - The agents participating in the debate
+ * @param keyPointsExtractor - Optional AI key points extractor
+ * @param options - Execution options
+ * @returns Round results and extracted key points
+ */
+export async function executeAndSaveRounds(
+  debateEngine: DebateEngine,
+  sessionManager: SessionManager,
+  session: Session,
+  agents: BaseAgent[],
+  keyPointsExtractor: KeyPointsExtractor | null,
+  options: ExecuteRoundsOptions = {}
+): Promise<ExecuteRoundsResult> {
+  const { rounds = 1, focusQuestion, contextResults } = options;
+
+  // Execute rounds
+  const roundResults = await debateEngine.executeRounds(
+    agents,
+    session,
+    rounds,
+    focusQuestion,
+    contextResults
+  );
+
+  // Update session round tracking (session.currentRound is already updated by executeRounds)
+  await sessionManager.updateSessionRound(session.id, session.currentRound);
+
+  // Save all responses
+  for (const result of roundResults) {
+    for (const response of result.responses) {
+      await sessionManager.addResponse(session.id, response, result.roundNumber);
+    }
+  }
+
+  // Extract key points from the latest round using AI (if available)
+  const latestRound = roundResults[roundResults.length - 1];
+  const keyPointsMap =
+    keyPointsExtractor && latestRound
+      ? await keyPointsExtractor.extractKeyPointsBatch(latestRound.responses)
+      : new Map<string, string[]>();
+
+  return { roundResults, keyPointsMap };
+}

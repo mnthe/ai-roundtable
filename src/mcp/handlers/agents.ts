@@ -6,7 +6,7 @@
 import type { AgentRegistry } from '../../agents/registry.js';
 import { GetAgentsInputSchema } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
-import { wrapError } from './utils.js';
+import { wrapError } from './utils/index.js';
 
 /**
  * Handler: get_agents
@@ -29,4 +29,15 @@ export async function handleGetAgents(
   } catch (error) {
     return createErrorResponse(wrapError(error));
   }
+}
+
+// --- Handler Registration ---
+
+import type { HandlerRegistry } from '../handler-registry.js';
+
+/**
+ * Register agent handlers with the registry
+ */
+export function registerAgentHandlers(registry: HandlerRegistry): void {
+  registry.register('get_agents', (args, ctx) => handleGetAgents(args, ctx.agentRegistry));
 }

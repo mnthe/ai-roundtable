@@ -11,7 +11,7 @@ import {
   groupResponsesByRound,
   wrapError,
   type MappedResponse,
-} from '../../../../src/mcp/handlers/utils.js';
+} from '../../../../src/mcp/handlers/utils/index.js';
 import type { AgentResponse, Session } from '../../../../src/types/index.js';
 import type { SessionManager } from '../../../../src/core/session-manager.js';
 
@@ -70,9 +70,7 @@ describe('mapResponseForOutput', () => {
   });
 
   it('should include citations when present', () => {
-    const citations = [
-      { url: 'https://example.com', title: 'Example', snippet: 'test' },
-    ];
+    const citations = [{ url: 'https://example.com', title: 'Example', snippet: 'test' }];
     const response = createMockAgentResponse({ citations });
     const mapped = mapResponseForOutput(response);
 

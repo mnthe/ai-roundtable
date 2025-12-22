@@ -11,13 +11,15 @@ import type { AIProvider } from '../../../../src/types/index.js';
 /**
  * Helper to create agent info object
  */
-function createMockAgentInfo(overrides: Partial<{
-  id: string;
-  name: string;
-  provider: AIProvider;
-  model: string;
-  active: boolean;
-}> = {}) {
+function createMockAgentInfo(
+  overrides: Partial<{
+    id: string;
+    name: string;
+    provider: AIProvider;
+    model: string;
+    active: boolean;
+  }> = {}
+) {
   return {
     id: 'agent-1',
     name: 'Claude',
@@ -43,7 +45,9 @@ function createMockAgentRegistry() {
 /**
  * Helper to parse response content
  */
-function parseResponseContent(response: { content: Array<{ type: string; text: string }> }): unknown {
+function parseResponseContent(response: {
+  content: Array<{ type: string; text: string }>;
+}): unknown {
   return JSON.parse(response.content[0].text);
 }
 
@@ -57,16 +61,23 @@ describe('handleGetAgents', () => {
 
   it('should return list of all active agents', async () => {
     const agents = [
-      createMockAgentInfo({ id: 'claude', name: 'Claude', provider: 'anthropic', model: 'claude-sonnet-4-5' }),
+      createMockAgentInfo({
+        id: 'claude',
+        name: 'Claude',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5',
+      }),
       createMockAgentInfo({ id: 'chatgpt', name: 'ChatGPT', provider: 'openai', model: 'gpt-5.2' }),
-      createMockAgentInfo({ id: 'gemini', name: 'Gemini', provider: 'google', model: 'gemini-3-flash-preview' }),
+      createMockAgentInfo({
+        id: 'gemini',
+        name: 'Gemini',
+        provider: 'google',
+        model: 'gemini-3-flash-preview',
+      }),
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: unknown[]; count: number };
     expect(parsed).toHaveProperty('agents');
@@ -86,10 +97,7 @@ describe('handleGetAgents', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<Record<string, unknown>> };
     const agent = parsed.agents[0];
@@ -103,10 +111,7 @@ describe('handleGetAgents', () => {
   it('should return empty list when no agents are available', async () => {
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue([]);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: unknown[]; count: number };
     expect(parsed).toHaveProperty('count', 0);
@@ -122,10 +127,7 @@ describe('handleGetAgents', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<{ provider: string }> };
     const providers = parsed.agents.map((a) => a.provider);
@@ -143,24 +145,16 @@ describe('handleGetAgents', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(activeAgents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<{ active: boolean }> };
     expect(parsed.agents.every((a) => a.active === true)).toBe(true);
   });
 
   it('should handle empty input object', async () => {
-    mockAgentRegistry.getActiveAgentInfoList.mockReturnValue([
-      createMockAgentInfo(),
-    ]);
+    mockAgentRegistry.getActiveAgentInfoList.mockReturnValue([createMockAgentInfo()]);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: unknown[] };
     expect(parsed.agents).toBeDefined();
@@ -200,10 +194,7 @@ describe('handleGetAgents', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<{ model: string }> };
     expect(parsed.agents.map((a) => a.model)).toContain('claude-opus-4-5-20251101');
@@ -216,10 +207,7 @@ describe('handleGetAgents', () => {
       throw new Error('Registry error');
     });
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { error: string };
     expect(parsed).toHaveProperty('error');
@@ -227,9 +215,7 @@ describe('handleGetAgents', () => {
   });
 
   it('should ignore extra input properties', async () => {
-    mockAgentRegistry.getActiveAgentInfoList.mockReturnValue([
-      createMockAgentInfo(),
-    ]);
+    mockAgentRegistry.getActiveAgentInfoList.mockReturnValue([createMockAgentInfo()]);
 
     // Extra properties should be ignored by schema validation
     const result = await handleGetAgents(
@@ -257,10 +243,7 @@ describe('handleGetAgents edge cases', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<{ name: string }> };
     expect(parsed.agents[0].name).toBe('Agent With-Dashes');
@@ -277,10 +260,7 @@ describe('handleGetAgents edge cases', () => {
     );
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: unknown[]; count: number };
     expect(parsed.count).toBe(100);
@@ -295,10 +275,7 @@ describe('handleGetAgents edge cases', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<{ id: string }> };
     expect(parsed.agents[0].id).toBe('first');
@@ -315,12 +292,11 @@ describe('handleGetAgents edge cases', () => {
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
 
-    const result = await handleGetAgents(
-      {},
-      mockAgentRegistry as unknown as AgentRegistry
-    );
+    const result = await handleGetAgents({}, mockAgentRegistry as unknown as AgentRegistry);
 
     const parsed = parseResponseContent(result) as { agents: Array<{ model: string }> };
-    expect(parsed.agents[0].model).toBe('claude-opus-4-5-20251101-with-extended-capabilities-version-2');
+    expect(parsed.agents[0].model).toBe(
+      'claude-opus-4-5-20251101-with-extended-capabilities-version-2'
+    );
   });
 });

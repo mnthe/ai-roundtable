@@ -7,7 +7,7 @@ import type { DebateEngine } from '../../core/debate-engine.js';
 import type { SessionManager } from '../../core/session-manager.js';
 import type { KeyPointsExtractor } from '../../core/key-points-extractor.js';
 import type { AgentRegistry } from '../../agents/registry.js';
-import type { DebateConfig, Session } from '../../types/index.js';
+import type { DebateConfig } from '../../types/index.js';
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
@@ -15,12 +15,13 @@ import {
   ListSessionsInputSchema,
 } from '../../types/schemas.js';
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
+import { buildRoundtableResponse } from './response-builder/index.js';
 import {
-  buildRoundtableResponse,
   getSessionOrError,
   isSessionError,
   wrapError,
-} from './utils.js';
+  executeAndSaveRounds,
+} from './utils/index.js';
 import { ERROR_MESSAGES } from './constants.js';
 
 /**
@@ -68,27 +69,21 @@ export async function handleStartRoundtable(
     // Get agents
     const agents = agentRegistry.getAgents(agentIds);
 
-    // Execute first round
-    const roundResults = await debateEngine.executeRounds(agents, session, 1);
-
-    // Update session (session.currentRound is already updated by executeRounds)
-    await sessionManager.updateSessionRound(session.id, session.currentRound);
-    for (const result of roundResults) {
-      for (const response of result.responses) {
-        await sessionManager.addResponse(session.id, response, result.roundNumber);
-      }
-    }
+    // Execute first round (handles saving and key points extraction)
+    const { roundResults, keyPointsMap } = await executeAndSaveRounds(
+      debateEngine,
+      sessionManager,
+      session,
+      agents,
+      keyPointsExtractor,
+      { rounds: 1 }
+    );
 
     // Build 4-layer response
     const firstRound = roundResults[0];
     if (!firstRound) {
       return createErrorResponse(ERROR_MESSAGES.NO_ROUND_RESULTS);
     }
-
-    // Extract key points using AI (if available)
-    const keyPointsMap = keyPointsExtractor
-      ? await keyPointsExtractor.extractKeyPointsBatch(firstRound.responses)
-      : new Map<string, string[]>();
 
     const response = buildRoundtableResponse(
       session,
@@ -126,29 +121,33 @@ export async function handleContinueRoundtable(
 
     // Check if session is active
     if (session.status !== 'active') {
-      return createErrorResponse(ERROR_MESSAGES.SESSION_NOT_ACTIVE(input.sessionId, session.status));
+      return createErrorResponse(
+        ERROR_MESSAGES.SESSION_NOT_ACTIVE(input.sessionId, session.status)
+      );
     }
 
     // Get agents
     const agents = agentRegistry.getAgents(session.agentIds);
 
-    // Execute additional rounds with any provided context results
-    const numRounds = input.rounds || 1;
-    const roundResults = await debateEngine.executeRounds(
-      agents,
-      session,
-      numRounds,
-      input.focusQuestion,
-      input.contextResults
-    );
+    // Get previous round responses for confidence change calculation (before executing new rounds)
+    const previousResponses =
+      session.currentRound > 0
+        ? await sessionManager.getResponsesForRound(session.id, session.currentRound)
+        : [];
 
-    // Update session (session.currentRound is already updated by executeRounds)
-    await sessionManager.updateSessionRound(session.id, session.currentRound);
-    for (const result of roundResults) {
-      for (const response of result.responses) {
-        await sessionManager.addResponse(session.id, response, result.roundNumber);
+    // Execute additional rounds (handles saving and key points extraction)
+    const { roundResults, keyPointsMap } = await executeAndSaveRounds(
+      debateEngine,
+      sessionManager,
+      session,
+      agents,
+      keyPointsExtractor,
+      {
+        rounds: input.rounds || 1,
+        focusQuestion: input.focusQuestion,
+        contextResults: input.contextResults,
       }
-    }
+    );
 
     // Mark as completed if we've reached total rounds (session.currentRound already updated by executeRounds)
     if (session.currentRound >= session.totalRounds) {
@@ -161,24 +160,8 @@ export async function handleContinueRoundtable(
       return createErrorResponse(ERROR_MESSAGES.NO_ROUND_RESULTS);
     }
 
-    // Get previous round responses for confidence change calculation
-    const previousResponses =
-      session.currentRound > 0
-        ? await sessionManager.getResponsesForRound(session.id, session.currentRound)
-        : [];
-
-    // Update session object for response building (session.currentRound already updated by executeRounds)
-    const updatedSession: Session = {
-      ...session,
-    };
-
-    // Extract key points using AI (if available)
-    const keyPointsMap = keyPointsExtractor
-      ? await keyPointsExtractor.extractKeyPointsBatch(latestRound.responses)
-      : new Map<string, string[]>();
-
     const response = buildRoundtableResponse(
-      updatedSession,
+      session,
       latestRound,
       previousResponses,
       keyPointsMap,
@@ -323,4 +306,39 @@ export async function handleListSessions(
   } catch (error) {
     return createErrorResponse(wrapError(error));
   }
+}
+
+// --- Handler Registration ---
+
+import type { HandlerRegistry } from '../handler-registry.js';
+
+/**
+ * Register session handlers with the registry
+ */
+export function registerSessionHandlers(registry: HandlerRegistry): void {
+  registry.register('start_roundtable', (args, ctx) =>
+    handleStartRoundtable(
+      args,
+      ctx.debateEngine,
+      ctx.sessionManager,
+      ctx.agentRegistry,
+      ctx.keyPointsExtractor
+    )
+  );
+
+  registry.register('continue_roundtable', (args, ctx) =>
+    handleContinueRoundtable(
+      args,
+      ctx.debateEngine,
+      ctx.sessionManager,
+      ctx.agentRegistry,
+      ctx.keyPointsExtractor
+    )
+  );
+
+  registry.register('control_session', (args, ctx) =>
+    handleControlSession(args, ctx.sessionManager)
+  );
+
+  registry.register('list_sessions', (args, ctx) => handleListSessions(args, ctx.sessionManager));
 }

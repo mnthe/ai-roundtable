@@ -14,7 +14,12 @@ import type { DebateEngine } from '../../../../src/core/debate-engine.js';
 import type { SessionManager } from '../../../../src/core/session-manager.js';
 import type { KeyPointsExtractor } from '../../../../src/core/key-points-extractor.js';
 import type { AgentRegistry } from '../../../../src/agents/registry.js';
-import type { Session, AgentResponse, RoundResult, ConsensusResult } from '../../../../src/types/index.js';
+import type {
+  Session,
+  AgentResponse,
+  RoundResult,
+  ConsensusResult,
+} from '../../../../src/types/index.js';
 
 /**
  * Helper to create a mock session
@@ -118,7 +123,9 @@ function createMockKeyPointsExtractor() {
 /**
  * Helper to parse response content
  */
-function parseResponseContent(response: { content: Array<{ type: string; text: string }> }): unknown {
+function parseResponseContent(response: {
+  content: Array<{ type: string; text: string }>;
+}): unknown {
   return JSON.parse(response.content[0].text);
 }
 
@@ -147,7 +154,12 @@ describe('handleStartRoundtable', () => {
     mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
 
     const result = await handleStartRoundtable(
-      { topic: 'Should AI be regulated?', mode: 'collaborative', agents: ['agent-1', 'agent-2'], rounds: 3 },
+      {
+        topic: 'Should AI be regulated?',
+        mode: 'collaborative',
+        agents: ['agent-1', 'agent-2'],
+        rounds: 3,
+      },
       mockDebateEngine as unknown as DebateEngine,
       mockSessionManager as unknown as SessionManager,
       mockAgentRegistry as unknown as AgentRegistry,
@@ -161,7 +173,9 @@ describe('handleStartRoundtable', () => {
     expect(mockDebateEngine.executeRounds).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(Object),
-      1
+      1,
+      undefined,
+      undefined
     );
   });
 
@@ -742,10 +756,7 @@ describe('handleListSessions', () => {
     ];
     mockSessionManager.listSessions.mockResolvedValue(sessions);
 
-    const result = await handleListSessions(
-      {},
-      mockSessionManager as unknown as SessionManager
-    );
+    const result = await handleListSessions({}, mockSessionManager as unknown as SessionManager);
 
     const parsed = parseResponseContent(result) as { sessions: unknown[]; count: number };
     expect(parsed).toHaveProperty('sessions');
@@ -765,7 +776,10 @@ describe('handleListSessions', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { sessions: Array<{ topic: string }>; count: number };
+    const parsed = parseResponseContent(result) as {
+      sessions: Array<{ topic: string }>;
+      count: number;
+    };
     expect(parsed.count).toBe(1);
     expect(parsed.sessions[0].topic).toBe('AI Safety');
   });
@@ -798,7 +812,10 @@ describe('handleListSessions', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { sessions: Array<{ mode: string }>; count: number };
+    const parsed = parseResponseContent(result) as {
+      sessions: Array<{ mode: string }>;
+      count: number;
+    };
     expect(parsed.count).toBe(1);
     expect(parsed.sessions[0].mode).toBe('collaborative');
   });
@@ -815,7 +832,10 @@ describe('handleListSessions', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { sessions: Array<{ status: string }>; count: number };
+    const parsed = parseResponseContent(result) as {
+      sessions: Array<{ status: string }>;
+      count: number;
+    };
     expect(parsed.count).toBe(1);
     expect(parsed.sessions[0].status).toBe('active');
   });
@@ -874,10 +894,7 @@ describe('handleListSessions', () => {
     );
     mockSessionManager.listSessions.mockResolvedValue(sessions);
 
-    const result = await handleListSessions(
-      {},
-      mockSessionManager as unknown as SessionManager
-    );
+    const result = await handleListSessions({}, mockSessionManager as unknown as SessionManager);
 
     const parsed = parseResponseContent(result) as { sessions: unknown[]; count: number };
     expect(parsed.count).toBe(50);
@@ -885,9 +902,24 @@ describe('handleListSessions', () => {
 
   it('should combine multiple filters', async () => {
     const sessions = [
-      createMockSession({ id: 'session-1', topic: 'AI Safety', mode: 'collaborative', status: 'active' }),
-      createMockSession({ id: 'session-2', topic: 'AI Ethics', mode: 'adversarial', status: 'active' }),
-      createMockSession({ id: 'session-3', topic: 'AI Safety', mode: 'collaborative', status: 'completed' }),
+      createMockSession({
+        id: 'session-1',
+        topic: 'AI Safety',
+        mode: 'collaborative',
+        status: 'active',
+      }),
+      createMockSession({
+        id: 'session-2',
+        topic: 'AI Ethics',
+        mode: 'adversarial',
+        status: 'active',
+      }),
+      createMockSession({
+        id: 'session-3',
+        topic: 'AI Safety',
+        mode: 'collaborative',
+        status: 'completed',
+      }),
     ];
     mockSessionManager.listSessions.mockResolvedValue(sessions);
 
@@ -896,15 +928,16 @@ describe('handleListSessions', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { sessions: Array<{ id: string }>; count: number };
+    const parsed = parseResponseContent(result) as {
+      sessions: Array<{ id: string }>;
+      count: number;
+    };
     expect(parsed.count).toBe(1);
     expect(parsed.sessions[0].id).toBe('session-1');
   });
 
   it('should return empty array when no sessions match', async () => {
-    const sessions = [
-      createMockSession({ id: 'session-1', topic: 'AI Safety' }),
-    ];
+    const sessions = [createMockSession({ id: 'session-1', topic: 'AI Safety' })];
     mockSessionManager.listSessions.mockResolvedValue(sessions);
 
     const result = await handleListSessions(
@@ -932,10 +965,7 @@ describe('handleListSessions', () => {
     ];
     mockSessionManager.listSessions.mockResolvedValue(sessions);
 
-    const result = await handleListSessions(
-      {},
-      mockSessionManager as unknown as SessionManager
-    );
+    const result = await handleListSessions({}, mockSessionManager as unknown as SessionManager);
 
     const parsed = parseResponseContent(result) as { sessions: Array<Record<string, unknown>> };
     const summary = parsed.sessions[0];

@@ -13,7 +13,12 @@ import {
 } from '../../../../src/mcp/handlers/query.js';
 import type { SessionManager } from '../../../../src/core/session-manager.js';
 import type { AIConsensusAnalyzer } from '../../../../src/core/ai-consensus-analyzer.js';
-import type { Session, AgentResponse, Citation, ToolCallRecord } from '../../../../src/types/index.js';
+import type {
+  Session,
+  AgentResponse,
+  Citation,
+  ToolCallRecord,
+} from '../../../../src/types/index.js';
 
 /**
  * Helper to create a mock session
@@ -102,7 +107,9 @@ function createMockAIConsensusAnalyzer() {
 /**
  * Helper to parse response content
  */
-function parseResponseContent(response: { content: Array<{ type: string; text: string }> }): unknown {
+function parseResponseContent(response: {
+  content: Array<{ type: string; text: string }>;
+}): unknown {
   return JSON.parse(response.content[0].text);
 }
 
@@ -453,9 +460,7 @@ describe('handleGetResponseDetail', () => {
 
   it('should return response for specific round when roundNumber provided', async () => {
     const session = createMockSession({ currentRound: 2, agentIds: ['agent-1', 'agent-2'] });
-    const allResponses = [
-      createMockAgentResponse({ agentId: 'agent-1', position: 'All round' }),
-    ];
+    const allResponses = [createMockAgentResponse({ agentId: 'agent-1', position: 'All round' })];
     const roundResponses = [
       createMockAgentResponse({ agentId: 'agent-1', position: 'Round 1 only' }),
     ];
@@ -469,7 +474,10 @@ describe('handleGetResponseDetail', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { responses: Array<{ position: string }>; roundNumber: number };
+    const parsed = parseResponseContent(result) as {
+      responses: Array<{ position: string }>;
+      roundNumber: number;
+    };
     expect(parsed).toHaveProperty('roundNumber', 1);
     expect(parsed.responses[0].position).toBe('Round 1 only');
     expect(mockSessionManager.getResponsesForRound).toHaveBeenCalledWith('session-1', 1);
@@ -608,9 +616,7 @@ describe('handleGetCitations', () => {
       createMockAgentResponse({
         agentId: 'agent-2',
         agentName: 'ChatGPT',
-        citations: [
-          createMockCitation({ title: 'Source 3', url: 'https://example.com/3' }),
-        ],
+        citations: [createMockCitation({ title: 'Source 3', url: 'https://example.com/3' })],
       }),
     ];
 
@@ -672,7 +678,11 @@ describe('handleGetCitations', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { agentId: string; citations: unknown[]; totalCitations: number };
+    const parsed = parseResponseContent(result) as {
+      agentId: string;
+      citations: unknown[];
+      totalCitations: number;
+    };
     expect(parsed).toHaveProperty('agentId', 'agent-1');
     expect(parsed.totalCitations).toBe(1);
   });
@@ -736,10 +746,7 @@ describe('handleGetCitations', () => {
   });
 
   it('should reject invalid input (missing sessionId)', async () => {
-    const result = await handleGetCitations(
-      {},
-      mockSessionManager as unknown as SessionManager
-    );
+    const result = await handleGetCitations({}, mockSessionManager as unknown as SessionManager);
 
     const parsed = parseResponseContent(result) as { error: string };
     expect(parsed).toHaveProperty('error');
@@ -822,7 +829,9 @@ describe('handleGetThoughts', () => {
       mockSessionManager as unknown as SessionManager
     );
 
-    const parsed = parseResponseContent(result) as { confidenceEvolution: Array<{ round: number; confidence: number }> };
+    const parsed = parseResponseContent(result) as {
+      confidenceEvolution: Array<{ round: number; confidence: number }>;
+    };
     expect(parsed.confidenceEvolution).toHaveLength(3);
     expect(parsed.confidenceEvolution[0].confidence).toBe(0.5);
     expect(parsed.confidenceEvolution[1].confidence).toBe(0.7);

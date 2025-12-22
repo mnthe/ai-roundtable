@@ -22,7 +22,7 @@ import {
   wrapError,
   mapResponseForOutput,
   mapResponseWithAgentForOutput,
-} from './utils.js';
+} from './utils/index.js';
 import { ERROR_MESSAGES } from './constants.js';
 
 /**
@@ -62,7 +62,9 @@ export async function handleGetConsensus(
       return createErrorResponse(ERROR_MESSAGES.NO_ROUNDS_EXECUTED);
     }
     if (roundToAnalyze > session.currentRound) {
-      return createErrorResponse(ERROR_MESSAGES.ROUND_NOT_EXIST(roundToAnalyze, session.currentRound));
+      return createErrorResponse(
+        ERROR_MESSAGES.ROUND_NOT_EXIST(roundToAnalyze, session.currentRound)
+      );
     }
 
     // Get responses for the specific round only
@@ -165,7 +167,9 @@ export async function handleGetResponseDetail(
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
-      return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId));
+      return createErrorResponse(
+        ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId)
+      );
     }
 
     // Get all responses
@@ -291,7 +295,9 @@ export async function handleGetThoughts(
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
-      return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId));
+      return createErrorResponse(
+        ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId)
+      );
     }
 
     // Get all responses for this agent
@@ -320,4 +326,29 @@ export async function handleGetThoughts(
   } catch (error) {
     return createErrorResponse(wrapError(error));
   }
+}
+
+// --- Handler Registration ---
+
+import type { HandlerRegistry } from '../handler-registry.js';
+
+/**
+ * Register query handlers with the registry
+ */
+export function registerQueryHandlers(registry: HandlerRegistry): void {
+  registry.register('get_consensus', (args, ctx) =>
+    handleGetConsensus(args, ctx.sessionManager, ctx.aiConsensusAnalyzer)
+  );
+
+  registry.register('get_round_details', (args, ctx) =>
+    handleGetRoundDetails(args, ctx.sessionManager, ctx.aiConsensusAnalyzer)
+  );
+
+  registry.register('get_response_detail', (args, ctx) =>
+    handleGetResponseDetail(args, ctx.sessionManager)
+  );
+
+  registry.register('get_citations', (args, ctx) => handleGetCitations(args, ctx.sessionManager));
+
+  registry.register('get_thoughts', (args, ctx) => handleGetThoughts(args, ctx.sessionManager));
 }

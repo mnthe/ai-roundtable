@@ -514,7 +514,9 @@ describe('MCP Tools', () => {
         reasoning: 'AI presents both opportunities and risks...',
         confidence: 0.85,
         citations: [{ title: 'Source', url: 'https://example.com', snippet: 'Text' }],
-        toolCalls: [{ toolName: 'search_web', input: { query: 'AI' }, output: {}, timestamp: new Date() }],
+        toolCalls: [
+          { toolName: 'search_web', input: { query: 'AI' }, output: {}, timestamp: new Date() },
+        ],
         timestamp: new Date(),
       };
 

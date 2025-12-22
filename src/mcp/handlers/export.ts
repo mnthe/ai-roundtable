@@ -15,7 +15,7 @@ import {
   isSessionError,
   groupResponsesByRound,
   wrapError,
-} from './utils.js';
+} from './utils/index.js';
 import { ERROR_MESSAGES } from './constants.js';
 
 const logger = createLogger('ExportHandlers');
@@ -368,4 +368,21 @@ function parseSynthesisResponse(responseText: string, synthesizerId: string): Sy
     synthesizerId,
     timestamp: new Date(),
   };
+}
+
+// --- Handler Registration ---
+
+import type { HandlerRegistry } from '../handler-registry.js';
+
+/**
+ * Register export handlers with the registry
+ */
+export function registerExportHandlers(registry: HandlerRegistry): void {
+  registry.register('export_session', (args, ctx) =>
+    handleExportSession(args, ctx.sessionManager, ctx.agentRegistry)
+  );
+
+  registry.register('synthesize_debate', (args, ctx) =>
+    handleSynthesizeDebate(args, ctx.sessionManager, ctx.agentRegistry)
+  );
 }
