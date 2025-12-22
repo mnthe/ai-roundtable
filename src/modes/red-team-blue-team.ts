@@ -13,7 +13,6 @@
 import { BaseModeStrategy } from './base.js';
 import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import type { DebateContext, AgentResponse } from '../types/index.js';
-import { createLogger } from '../utils/logger.js';
 import {
   buildRoleAnchor,
   buildBehavioralContract,
@@ -24,8 +23,6 @@ import {
   type VerificationLoopConfig,
   type OutputSection,
 } from './utils/index.js';
-
-const logger = createLogger('RedTeamBlueTeamMode');
 
 /**
  * Team assignment for agents
@@ -187,61 +184,23 @@ export class RedTeamBlueTeamMode extends BaseModeStrategy {
    * - Even indices (0, 2, 4, ...): Red Team
    * - Odd indices (1, 3, 5, ...): Blue Team
    *
-   * Both teams execute in parallel using Promise.allSettled for error handling.
+   * Both teams execute in parallel using the base class executeParallel method.
+   * Team assignment is handled via the transformContext hook.
    */
   async executeRound(
     agents: BaseAgent[],
     context: DebateContext,
     toolkit: AgentToolkit
   ): Promise<AgentResponse[]> {
-    if (agents.length === 0) {
-      return [];
-    }
-
-    // Store agent indices for hook access
+    // Store agent indices for hook access (used by transformContext)
     this.agentIndices.clear();
     agents.forEach((agent, index) => {
       this.agentIndices.set(agent.id, index);
     });
 
-    // Execute all agents in parallel with team-specific prompts via hooks
-    const responsePromises = agents.map((agent, index) => {
-      agent.setToolkit(toolkit);
-
-      // Get team role via hook
-      const team = this.getAgentRole(agent, index, context) as Team;
-      logger.debug({ agentId: agent.id, team, index }, 'Agent team assigned');
-
-      // Build context with team-specific prompt via transformContext
-      const agentContext = this.transformContext(
-        {
-          ...context,
-          modePrompt: this.buildAgentPrompt(context),
-        },
-        agent
-      );
-
-      return agent.generateResponse(agentContext);
-    });
-
-    // Use allSettled to handle individual failures gracefully
-    const results = await Promise.allSettled(responsePromises);
-
-    const responses: AgentResponse[] = [];
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      const agent = agents[i];
-      if (!result || !agent) continue;
-
-      if (result.status === 'fulfilled') {
-        responses.push(result.value);
-      } else {
-        // Log error but continue with other agents
-        logger.error({ err: result.reason, agentId: agent.id }, 'Error from agent');
-      }
-    }
-
-    return responses;
+    // Delegate to base class executeParallel
+    // Team-specific prompts are handled via transformContext hook
+    return this.executeParallel(agents, context, toolkit);
   }
 
   /**
