@@ -16,3 +16,10 @@ export {
   parseAIConsensusResponse,
   type ParseOptions,
 } from './json-parser.js';
+
+export {
+  selectPreferredAgent,
+  createLightAgentFromBase,
+  selectAndCreateLightAgent,
+  type LightAgentConfig,
+} from './light-agent-selector.js';

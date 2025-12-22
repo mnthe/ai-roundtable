@@ -177,13 +177,11 @@ const EXPERT_PANEL_CONFIG: ModePromptConfig = {
  * - Emphasis on domain expertise and citations
  *
  * Uses hooks:
- * - getAgentRole: Returns the perspective (technical/economic/ethical/social) via round-robin
  * - transformContext: Injects agent perspective into context for prompt building
  */
 export class ExpertPanelMode extends BaseModeStrategy {
   readonly name = 'expert-panel';
   readonly needsGroupthinkDetection = true;
-  override readonly executionPattern = 'parallel' as const;
 
   /**
    * Map to track agent-to-perspective assignments during a round.
@@ -218,24 +216,6 @@ export class ExpertPanelMode extends BaseModeStrategy {
     }
 
     return this.executeParallel(agents, context, toolkit);
-  }
-
-  /**
-   * Get the perspective (role) for an agent based on round-robin assignment.
-   * Hook implementation for BaseModeStrategy.
-   *
-   * @param _agent - The agent (unused, perspective is based on index)
-   * @param index - The agent's index in the agents array
-   * @param _context - Current debate context (unused)
-   * @returns Perspective identifier (technical/economic/ethical/social)
-   */
-  protected override getAgentRole(
-    _agent: BaseAgent,
-    index: number,
-    _context: DebateContext
-  ): Perspective {
-    // Modulo operation guarantees a valid index, use non-null assertion
-    return PERSPECTIVE_ANCHORS[index % PERSPECTIVE_ANCHORS.length]!;
   }
 
   /**

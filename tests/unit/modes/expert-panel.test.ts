@@ -39,10 +39,6 @@ describe('ExpertPanelMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('expert-panel');
     });
-
-    it('should have executionPattern set to parallel', () => {
-      expect(mode.executionPattern).toBe('parallel');
-    });
   });
 
   describe('perspective anchors exports', () => {
@@ -564,25 +560,4 @@ describe('ExpertPanelMode', () => {
     });
   });
 
-  describe('getAgentRole', () => {
-    it('should return correct perspective via getAgentRole hook', () => {
-      // Access protected method via type assertion for testing
-      const modeWithAccess = mode as unknown as {
-        getAgentRole: (agent: MockAgent, index: number, context: DebateContext) => Perspective;
-      };
-
-      const agent = new MockAgent({
-        id: 'test',
-        name: 'Test',
-        provider: 'anthropic',
-        model: 'mock',
-      });
-
-      expect(modeWithAccess.getAgentRole(agent, 0, defaultContext)).toBe('technical');
-      expect(modeWithAccess.getAgentRole(agent, 1, defaultContext)).toBe('economic');
-      expect(modeWithAccess.getAgentRole(agent, 2, defaultContext)).toBe('ethical');
-      expect(modeWithAccess.getAgentRole(agent, 3, defaultContext)).toBe('social');
-      expect(modeWithAccess.getAgentRole(agent, 4, defaultContext)).toBe('technical'); // wrap around
-    });
-  });
 });

@@ -6,8 +6,8 @@ describe('SQLiteStorage', () => {
   let storage: SQLiteStorage;
 
   beforeEach(() => {
-    // Use in-memory database for tests
-    storage = new SQLiteStorage({ filename: ':memory:' });
+    // SQLiteStorage always uses in-memory database
+    storage = new SQLiteStorage();
   });
 
   afterEach(() => {

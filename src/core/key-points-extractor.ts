@@ -8,10 +8,10 @@
 import { jsonrepair } from 'jsonrepair';
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
-import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
 import { AgentError } from '../errors/index.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
+import { selectPreferredAgent, createLightAgentFromBase } from './utils/light-agent-selector.js';
 
 const logger = createLogger('KeyPointsExtractor');
 
@@ -159,38 +159,32 @@ export class KeyPointsExtractor {
    * Get or create a light model agent for extraction
    */
   private async getOrCreateLightAgent(): Promise<BaseAgent | null> {
+    // Check cached agent health before returning
     if (this.lightAgent) {
-      return this.lightAgent;
+      const health = await this.lightAgent.healthCheck();
+      if (health.healthy) {
+        return this.lightAgent;
+      }
+      // Invalidate unhealthy agent
+      logger.debug(
+        { agentId: this.lightAgent.getInfo().id, error: health.error },
+        'Cached light agent unhealthy, invalidating'
+      );
+      this.lightAgent = null;
     }
 
-    const activeAgents = this.registry.getActiveAgents();
-    if (activeAgents.length === 0) {
+    // Use shared utility for agent selection
+    const baseAgent = selectPreferredAgent(this.registry, this.preferredProvider);
+    if (!baseAgent) {
       return null;
     }
 
-    // Try preferred provider first
-    if (this.preferredProvider) {
-      const preferred = activeAgents.find(
-        (a) => a.getInfo().provider === this.preferredProvider
-      );
-      if (preferred) {
-        this.lightAgent = createLightModelAgent(preferred, this.registry, {
-          idSuffix: 'keypoints',
-        });
-        return this.lightAgent;
-      }
-    }
+    // Create light model agent using shared utility
+    this.lightAgent = createLightAgentFromBase(baseAgent, this.registry, {
+      idSuffix: 'keypoints',
+    });
 
-    // Use first available agent
-    const firstAgent = activeAgents[0];
-    if (firstAgent) {
-      this.lightAgent = createLightModelAgent(firstAgent, this.registry, {
-        idSuffix: 'keypoints',
-      });
-      return this.lightAgent;
-    }
-
-    return null;
+    return this.lightAgent;
   }
 
   /**
@@ -205,36 +199,29 @@ export class KeyPointsExtractor {
       .replace('{position}', response.position)
       .replace('{reasoning}', response.reasoning);
 
-    // Create a minimal debate context for the agent
-    const extractionContext = {
-      sessionId: 'keypoints-extraction',
-      topic: prompt,
-      mode: 'collaborative' as const,
-      currentRound: 1,
-      totalRounds: 1,
-      previousResponses: [],
-    };
+    // System prompt for JSON-only output
+    const systemPrompt =
+      'You are an AI assistant that extracts key points from text. ' +
+      'You must respond with valid JSON only, no additional text before or after the JSON object. ' +
+      'Do not include markdown code fences or any other formatting.';
 
-    const aiResponse = await agent.generateResponse(extractionContext);
+    // Use generateRawCompletion to get raw JSON without parsing
+    const rawResponse = await agent.generateRawCompletion(prompt, systemPrompt);
 
-    // Parse the AI response, passing original reasoning for fallback
-    return this.parseAIResponse(aiResponse, response.reasoning);
+    // Parse the raw response, passing original reasoning for fallback
+    return this.parseRawResponse(rawResponse, response.reasoning);
   }
 
   /**
-   * Parse the AI's JSON response into key points array
+   * Parse the raw AI response string into key points array
    *
-   * @param response - AI agent's response containing JSON key points
+   * @param rawResponse - Raw string response from AI containing JSON key points
    * @param originalReasoning - Original agent's reasoning for fallback extraction
    */
-  private parseAIResponse(response: AgentResponse, originalReasoning: string): string[] {
+  private parseRawResponse(rawResponse: string, originalReasoning: string): string[] {
     try {
-      // Try to extract JSON from the response
-      let jsonStr = response.position.match(/\{[\s\S]*\}/)?.[0];
-      if (!jsonStr) {
-        // Try reasoning field as fallback
-        jsonStr = response.reasoning.match(/\{[\s\S]*\}/)?.[0];
-      }
+      // Try to extract JSON from the raw response
+      const jsonStr = rawResponse.match(/\{[\s\S]*\}/)?.[0];
 
       if (!jsonStr) {
         throw new AgentError('No JSON found in AI response for key points extraction', {

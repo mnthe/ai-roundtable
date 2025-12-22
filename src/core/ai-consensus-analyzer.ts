@@ -7,12 +7,16 @@
 
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
-import { createLightModelAgent } from '../agents/utils/light-model-factory.js';
+import { ConfigurationError } from '../errors/index.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import { parseAIConsensusResponse } from './utils/json-parser.js';
+import { selectPreferredAgent, createLightAgentFromBase } from './utils/light-agent-selector.js';
 
 const logger = createLogger('AIConsensusAnalyzer');
+
+/** Constant for self-analysis identifier when only one response is provided */
+const SELF_ANALYZER_ID = 'self';
 
 /**
  * Configuration for AIConsensusAnalyzer
@@ -178,7 +182,7 @@ export class AIConsensusAnalyzer {
             summary: response.position,
           },
         ],
-        analyzerId: 'self',
+        analyzerId: SELF_ANALYZER_ID,
       };
     }
 
@@ -196,7 +200,9 @@ export class AIConsensusAnalyzer {
         },
         'No AI agent available for consensus analysis'
       );
-      throw new Error(errorMessage);
+      throw new ConfigurationError(errorMessage, {
+        code: 'AI_ANALYSIS_UNAVAILABLE',
+      });
     }
 
     logger.debug(
@@ -243,8 +249,9 @@ export class AIConsensusAnalyzer {
   }> {
     const diagnostics = this.getDiagnostics();
 
-    const activeAgents = this.registry.getActiveAgents();
-    if (activeAgents.length === 0) {
+    // Use shared utility for agent selection
+    const baseAgent = selectPreferredAgent(this.registry, this.preferredProvider);
+    if (!baseAgent) {
       logger.warn(
         {
           totalAgents: diagnostics.totalAgents,
@@ -256,44 +263,36 @@ export class AIConsensusAnalyzer {
       return { agent: null, diagnostics };
     }
 
-    // Try preferred provider first
-    if (this.preferredProvider) {
-      const preferred = activeAgents.find((a) => a.getInfo().provider === this.preferredProvider);
-      if (preferred) {
-        logger.debug(
-          { provider: this.preferredProvider, agentId: preferred.getInfo().id },
-          'Using preferred provider for analysis'
-        );
-        const lightAgent = createLightModelAgent(preferred, this.registry, {
-          idSuffix: 'consensus',
-          maxTokens: 8192, // Higher limit for detailed analysis
-        });
-        return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
-      }
+    const info = baseAgent.getInfo();
+    const isPreferred = this.preferredProvider && info.provider === this.preferredProvider;
+
+    if (isPreferred) {
+      logger.debug(
+        { provider: this.preferredProvider, agentId: info.id },
+        'Using preferred provider for analysis'
+      );
+    } else if (this.preferredProvider) {
       logger.debug(
         {
           preferredProvider: this.preferredProvider,
-          availableProviders: activeAgents.map((a) => a.getInfo().provider),
+          actualProvider: info.provider,
         },
         'Preferred provider not available, using alternative'
       );
-    }
-
-    // Use first available agent
-    const firstAgent = activeAgents[0];
-    if (firstAgent) {
+    } else {
       logger.debug(
-        { provider: firstAgent.getInfo().provider, agentId: firstAgent.getInfo().id },
+        { provider: info.provider, agentId: info.id },
         'Using first available agent for analysis'
       );
-      const lightAgent = createLightModelAgent(firstAgent, this.registry, {
-        idSuffix: 'consensus',
-        maxTokens: 8192, // Higher limit for detailed analysis
-      });
-      return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
     }
 
-    return { agent: null, diagnostics };
+    // Create light model agent using shared utility
+    const lightAgent = createLightAgentFromBase(baseAgent, this.registry, {
+      idSuffix: 'consensus',
+      maxTokens: 8192, // Higher limit for detailed analysis
+    });
+
+    return { agent: lightAgent, diagnostics: { ...diagnostics, available: true } };
   }
 
   /**

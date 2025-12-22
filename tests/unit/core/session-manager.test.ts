@@ -8,8 +8,8 @@ describe('SessionManager', () => {
   let storage: SQLiteStorage;
 
   beforeEach(() => {
-    // Use in-memory database for tests
-    storage = new SQLiteStorage({ filename: ':memory:' });
+    // SQLiteStorage always uses in-memory database
+    storage = new SQLiteStorage();
     manager = new SessionManager({ storage });
   });
 
@@ -482,7 +482,7 @@ describe('SessionManager', () => {
 
   describe('storage ownership', () => {
     it('should not close provided storage when manager is closed', async () => {
-      const providedStorage = new SQLiteStorage({ filename: ':memory:' });
+      const providedStorage = new SQLiteStorage();
       const managerWithProvidedStorage = new SessionManager({ storage: providedStorage });
 
       managerWithProvidedStorage.close();

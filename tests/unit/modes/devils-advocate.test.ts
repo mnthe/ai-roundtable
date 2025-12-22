@@ -34,10 +34,6 @@ describe('DevilsAdvocateMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('devils-advocate');
     });
-
-    it('should have sequential execution pattern', () => {
-      expect(mode.executionPattern).toBe('sequential');
-    });
   });
 
   describe('executeRound', () => {

@@ -34,10 +34,6 @@ describe('RedTeamBlueTeamMode', () => {
     it('should have correct name', () => {
       expect(mode.name).toBe('red-team-blue-team');
     });
-
-    it('should have parallel execution pattern', () => {
-      expect(mode.executionPattern).toBe('parallel');
-    });
   });
 
   describe('getAgentRole hook', () => {

@@ -170,7 +170,6 @@ const BLUE_TEAM_OUTPUT_SECTIONS: OutputSection[] = createOutputSections([
 export class RedTeamBlueTeamMode extends BaseModeStrategy {
   readonly name = 'red-team-blue-team';
   readonly needsGroupthinkDetection = false;
-  override readonly executionPattern = 'parallel' as const;
 
   /**
    * Stores agent indices for the current round execution.

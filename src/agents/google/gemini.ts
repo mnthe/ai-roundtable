@@ -286,46 +286,24 @@ Please provide your final response. You have access to additional tools (request
   }
 
   /**
-   * Perform synthesis by calling Gemini API directly with synthesis-specific prompts
-   * This bypasses the standard debate prompt building to use synthesis format
+   * Execute a simple completion request to Gemini API
+   * Shared logic for performSynthesis and generateRawCompletion
    */
-  protected override async performSynthesis(
+  private async executeSimpleCompletion(
     systemPrompt: string,
-    userMessage: string
+    userMessage: string,
+    operation: string
   ): Promise<string> {
-    const response = await withRetry(
-      () =>
-        this.client.models.generateContent({
-          model: this.model,
-          contents: userMessage,
-          config: {
-            systemInstruction: systemPrompt,
-            temperature: this.temperature,
-            maxOutputTokens: this.maxTokens,
-          },
-        }),
-      { maxRetries: 3 }
-    );
-
-    return response.text ?? '';
-  }
-
-  /**
-   * Generate a raw text completion without parsing into structured format
-   * Used by AIConsensusAnalyzer to get raw JSON responses
-   */
-  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    logger.debug({ agentId: this.id }, 'Generating raw completion');
+    logger.debug({ agentId: this.id }, operation);
 
     try {
       const response = await withRetry(
         () =>
           this.client.models.generateContent({
             model: this.model,
-            contents: prompt,
+            contents: userMessage,
             config: {
-              systemInstruction:
-                systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+              systemInstruction: systemPrompt,
               temperature: this.temperature,
               maxOutputTokens: this.maxTokens,
             },
@@ -335,13 +313,33 @@ Please provide your final response. You have access to additional tools (request
 
       return response.text ?? '';
     } catch (error) {
-      const convertedError = convertSDKError(error, 'google');
-      logger.error(
-        { err: convertedError, agentId: this.id },
-        'Failed to generate raw completion'
-      );
+      const convertedError = this.convertError(error);
+      logger.error({ err: convertedError, agentId: this.id }, `Failed to ${operation}`);
       throw convertedError;
     }
+  }
+
+  /**
+   * Perform synthesis by calling Gemini API directly with synthesis-specific prompts
+   * This bypasses the standard debate prompt building to use synthesis format
+   */
+  protected override async performSynthesis(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
+    return this.executeSimpleCompletion(systemPrompt, userMessage, 'perform synthesis');
+  }
+
+  /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer to get raw JSON responses
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    return this.executeSimpleCompletion(
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      prompt,
+      'generate raw completion'
+    );
   }
 
   /**

@@ -214,10 +214,7 @@ export class ClaudeAgent extends BaseAgent {
     }
 
     // Extract text from final response
-    const textBlocks = response.content.filter(
-      (block): block is TextBlock => block.type === 'text'
-    );
-    const rawText = textBlocks.map((block) => block.text).join('\n');
+    const rawText = this.extractTextFromResponse(response);
 
     return { rawText, toolCalls, citations };
   }
@@ -230,38 +227,15 @@ export class ClaudeAgent extends BaseAgent {
   }
 
   /**
-   * Perform synthesis by calling Claude API directly with synthesis-specific prompts
-   * This bypasses the standard debate prompt building to use synthesis format
+   * Execute a simple completion without tool support
+   * Shared logic for performSynthesis and generateRawCompletion
    */
-  protected override async performSynthesis(
+  private async executeSimpleCompletion(
     systemPrompt: string,
-    userMessage: string
+    userMessage: string,
+    operation: string
   ): Promise<string> {
-    const response = await withRetry(
-      () =>
-        this.client.messages.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userMessage }],
-          temperature: this.temperature,
-        }),
-      { maxRetries: 3 }
-    );
-
-    // Extract text from response
-    const textBlocks = response.content.filter(
-      (block): block is TextBlock => block.type === 'text'
-    );
-    return textBlocks.map((block) => block.text).join('\n');
-  }
-
-  /**
-   * Generate a raw text completion without parsing into structured format
-   * Used by AIConsensusAnalyzer to get raw JSON responses
-   */
-  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    logger.debug({ agentId: this.id }, 'Generating raw completion');
+    logger.debug({ agentId: this.id }, operation);
 
     try {
       const response = await withRetry(
@@ -269,26 +243,52 @@ export class ClaudeAgent extends BaseAgent {
           this.client.messages.create({
             model: this.model,
             max_tokens: this.maxTokens,
-            system: systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
-            messages: [{ role: 'user', content: prompt }],
+            system: systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
             temperature: this.temperature,
           }),
         { maxRetries: 3 }
       );
 
-      // Extract text from response without any parsing
-      const textBlocks = response.content.filter(
-        (block): block is TextBlock => block.type === 'text'
-      );
-      return textBlocks.map((block) => block.text).join('\n');
+      return this.extractTextFromResponse(response);
     } catch (error) {
-      const convertedError = convertSDKError(error, 'anthropic');
-      logger.error(
-        { err: convertedError, agentId: this.id },
-        'Failed to generate raw completion'
-      );
+      const convertedError = this.convertError(error);
+      logger.error({ err: convertedError, agentId: this.id }, `Failed to ${operation}`);
       throw convertedError;
     }
+  }
+
+  /**
+   * Extract text content from Anthropic message response
+   */
+  private extractTextFromResponse(response: Anthropic.Message): string {
+    const textBlocks = response.content.filter(
+      (block): block is TextBlock => block.type === 'text'
+    );
+    return textBlocks.map((block) => block.text).join('\n');
+  }
+
+  /**
+   * Perform synthesis by calling Claude API directly with synthesis-specific prompts
+   * This bypasses the standard debate prompt building to use synthesis format
+   */
+  protected override async performSynthesis(
+    systemPrompt: string,
+    userMessage: string
+  ): Promise<string> {
+    return this.executeSimpleCompletion(systemPrompt, userMessage, 'Performing synthesis');
+  }
+
+  /**
+   * Generate a raw text completion without parsing into structured format
+   * Used by AIConsensusAnalyzer to get raw JSON responses
+   */
+  async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
+    return this.executeSimpleCompletion(
+      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      prompt,
+      'Generating raw completion'
+    );
   }
 
   /**

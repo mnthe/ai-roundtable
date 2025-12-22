@@ -35,9 +35,13 @@ function escapeLikePattern(value: string): string {
   return value.replace(/[%_\\]/g, '\\$&');
 }
 
-export interface SQLiteStorageOptions {
-  filename?: string; // Use ':memory:' for in-memory database (default)
-}
+/**
+ * Options for SQLiteStorage constructor.
+ * Currently empty as SQLiteStorage always uses in-memory database.
+ * Kept for future extensibility (e.g., file-based persistence).
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface SQLiteStorageOptions {}
 
 /**
  * Session filter options for search

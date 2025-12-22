@@ -869,8 +869,8 @@ describe('MCP Tools', () => {
     let debateEngine: DebateEngine;
 
     beforeEach(() => {
-      // Create in-memory storage
-      storage = new SQLiteStorage({ filename: ':memory:' });
+      // SQLiteStorage always uses in-memory database
+      storage = new SQLiteStorage();
       sessionManager = new SessionManager({ storage });
       agentRegistry = new AgentRegistry();
       const toolkit = new DefaultAgentToolkit();

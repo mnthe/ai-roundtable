@@ -10,8 +10,6 @@ import type { Session, AgentResponse, SessionStatus, DebateConfig } from '../typ
 export interface SessionManagerOptions {
   /** Provide a custom storage implementation */
   storage?: Storage;
-  /** Filename for SQLite storage (ignored if storage is provided) */
-  storageFilename?: string;
 }
 
 export class SessionManager {
@@ -23,7 +21,7 @@ export class SessionManager {
       this.storage = options.storage;
       this.ownsStorage = false;
     } else {
-      this.storage = new SQLiteStorage({ filename: options.storageFilename });
+      this.storage = new SQLiteStorage();
       this.ownsStorage = true;
     }
   }

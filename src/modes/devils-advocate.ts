@@ -218,7 +218,6 @@ const ROLE_DISPLAY_NAMES: Record<DevilsAdvocateRole, string> = {
 export class DevilsAdvocateMode extends BaseModeStrategy {
   readonly name = 'devils-advocate';
   readonly needsGroupthinkDetection = false;
-  override readonly executionPattern = 'sequential' as const;
 
   /**
    * Tracks current agent index during sequential execution.
