@@ -21,6 +21,7 @@ import {
   isSessionError,
   wrapError,
 } from './utils.js';
+import { ERROR_MESSAGES } from './constants.js';
 
 /**
  * Handler: start_roundtable
@@ -42,14 +43,14 @@ export async function handleStartRoundtable(
       // Use all registered agents if none specified
       agentIds = agentRegistry.getAllAgentIds();
       if (agentIds.length === 0) {
-        return createErrorResponse('No agents available. Please register agents first.');
+        return createErrorResponse(ERROR_MESSAGES.NO_AGENTS_AVAILABLE);
       }
     }
 
     // Validate agents exist
     for (const agentId of agentIds) {
       if (!agentRegistry.hasAgent(agentId)) {
-        return createErrorResponse(`Agent "${agentId}" not found`);
+        return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_FOUND(agentId));
       }
     }
 
@@ -81,7 +82,7 @@ export async function handleStartRoundtable(
     // Build 4-layer response
     const firstRound = roundResults[0];
     if (!firstRound) {
-      return createErrorResponse('No round results available');
+      return createErrorResponse(ERROR_MESSAGES.NO_ROUND_RESULTS);
     }
 
     // Extract key points using AI (if available)
@@ -125,9 +126,7 @@ export async function handleContinueRoundtable(
 
     // Check if session is active
     if (session.status !== 'active') {
-      return createErrorResponse(
-        `Session "${input.sessionId}" is not active (status: ${session.status})`
-      );
+      return createErrorResponse(ERROR_MESSAGES.SESSION_NOT_ACTIVE(input.sessionId, session.status));
     }
 
     // Get agents
@@ -159,7 +158,7 @@ export async function handleContinueRoundtable(
     // Build 4-layer response - only latest round
     const latestRound = roundResults[roundResults.length - 1];
     if (!latestRound) {
-      return createErrorResponse('No round results available');
+      return createErrorResponse(ERROR_MESSAGES.NO_ROUND_RESULTS);
     }
 
     // Get previous round responses for confidence change calculation
@@ -216,9 +215,7 @@ export async function handleControlSession(
     switch (input.action) {
       case 'pause':
         if (session.status !== 'active') {
-          return createErrorResponse(
-            `Cannot pause session in status "${session.status}". Only active sessions can be paused.`
-          );
+          return createErrorResponse(ERROR_MESSAGES.CANNOT_PAUSE(session.status));
         }
         newStatus = 'paused';
         message = 'Session paused successfully';
@@ -226,9 +223,7 @@ export async function handleControlSession(
 
       case 'resume':
         if (session.status !== 'paused') {
-          return createErrorResponse(
-            `Cannot resume session in status "${session.status}". Only paused sessions can be resumed.`
-          );
+          return createErrorResponse(ERROR_MESSAGES.CANNOT_RESUME(session.status));
         }
         newStatus = 'active';
         message = 'Session resumed successfully';
@@ -236,14 +231,14 @@ export async function handleControlSession(
 
       case 'stop':
         if (session.status === 'completed') {
-          return createErrorResponse('Session is already completed');
+          return createErrorResponse(ERROR_MESSAGES.SESSION_ALREADY_COMPLETED);
         }
         newStatus = 'completed';
         message = 'Session stopped and marked as completed';
         break;
 
       default:
-        return createErrorResponse(`Unknown action: ${input.action}`);
+        return createErrorResponse(ERROR_MESSAGES.UNKNOWN_ACTION(input.action));
     }
 
     // Update session status

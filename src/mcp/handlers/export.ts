@@ -16,6 +16,7 @@ import {
   groupResponsesByRound,
   wrapError,
 } from './utils.js';
+import { ERROR_MESSAGES } from './constants.js';
 
 const logger = createLogger('ExportHandlers');
 
@@ -207,9 +208,7 @@ export async function handleSynthesizeDebate(
     // Get all responses
     const responses = await sessionManager.getResponses(input.sessionId);
     if (responses.length === 0) {
-      return createErrorResponse(
-        'No responses found in this session. Cannot synthesize an empty debate.'
-      );
+      return createErrorResponse(ERROR_MESSAGES.SESSION_NO_RESPONSES);
     }
 
     // Determine synthesizer agent
@@ -218,7 +217,7 @@ export async function handleSynthesizeDebate(
       // Use first active agent as default
       const activeAgentIds = agentRegistry.getActiveAgentIds();
       if (activeAgentIds.length === 0) {
-        return createErrorResponse('No active agents available for synthesis');
+        return createErrorResponse(ERROR_MESSAGES.NO_ACTIVE_AGENTS);
       }
       synthesizerId = activeAgentIds[0]!;
     }
@@ -226,7 +225,7 @@ export async function handleSynthesizeDebate(
     // Verify synthesizer exists
     const synthesizerAgent = agentRegistry.getAgent(synthesizerId);
     if (!synthesizerAgent) {
-      return createErrorResponse(`Synthesizer agent "${synthesizerId}" not found`);
+      return createErrorResponse(ERROR_MESSAGES.SYNTHESIZER_NOT_FOUND(synthesizerId));
     }
 
     // Build synthesis prompt

@@ -23,6 +23,7 @@ export interface MappedResponse {
   position: string;
   reasoning: string;
   confidence: number;
+  stance?: 'YES' | 'NO' | 'NEUTRAL';
   citations?: AgentResponse['citations'];
   toolCalls?: { toolName: string; timestamp: Date }[];
   timestamp: Date;
@@ -45,6 +46,7 @@ export function mapResponseForOutput(response: AgentResponse): MappedResponse {
     position: response.position,
     reasoning: response.reasoning,
     confidence: response.confidence,
+    stance: response.stance,
     citations: response.citations,
     toolCalls: response.toolCalls?.map((tc) => ({
       toolName: tc.toolName,

@@ -59,18 +59,16 @@ export async function handleGetConsensus(
 
     // Validate round number
     if (roundToAnalyze < 1) {
-      return createErrorResponse('No rounds have been executed yet');
+      return createErrorResponse(ERROR_MESSAGES.NO_ROUNDS_EXECUTED);
     }
     if (roundToAnalyze > session.currentRound) {
-      return createErrorResponse(
-        `Round ${roundToAnalyze} does not exist. Current round is ${session.currentRound}`
-      );
+      return createErrorResponse(ERROR_MESSAGES.ROUND_NOT_EXIST(roundToAnalyze, session.currentRound));
     }
 
     // Get responses for the specific round only
     const responses = await sessionManager.getResponsesForRound(input.sessionId, roundToAnalyze);
     if (responses.length === 0) {
-      return createErrorResponse(`No responses found for round ${roundToAnalyze}`);
+      return createErrorResponse(ERROR_MESSAGES.NO_RESPONSES_FOR_ROUND(roundToAnalyze));
     }
 
     // Analyze consensus using AI (required)
@@ -116,7 +114,7 @@ export async function handleGetRoundDetails(
     // Validate round number
     if (input.roundNumber > session.currentRound) {
       return createErrorResponse(
-        `Round ${input.roundNumber} has not been executed yet. Current round: ${session.currentRound}`
+        ERROR_MESSAGES.ROUND_NOT_EXECUTED(input.roundNumber, session.currentRound)
       );
     }
 
@@ -124,7 +122,7 @@ export async function handleGetRoundDetails(
     const responses = await sessionManager.getResponsesForRound(input.sessionId, input.roundNumber);
 
     if (responses.length === 0) {
-      return createErrorResponse(`No responses found for round ${input.roundNumber}`);
+      return createErrorResponse(ERROR_MESSAGES.NO_RESPONSES_FOR_ROUND(input.roundNumber));
     }
 
     // Analyze consensus using AI (required)
@@ -167,9 +165,7 @@ export async function handleGetResponseDetail(
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
-      return createErrorResponse(
-        `Agent "${input.agentId}" did not participate in session "${input.sessionId}"`
-      );
+      return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId));
     }
 
     // Get all responses
@@ -177,7 +173,7 @@ export async function handleGetResponseDetail(
     let agentResponses = allResponses.filter((r) => r.agentId === input.agentId);
 
     if (agentResponses.length === 0) {
-      return createErrorResponse(`No responses found for agent "${input.agentId}" in this session`);
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
     }
 
     // Filter by round if specified
@@ -190,7 +186,7 @@ export async function handleGetResponseDetail(
 
       if (agentResponses.length === 0) {
         return createErrorResponse(
-          `No responses found for agent "${input.agentId}" in round ${input.roundNumber}`
+          ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_ROUND(input.agentId, input.roundNumber)
         );
       }
     }
@@ -295,9 +291,7 @@ export async function handleGetThoughts(
 
     // Verify agent participated in this session
     if (!session.agentIds.includes(input.agentId)) {
-      return createErrorResponse(
-        `Agent "${input.agentId}" did not participate in session "${input.sessionId}"`
-      );
+      return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_PARTICIPATE(input.agentId, input.sessionId));
     }
 
     // Get all responses for this agent
@@ -305,7 +299,7 @@ export async function handleGetThoughts(
     const agentResponses = allResponses.filter((r) => r.agentId === input.agentId);
 
     if (agentResponses.length === 0) {
-      return createErrorResponse(`No responses found for agent "${input.agentId}" in this session`);
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
     }
 
     // Group responses by round
