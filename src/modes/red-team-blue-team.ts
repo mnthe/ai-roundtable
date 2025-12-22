@@ -38,10 +38,6 @@ interface RedTeamBlueTeamContext extends DebateContext {
   _agentTeam?: Team;
 }
 
-/**
- * Alias for backward compatibility within this file
- */
-const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Red Team role configuration
@@ -286,9 +282,9 @@ BLUE TEAM HAS PROPOSED SOLUTIONS. YOUR JOB: BREAK THEM.
 
     if (context.focusQuestion) {
       prompt += `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Attack this question. What are ALL the risks and problems?
 `;
@@ -327,9 +323,9 @@ RED TEAM HAS ATTACKED. YOUR JOB: DEFEND AND BUILD.
 
     if (context.focusQuestion) {
       prompt += `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 FOCUS QUESTION: ${context.focusQuestion}
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Solve this. Propose robust solutions that withstand attacks.
 `;
@@ -343,9 +339,9 @@ Solve this. Propose robust solutions that withstand attacks.
    */
   private buildTeamStructuralEnforcement(sections: OutputSection[]): string {
     let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 REQUIRED OUTPUT STRUCTURE:
 

@@ -20,7 +20,10 @@ import {
   isSessionError,
   groupResponsesByRound,
   wrapError,
+  mapResponseForOutput,
+  mapResponseWithAgentForOutput,
 } from './utils.js';
+import { ERROR_MESSAGES } from './constants.js';
 
 /**
  * Get whether groupthink detection is needed for a given mode
@@ -72,9 +75,7 @@ export async function handleGetConsensus(
 
     // Analyze consensus using AI (required)
     if (!aiConsensusAnalyzer) {
-      return createErrorResponse(
-        'AI consensus analyzer not available. Ensure API keys are configured.'
-      );
+      return createErrorResponse(ERROR_MESSAGES.AI_ANALYZER_NOT_AVAILABLE);
     }
     const includeGroupthink = needsGroupthinkDetection(session.mode);
     const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
@@ -128,9 +129,7 @@ export async function handleGetRoundDetails(
 
     // Analyze consensus using AI (required)
     if (!aiConsensusAnalyzer) {
-      return createErrorResponse(
-        'AI consensus analyzer not available. Ensure API keys are configured.'
-      );
+      return createErrorResponse(ERROR_MESSAGES.AI_ANALYZER_NOT_AVAILABLE);
     }
     const includeGroupthink = needsGroupthinkDetection(session.mode);
     const consensus = await aiConsensusAnalyzer.analyzeConsensus(responses, session.topic, {
@@ -140,19 +139,7 @@ export async function handleGetRoundDetails(
     return createSuccessResponse({
       sessionId: input.sessionId,
       roundNumber: input.roundNumber,
-      responses: responses.map((r) => ({
-        agentId: r.agentId,
-        agentName: r.agentName,
-        position: r.position,
-        reasoning: r.reasoning,
-        confidence: r.confidence,
-        citations: r.citations,
-        toolCalls: r.toolCalls?.map((tc) => ({
-          toolName: tc.toolName,
-          timestamp: tc.timestamp,
-        })),
-        timestamp: r.timestamp,
-      })),
+      responses: responses.map(mapResponseWithAgentForOutput),
       consensus,
     });
   } catch (error) {
@@ -213,17 +200,7 @@ export async function handleGetResponseDetail(
       agentId: input.agentId,
       agentName: agentResponses[0]!.agentName,
       roundNumber: input.roundNumber,
-      responses: agentResponses.map((r) => ({
-        position: r.position,
-        reasoning: r.reasoning,
-        confidence: r.confidence,
-        citations: r.citations,
-        toolCalls: r.toolCalls?.map((tc) => ({
-          toolName: tc.toolName,
-          timestamp: tc.timestamp,
-        })),
-        timestamp: r.timestamp,
-      })),
+      responses: agentResponses.map(mapResponseForOutput),
     });
   } catch (error) {
     return createErrorResponse(wrapError(error));
@@ -340,17 +317,7 @@ export async function handleGetThoughts(
       agentName: agentResponses[0]!.agentName,
       totalResponses: agentResponses.length,
       rounds: responsesByRound.size,
-      responses: agentResponses.map((r) => ({
-        position: r.position,
-        reasoning: r.reasoning,
-        confidence: r.confidence,
-        citations: r.citations,
-        toolCalls: r.toolCalls?.map((tc) => ({
-          toolName: tc.toolName,
-          timestamp: tc.timestamp,
-        })),
-        timestamp: r.timestamp,
-      })),
+      responses: agentResponses.map(mapResponseForOutput),
       confidenceEvolution: agentResponses.map((r, idx) => ({
         round: idx + 1,
         confidence: r.confidence,

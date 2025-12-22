@@ -24,10 +24,6 @@ import {
 
 const logger = createLogger('DevilsAdvocateMode');
 
-/**
- * Alias for backward compatibility within this file
- */
-const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Role identifiers for devils-advocate mode
@@ -503,11 +499,11 @@ Present the counter-perspective on this specific question.
     }
 
     prompt += `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 REMINDER: You are the designated opposition in this debate exercise.
 Your role is to present the strongest possible case for NO.
 This ensures the topic receives thorough examination from all angles.
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 `;
 
     return prompt;
@@ -548,9 +544,9 @@ Evaluate which position better addresses this question.
    */
   private buildPrimaryStructuralEnforcement(): string {
     return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Your JSON response MUST include:
 {
@@ -572,9 +568,9 @@ FORBIDDEN PHRASES in position/reasoning:
    */
   private buildOppositionStructuralEnforcement(): string {
     return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 YOUR JSON RESPONSE FORMAT:
 {
@@ -602,9 +598,9 @@ AVOID (breaks debate structure):
    */
   private buildEvaluatorStructuralEnforcement(): string {
     return `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 Your JSON response MUST include:
 {

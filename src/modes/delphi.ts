@@ -33,10 +33,6 @@ import {
   type ContextProcessor,
 } from './processors/index.js';
 
-/**
- * Alias for backward compatibility within this file
- */
-const SEPARATOR = PROMPT_SEPARATOR;
 
 /**
  * Delphi mode role anchor configuration
@@ -215,9 +211,9 @@ Mode: Delphi Method
    */
   private buildStructuralEnforcementWithStats(context: DebateContext): string {
     let prompt = `
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 LAYER 3: STRUCTURAL ENFORCEMENT
-${SEPARATOR}
+${PROMPT_SEPARATOR}
 
 `;
 
