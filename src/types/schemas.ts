@@ -126,10 +126,21 @@ export const StartRoundtableInputSchema = z.object({
   ),
 });
 
+/**
+ * Schema for context result provided by caller
+ */
+export const ContextResultSchema = z.object({
+  requestId: z.string().min(1, 'Request ID is required'),
+  success: z.boolean(),
+  result: z.string().optional(),
+  error: z.string().optional(),
+});
+
 export const ContinueRoundtableInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
   rounds: z.number().int().positive().optional(),
   focusQuestion: z.string().optional(),
+  contextResults: z.array(ContextResultSchema).optional(),
 });
 
 export const GetConsensusInputSchema = z.object({
@@ -173,6 +184,17 @@ export const SynthesizeDebateInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
   synthesizer: z.string().optional(),
 });
+
+export const ListSessionsInputSchema = z.object({
+  topic: z.string().optional().describe('Search sessions by topic keyword (partial match)'),
+  mode: DebateModeSchema.optional().describe('Filter by debate mode'),
+  status: SessionStatusSchema.optional().describe('Filter by session status'),
+  fromDate: z.string().optional().describe('Filter sessions created after this date (ISO 8601 format)'),
+  toDate: z.string().optional().describe('Filter sessions created before this date (ISO 8601 format)'),
+  limit: z.number().int().positive().optional().default(50).describe('Maximum number of results to return'),
+});
+
+export const GetAgentsInputSchema = z.object({});
 
 // ============================================
 // SQLite Storage Schemas

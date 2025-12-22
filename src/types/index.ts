@@ -105,6 +105,8 @@ export interface DebateContext {
   focusQuestion?: string;
   /** Mode-specific prompt additions (set by the mode strategy) */
   modePrompt?: string;
+  /** Results from previous context requests (provided by caller) */
+  contextResults?: ContextResult[];
 }
 
 // ============================================
@@ -131,6 +133,8 @@ export interface RoundResult {
   roundNumber: number;
   responses: AgentResponse[];
   consensus: ConsensusResult;
+  /** Context requests made by agents during this round */
+  contextRequests?: ContextRequest[];
 }
 
 // ============================================
@@ -248,6 +252,8 @@ export interface ContinueRoundtableInput {
   sessionId: string;
   rounds?: number;
   focusQuestion?: string;
+  /** Results for previous context requests (provided by caller) */
+  contextResults?: ContextResult[];
 }
 
 export interface GetConsensusInput {
@@ -379,6 +385,9 @@ export interface RoundtableResponse {
   roundNumber: number;
   totalRounds: number;
 
+  /** Response status indicating if context is needed */
+  status: RoundtableStatus;
+
   /** Layer 1: Quick decision info */
   decision: DecisionLayer;
 
@@ -390,6 +399,9 @@ export interface RoundtableResponse {
 
   /** Layer 4: Deep dive references */
   metadata: MetadataLayer;
+
+  /** Context requests from agents (present when status is 'needs_context') */
+  contextRequests?: ContextRequest[];
 }
 
 // ============================================
@@ -431,3 +443,58 @@ export interface ExitResult {
   /** Human-readable explanation */
   details: string;
 }
+
+// ============================================
+// Context Request Types (External Context Integration)
+// ============================================
+
+/**
+ * Priority level for context requests
+ * - required: Debate cannot meaningfully continue without this information
+ * - optional: Information would be helpful but debate can proceed without it
+ */
+export type ContextRequestPriority = 'required' | 'optional';
+
+/**
+ * Context request from an agent during debate
+ *
+ * Agents use this to request additional information that isn't available
+ * in the current debate context. The caller (SOTA AI like Claude Code)
+ * decides HOW to obtain this information.
+ */
+export interface ContextRequest {
+  /** Unique identifier for this request */
+  id: string;
+  /** ID of the agent that made this request */
+  agentId: string;
+  /** Natural language description of what information is needed */
+  query: string;
+  /** Why this information is needed (for audit and context) */
+  reason: string;
+  /** Whether this information is required to continue */
+  priority: ContextRequestPriority;
+  /** Timestamp when the request was made */
+  timestamp: Date;
+}
+
+/**
+ * Result provided by caller for a context request
+ */
+export interface ContextResult {
+  /** ID of the original ContextRequest this result corresponds to */
+  requestId: string;
+  /** Whether the request was successfully fulfilled */
+  success: boolean;
+  /** The result data (when success is true) */
+  result?: string;
+  /** Error message (when success is false) */
+  error?: string;
+}
+
+/**
+ * Status of roundtable response
+ * - completed: Round completed successfully, no pending requests
+ * - needs_context: Agents have requested additional context
+ * - in_progress: Debate is still active
+ */
+export type RoundtableStatus = 'completed' | 'needs_context' | 'in_progress';
