@@ -10,6 +10,8 @@ import type {
   ActionRecommendationType,
   AgentResponseSummary,
   Session,
+  ContextRequest,
+  RoundtableStatus,
 } from '../../types/index.js';
 
 /**
@@ -215,12 +217,14 @@ function buildVerificationHints(
  * @param roundResult - The round result containing responses and consensus
  * @param previousResponses - Previous round responses for confidence change calculation
  * @param keyPointsMap - Pre-extracted key points map (agentId -> keyPoints[])
+ * @param contextRequests - Pending context requests from agents (optional)
  */
 export function buildRoundtableResponse(
   session: Session,
   roundResult: RoundResult,
   previousResponses: AgentResponse[] = [],
-  keyPointsMap: Map<string, string[]> = new Map()
+  keyPointsMap: Map<string, string[]> = new Map(),
+  contextRequests: ContextRequest[] = []
 ): RoundtableResponse {
   const responses = roundResult.responses;
   const consensus = roundResult.consensus;
@@ -294,12 +298,24 @@ export function buildRoundtableResponse(
   // Build verification hints (Layer 4)
   const verificationHints = buildVerificationHints(responses, session.id);
 
-  return {
+  // Determine status based on context requests
+  const hasRequiredRequests = contextRequests.some((r) => r.priority === 'required');
+  const status: RoundtableStatus =
+    contextRequests.length > 0 && hasRequiredRequests
+      ? 'needs_context'
+      : session.currentRound >= session.totalRounds
+        ? 'completed'
+        : 'in_progress';
+
+  const result: RoundtableResponse = {
     sessionId: session.id,
     topic: session.topic,
     mode: session.mode,
     roundNumber: roundResult.roundNumber,
     totalRounds: session.totalRounds,
+
+    // Status indicating if context is needed
+    status,
 
     // Layer 1: Decision
     decision: {
@@ -334,4 +350,11 @@ export function buildRoundtableResponse(
       hasMoreDetails: true,
     },
   };
+
+  // Add context requests if present
+  if (contextRequests.length > 0) {
+    result.contextRequests = contextRequests;
+  }
+
+  return result;
 }
