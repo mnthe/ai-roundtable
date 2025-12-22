@@ -275,6 +275,22 @@ export class PerplexityAgent extends BaseAgent {
     const perplexityMetadata = this.extractPerplexityMetadata(response, rawText);
     if (perplexityMetadata.citations.length > 0) {
       citations.push(...perplexityMetadata.citations);
+
+      // Record built-in web search as a tool call for consistency with other agents
+      toolCalls.push({
+        toolName: 'perplexity_search',
+        input: { query: context.topic },
+        output: {
+          success: true,
+          data: {
+            results: perplexityMetadata.citations.map((c) => ({
+              title: c.title,
+              url: c.url,
+            })),
+          },
+        },
+        timestamp: new Date(),
+      });
     }
 
     return {
