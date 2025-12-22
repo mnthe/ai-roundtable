@@ -394,6 +394,277 @@ describe('GeminiAgent', () => {
       expect(response.toolCalls?.[0]?.toolName).toBe('submit_response');
     });
   });
+
+  describe('google search grounding', () => {
+    it('should include google_search tool by default', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'AI regulation needed',
+        reasoning: 'Based on research',
+        confidence: 0.85,
+      });
+
+      let capturedConfig: Record<string, unknown> | undefined;
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedConfig = params?.config;
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: undefined,
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Should include google_search in tools by default
+      expect(capturedConfig?.tools).toBeDefined();
+      const tools = capturedConfig?.tools as Array<{ googleSearch?: object }>;
+      const hasGoogleSearch = tools.some((t) => t.googleSearch !== undefined);
+      expect(hasGoogleSearch).toBe(true);
+    });
+
+    it('should allow disabling google_search', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.8,
+      });
+
+      let capturedConfig: Record<string, unknown> | undefined;
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockImplementation((params) => {
+            capturedConfig = params?.config;
+            return {
+              sendMessage: vi.fn().mockResolvedValue({
+                text: mockResponse,
+                functionCalls: undefined,
+                candidates: undefined,
+              }),
+              getHistory: vi.fn().mockReturnValue([]),
+            };
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+        googleSearch: { enabled: false },
+      });
+
+      await agent.generateResponse(defaultContext);
+
+      // Should NOT include google_search when disabled
+      const tools = capturedConfig?.tools as Array<{ googleSearch?: object }> | undefined;
+      if (tools) {
+        const hasGoogleSearch = tools.some((t) => t.googleSearch !== undefined);
+        expect(hasGoogleSearch).toBe(false);
+      }
+    });
+
+    it('should extract citations from grounding metadata', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'AI needs regulation',
+        reasoning: 'Based on web research',
+        confidence: 0.9,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [
+                {
+                  groundingMetadata: {
+                    webSearchQueries: ['AI regulation 2025'],
+                    groundingChunks: [
+                      {
+                        web: {
+                          title: 'AI Regulation Guide',
+                          uri: 'https://example.com/ai-regulation',
+                        },
+                      },
+                      {
+                        web: {
+                          title: 'Policy Update',
+                          uri: 'https://example.com/policy',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should extract citations from grounding metadata
+      expect(response.citations).toHaveLength(2);
+      expect(response.citations?.[0]?.title).toBe('AI Regulation Guide');
+      expect(response.citations?.[0]?.url).toBe('https://example.com/ai-regulation');
+      expect(response.citations?.[1]?.title).toBe('Policy Update');
+      expect(response.citations?.[1]?.url).toBe('https://example.com/policy');
+    });
+
+    it('should record google_search tool call from grounding metadata', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test position',
+        reasoning: 'Test reasoning',
+        confidence: 0.8,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [
+                {
+                  groundingMetadata: {
+                    webSearchQueries: ['test query'],
+                    groundingChunks: [
+                      {
+                        web: {
+                          title: 'Test Result',
+                          uri: 'https://test.com',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should record google_search tool call
+      expect(response.toolCalls).toHaveLength(1);
+      expect(response.toolCalls?.[0]?.toolName).toBe('google_search');
+      expect(response.toolCalls?.[0]?.input).toEqual({ queries: ['test query'] });
+      expect(response.toolCalls?.[0]?.output).toEqual({
+        success: true,
+        data: {
+          results: [{ title: 'Test Result', url: 'https://test.com' }],
+        },
+      });
+    });
+
+    it('should handle grounding metadata without chunks', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.7,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [
+                {
+                  groundingMetadata: {
+                    webSearchQueries: ['query'],
+                    groundingChunks: [],
+                  },
+                },
+              ],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should handle empty grounding chunks gracefully
+      expect(response.citations?.length ?? 0).toBe(0);
+      expect(response.toolCalls?.length ?? 0).toBe(0);
+    });
+
+    it('should handle missing grounding metadata', async () => {
+      const mockResponse = createJsonResponse({
+        position: 'Test',
+        reasoning: 'Test',
+        confidence: 0.7,
+      });
+
+      const mockClient = {
+        chats: {
+          create: vi.fn().mockReturnValue({
+            sendMessage: vi.fn().mockResolvedValue({
+              text: mockResponse,
+              functionCalls: undefined,
+              candidates: [{ groundingMetadata: undefined }],
+            }),
+            getHistory: vi.fn().mockReturnValue([]),
+          }),
+        },
+        models: {
+          generateContent: vi.fn().mockResolvedValue({ text: 'ok' }),
+        },
+      };
+
+      const agent = new GeminiAgent(defaultConfig, {
+        client: mockClient as unknown as ConstructorParameters<typeof GeminiAgent>[1]['client'],
+      });
+
+      const response = await agent.generateResponse(defaultContext);
+
+      // Should handle missing grounding metadata gracefully
+      expect(response.citations?.length ?? 0).toBe(0);
+      expect(response.toolCalls?.length ?? 0).toBe(0);
+    });
+  });
 });
 
 describe('createGeminiAgent', () => {

@@ -3,7 +3,14 @@
  */
 
 import { GoogleGenAI, Type } from '@google/genai';
-import type { Chat, FunctionDeclaration, Content } from '@google/genai';
+import type {
+  Chat,
+  FunctionDeclaration,
+  Content,
+  GroundingMetadata,
+  GroundingChunk,
+  Tool,
+} from '@google/genai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
@@ -13,6 +20,14 @@ import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../ty
 const logger = createLogger('GeminiAgent');
 
 /**
+ * Google Search grounding configuration options
+ */
+export interface GoogleSearchConfig {
+  /** Enable Google Search grounding (default: true) */
+  enabled?: boolean;
+}
+
+/**
  * Configuration options for Gemini Agent
  */
 export interface GeminiAgentOptions {
@@ -20,6 +35,8 @@ export interface GeminiAgentOptions {
   apiKey?: string;
   /** Custom GoogleGenAI instance (for testing) */
   client?: GoogleGenAI;
+  /** Google Search grounding configuration (default: enabled) */
+  googleSearch?: GoogleSearchConfig;
 }
 
 /**
@@ -33,6 +50,7 @@ export interface GeminiAgentOptions {
  */
 export class GeminiAgent extends BaseAgent {
   private client: GoogleGenAI;
+  private googleSearchConfig: GoogleSearchConfig;
 
   constructor(config: AgentConfig, options?: GeminiAgentOptions) {
     super(config);
@@ -44,6 +62,11 @@ export class GeminiAgent extends BaseAgent {
     } else {
       this.client = new GoogleGenAI({ apiKey });
     }
+
+    // Google Search grounding enabled by default
+    this.googleSearchConfig = {
+      enabled: options?.googleSearch?.enabled !== false,
+    };
   }
 
   /**
@@ -58,8 +81,8 @@ export class GeminiAgent extends BaseAgent {
     const toolCalls: ToolCallRecord[] = [];
     const citations: Citation[] = [];
 
-    // Build tools if toolkit is available
-    const tools = this.toolkit ? this.buildGeminiTools() : undefined;
+    // Build all tools: toolkit tools + Google Search grounding
+    const tools = this.buildAllTools();
 
     // Build chat history
     const history: Content[] = [];
@@ -71,7 +94,7 @@ export class GeminiAgent extends BaseAgent {
         systemInstruction: systemPrompt,
         temperature: this.temperature,
         maxOutputTokens: this.maxTokens,
-        tools: tools ? [{ functionDeclarations: tools }] : undefined,
+        tools: tools.length > 0 ? tools : undefined,
       },
       history,
     });
@@ -128,6 +151,31 @@ export class GeminiAgent extends BaseAgent {
           }),
         { maxRetries: 3 }
       );
+    }
+
+    // Extract grounding metadata and citations from Google Search
+    const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
+    if (groundingMetadata) {
+      const groundingCitations = this.extractCitationsFromGrounding(groundingMetadata);
+      citations.push(...groundingCitations);
+
+      // Record tool call for Google Search grounding
+      if (groundingMetadata.groundingChunks && groundingMetadata.groundingChunks.length > 0) {
+        toolCalls.push({
+          toolName: 'google_search',
+          input: { queries: groundingMetadata.webSearchQueries ?? [] },
+          output: {
+            success: true,
+            data: {
+              results: groundingMetadata.groundingChunks.map((chunk) => ({
+                title: chunk.web?.title,
+                url: chunk.web?.uri,
+              })),
+            },
+          },
+          timestamp: new Date(),
+        });
+      }
     }
 
     // Extract text from final response
@@ -229,6 +277,25 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
+   * Build all tools: toolkit tools + Google Search grounding
+   */
+  private buildAllTools(): Tool[] {
+    const tools: Tool[] = [];
+
+    // Add toolkit tools (function declarations)
+    if (this.toolkit) {
+      tools.push({ functionDeclarations: this.buildGeminiTools() });
+    }
+
+    // Add Google Search grounding if enabled
+    if (this.googleSearchConfig.enabled) {
+      tools.push({ googleSearch: {} });
+    }
+
+    return tools;
+  }
+
+  /**
    * Build Gemini-format tool definitions from toolkit
    * Uses the new @google/genai SDK format with parametersJsonSchema
    */
@@ -254,6 +321,21 @@ export class GeminiAgent extends BaseAgent {
         required: Object.keys(tool.parameters),
       },
     }));
+  }
+
+  /**
+   * Extract citations from Google Search grounding metadata
+   */
+  private extractCitationsFromGrounding(metadata: GroundingMetadata): Citation[] {
+    const chunks = metadata.groundingChunks ?? [];
+
+    return chunks
+      .filter((chunk: GroundingChunk) => chunk.web?.uri)
+      .map((chunk: GroundingChunk) => ({
+        title: chunk.web?.title ?? 'Untitled',
+        url: chunk.web?.uri ?? '',
+        snippet: undefined,
+      }));
   }
 }
 
