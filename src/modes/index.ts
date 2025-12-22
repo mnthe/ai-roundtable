@@ -3,6 +3,12 @@
  */
 
 export { BaseModeStrategy, type DebateModeStrategy } from './base.js';
+export {
+  RoleBasedModeStrategy,
+  type RoleConfig,
+  type RoleBasedContext,
+  type RoleBasedRoundState,
+} from './role-based.js';
 export { CollaborativeMode } from './collaborative.js';
 export { AdversarialMode } from './adversarial.js';
 export { SocraticMode } from './socratic.js';
@@ -15,6 +21,9 @@ export {
   getGlobalModeRegistry,
   resetGlobalModeRegistry,
 } from './registry.js';
+
+// Mode configurations
+export * from './configs/index.js';
 
 // Prompt builder utilities
 export {
