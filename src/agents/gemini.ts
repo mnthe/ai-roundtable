@@ -39,6 +39,7 @@ import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
 import { convertSDKError } from './utils/error-converter.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
+import { LIGHT_MODELS } from './setup.js';
 
 const logger = createLogger('GeminiAgent');
 
@@ -60,6 +61,8 @@ export interface GeminiAgentOptions {
   client?: GoogleGenAI;
   /** Google Search grounding configuration (default: enabled) */
   googleSearch?: GoogleSearchConfig;
+  /** Use light model for Phase 1 web search (default: true for cost/speed optimization) */
+  useLightModelForSearch?: boolean;
 }
 
 /**
@@ -74,6 +77,7 @@ export interface GeminiAgentOptions {
 export class GeminiAgent extends BaseAgent {
   private client: GoogleGenAI;
   private googleSearchConfig: GoogleSearchConfig;
+  private useLightModelForSearch: boolean;
 
   constructor(config: AgentConfig, options?: GeminiAgentOptions) {
     super(config);
@@ -90,6 +94,11 @@ export class GeminiAgent extends BaseAgent {
     this.googleSearchConfig = {
       enabled: options?.googleSearch?.enabled !== false,
     };
+
+    // Use light model for Phase 1 search
+    // NOTE: Disabled by default because gemini-2.5-flash-lite doesn't support Google Search grounding properly
+    // Set to true only if using a model that supports grounding
+    this.useLightModelForSearch = options?.useLightModelForSearch === true;
   }
 
   /**
@@ -120,15 +129,20 @@ export class GeminiAgent extends BaseAgent {
 
     // ============================================================
     // PHASE 1: Web Search with Google Search Grounding
+    // Uses light model by default for cost/speed optimization
     // ============================================================
-    logger.debug({ agentId: this.id }, 'Phase 1: Executing with Google Search grounding');
+    const phase1Model = this.useLightModelForSearch ? LIGHT_MODELS.google : this.model;
+    logger.debug(
+      { agentId: this.id, model: phase1Model, useLightModel: this.useLightModelForSearch },
+      'Phase 1: Executing with Google Search grounding'
+    );
 
     let phase1Response: Awaited<ReturnType<Chat['sendMessage']>> | null = null;
     let phase1Text = '';
 
     if (this.googleSearchConfig.enabled) {
       const phase1Chat: Chat = this.client.chats.create({
-        model: this.model,
+        model: phase1Model,
         config: {
           systemInstruction: systemPrompt,
           temperature: this.temperature,
