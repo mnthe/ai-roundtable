@@ -18,7 +18,7 @@ import { AgentRegistry } from '../../src/agents/registry.js';
 import { ClaudeAgent } from '../../src/agents/claude.js';
 import { ChatGPTAgent } from '../../src/agents/chatgpt.js';
 import { GeminiAgent } from '../../src/agents/gemini.js';
-import { PerplexityAgent } from '../../src/agents/perplexity.js';
+import { PerplexityAgent } from '../../src/agents/perplexity/index.js';
 import { ConsensusAnalyzer } from '../../src/core/consensus-analyzer.js';
 import { resetGlobalModeRegistry } from '../../src/modes/registry.js';
 import { DefaultAgentToolkit } from '../../src/tools/toolkit.js';

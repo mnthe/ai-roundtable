@@ -8,6 +8,8 @@ export {
   createLightModelAgent,
   type LightModelAgentOptions,
 } from './light-model-factory.js';
+// OpenAI Responses API utilities moved to ../openai/
+// Re-export for backward compatibility
 export {
   executeResponsesCompletion,
   executeSimpleResponsesCompletion,
@@ -15,8 +17,10 @@ export {
   extractCitationsFromResponseOutput,
   extractTextFromResponse,
   recordWebSearchToolCall,
-  type ResponsesCompletionParams,
-  type ResponsesCompletionResult,
-  type ResponsesWebSearchConfig,
-  type SimpleResponsesCompletionParams,
-} from './openai-responses.js';
+} from '../openai/responses.js';
+export type {
+  ResponsesCompletionParams,
+  ResponsesCompletionResult,
+  ResponsesWebSearchConfig,
+  SimpleResponsesCompletionParams,
+} from '../openai/types.js';

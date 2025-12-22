@@ -80,7 +80,11 @@ Detailed implementation guides are in `.claude/rules/`:
 
 ```
 src/
-├── agents/           # AI Agent implementations (Claude, ChatGPT, Gemini, Perplexity)
+├── agents/           # AI Agent implementations (organized by provider)
+│   ├── anthropic/    # Claude agent (web_search tool)
+│   ├── openai/       # ChatGPT agent (Responses API)
+│   ├── google/       # Gemini agent (Google grounding)
+│   ├── perplexity/   # Perplexity agent (built-in search)
 │   └── utils/        # Shared utilities (error converter, tool converters)
 ├── benchmark/        # Benchmark framework for debate performance metrics
 ├── config/           # Configuration (exit criteria settings)

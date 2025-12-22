@@ -14,10 +14,12 @@ import {
   recordWebSearchToolCall,
   executeResponsesCompletion,
   executeSimpleResponsesCompletion,
-  type ResponsesWebSearchConfig,
-  type ResponsesCompletionParams,
-  type SimpleResponsesCompletionParams,
-} from '../../../../src/agents/utils/openai-responses.js';
+} from '../../../../src/agents/openai/responses.js';
+import type {
+  ResponsesWebSearchConfig,
+  ResponsesCompletionParams,
+  SimpleResponsesCompletionParams,
+} from '../../../../src/agents/openai/types.js';
 import type { Citation } from '../../../../src/types/index.js';
 
 describe('OpenAI Responses API Utilities', () => {

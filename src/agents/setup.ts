@@ -6,10 +6,10 @@
  */
 
 import { AgentRegistry } from './registry.js';
-import { ClaudeAgent } from './claude.js';
-import { ChatGPTAgent } from './chatgpt.js';
-import { GeminiAgent } from './gemini.js';
-import { PerplexityAgent } from './perplexity.js';
+import { ClaudeAgent } from './anthropic/claude.js';
+import { ChatGPTAgent } from './openai/chatgpt.js';
+import { GeminiAgent } from './google/gemini.js';
+import { PerplexityAgent } from './perplexity/perplexity.js';
 import type { AIProvider, AgentConfig } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import { getEnvOptional } from '../utils/env.js';

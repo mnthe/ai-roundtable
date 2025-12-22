@@ -29,41 +29,18 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type {
   Chat,
   FunctionDeclaration,
-  Content,
   GroundingMetadata,
   GroundingChunk,
-  Tool,
 } from '@google/genai';
-import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
-import { withRetry } from '../utils/retry.js';
-import { createLogger } from '../utils/logger.js';
-import { convertSDKError } from './utils/error-converter.js';
-import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
-import { LIGHT_MODELS } from './setup.js';
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
+import { withRetry } from '../../utils/retry.js';
+import { createLogger } from '../../utils/logger.js';
+import { convertSDKError } from '../utils/error-converter.js';
+import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
+import { LIGHT_MODELS } from '../setup.js';
+import type { GoogleSearchConfig, GeminiAgentOptions } from './types.js';
 
 const logger = createLogger('GeminiAgent');
-
-/**
- * Google Search grounding configuration options
- */
-export interface GoogleSearchConfig {
-  /** Enable Google Search grounding (default: true) */
-  enabled?: boolean;
-}
-
-/**
- * Configuration options for Gemini Agent
- */
-export interface GeminiAgentOptions {
-  /** Google AI API key (defaults to GOOGLE_API_KEY env var) */
-  apiKey?: string;
-  /** Custom GoogleGenAI instance (for testing) */
-  client?: GoogleGenAI;
-  /** Google Search grounding configuration (default: enabled) */
-  googleSearch?: GoogleSearchConfig;
-  /** Use light model for Phase 1 web search (default: true for cost/speed optimization) */
-  useLightModelForSearch?: boolean;
-}
 
 /**
  * Gemini Agent using Google's new unified Gen AI SDK (@google/genai)

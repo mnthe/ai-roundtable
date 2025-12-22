@@ -8,9 +8,6 @@
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
-  DebateModeSchema,
-  SessionStatusSchema,
-  ParallelizationLevelSchema,
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
   GetConsensusInputSchema,

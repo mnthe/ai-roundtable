@@ -1,4 +1,5 @@
 /**
  * Anthropic (Claude) Agent exports
  */
-export { ClaudeAgent, createClaudeAgent, type ClaudeAgentOptions, type WebSearchConfig } from './claude.js';
+export { ClaudeAgent, createClaudeAgent } from './claude.js';
+export type { ClaudeAgentOptions, WebSearchConfig } from './types.js';

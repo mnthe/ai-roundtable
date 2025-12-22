@@ -3,7 +3,7 @@ import {
   PerplexityAgent,
   createPerplexityAgent,
   type PerplexitySearchOptions,
-} from '../../../src/agents/perplexity.js';
+} from '../../../src/agents/perplexity/index.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {

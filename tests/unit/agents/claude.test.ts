@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ClaudeAgent, createClaudeAgent } from '../../../src/agents/claude.js';
+import { ClaudeAgent, createClaudeAgent } from '../../../src/agents/anthropic/claude.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {

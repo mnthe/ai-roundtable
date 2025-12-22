@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiAgent, createGeminiAgent } from '../../../src/agents/gemini.js';
+import { GeminiAgent, createGeminiAgent } from '../../../src/agents/google/gemini.js';
 import type { AgentConfig, DebateContext } from '../../../src/types/index.js';
 import type { AgentToolkit } from '../../../src/agents/base.js';
 import {

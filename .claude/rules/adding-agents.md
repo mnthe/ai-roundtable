@@ -9,24 +9,31 @@ Apply this rule when:
 
 ## Required Steps
 
-### 1. Create Agent Class
+### 1. Create Provider Directory
 
-Create `src/agents/<provider>.ts`:
+Create provider directory with the following structure:
+
+```
+src/agents/<provider>/
+├── <provider>.ts    # Agent implementation
+├── types.ts         # Provider-specific types
+└── index.ts         # Barrel exports
+```
+
+### 2. Create Agent Class
+
+Create `src/agents/<provider>/<provider>.ts`:
 
 ```typescript
-import { BaseAgent } from './base.js';
-import type { AgentConfig, AgentResponse, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
-import type { ProviderApiResult } from './base.js';
-import { createLogger } from '../utils/logger.js';
-import { convertSDKError } from './utils/error-converter.js';
-import { withRetry } from '../utils/retry.js';
+import { BaseAgent } from '../base.js';
+import type { AgentConfig, AgentResponse, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
+import type { ProviderApiResult } from '../base.js';
+import { createLogger } from '../../utils/logger.js';
+import { convertSDKError } from '../utils/error-converter.js';
+import { withRetry } from '../../utils/retry.js';
+import type { MyAgentOptions } from './types.js';
 
 const logger = createLogger('MyAgent');
-
-export interface MyAgentOptions {
-  apiKey?: string;
-  client?: MySDKClient; // For testing
-}
 
 export class MyAgent extends BaseAgent {
   private client: MySDKClient;
@@ -309,21 +316,45 @@ export function createLightModelAgent(
 
 **Key point**: As long as you register your provider in `setupProviders()` and add an entry to `LIGHT_MODELS`, light model support works automatically.
 
-### 6. Export from Index
+### 6. Create Types File
+
+Create `src/agents/<provider>/types.ts`:
+
+```typescript
+export interface MyAgentOptions {
+  apiKey?: string;
+  client?: MySDKClient; // For testing
+}
+```
+
+### 7. Create Provider Index
+
+Create `src/agents/<provider>/index.ts`:
+
+```typescript
+export { MyAgent, createMyAgent } from './my-agent.js';
+export type { MyAgentOptions } from './types.js';
+```
+
+### 8. Export from Main Index
 
 In `src/agents/index.ts`:
 
 ```typescript
-export { MyAgent, createMyAgent, type MyAgentOptions } from './my-agent.js';
+export {
+  MyAgent,
+  createMyAgent,
+  type MyAgentOptions,
+} from './my-provider/index.js';
 ```
 
-### 7. Add Tests
+### 9. Add Tests
 
 Create `tests/unit/agents/my-agent.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MyAgent } from '../../../src/agents/my-agent.js';
+import { MyAgent } from '../../../src/agents/my-provider/my-agent.js';
 import type { DebateContext } from '../../../src/types/index.js';
 
 describe('MyAgent', () => {
@@ -479,6 +510,10 @@ BaseAgent.healthCheck() [TEMPLATE - DO NOT OVERRIDE]
   - [ ] `DEFAULT_AGENT_NAMES`
   - [ ] Provider registration in `setupProviders()`
 - [ ] Error converter updated
-- [ ] Exported from `index.ts`
+- [ ] Provider directory created with:
+  - [ ] `<provider>.ts` (agent class)
+  - [ ] `types.ts` (provider-specific types)
+  - [ ] `index.ts` (barrel exports)
+- [ ] Exported from main `agents/index.ts`
 - [ ] Unit tests with mock client
 - [ ] Environment variable documented

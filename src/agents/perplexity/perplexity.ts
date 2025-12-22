@@ -9,45 +9,17 @@ import Perplexity from '@perplexity-ai/perplexity_ai';
 import type {
   ChatMessageInput,
   ChatMessageOutput,
-  APIPublicSearchResult,
 } from '@perplexity-ai/perplexity_ai/resources';
 import type { StreamChunk } from '@perplexity-ai/perplexity_ai/resources/chat/chat';
 import type { CompletionCreateParams } from '@perplexity-ai/perplexity_ai/resources/chat/completions';
-import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
-import { withRetry } from '../utils/retry.js';
-import { createLogger } from '../utils/logger.js';
-import { convertSDKError } from './utils/index.js';
-import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
+import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
+import { withRetry } from '../../utils/retry.js';
+import { createLogger } from '../../utils/logger.js';
+import { convertSDKError } from '../utils/index.js';
+import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
+import type { PerplexitySearchOptions, PerplexityAgentOptions } from './types.js';
 
 const logger = createLogger('PerplexityAgent');
-
-/**
- * Search recency filter options
- */
-export type SearchRecencyFilter = 'hour' | 'day' | 'week' | 'month' | 'year';
-
-/**
- * Perplexity search configuration options
- * These options control how Perplexity searches the web
- */
-export interface PerplexitySearchOptions {
-  /** Filter results by recency */
-  recencyFilter?: SearchRecencyFilter;
-  /** Limit search to specific domains (max 3) */
-  domainFilter?: string[];
-}
-
-/**
- * Configuration options for Perplexity Agent
- */
-export interface PerplexityAgentOptions {
-  /** Perplexity API key (defaults to PERPLEXITY_API_KEY env var) */
-  apiKey?: string;
-  /** Custom Perplexity client instance (for testing) */
-  client?: Perplexity;
-  /** Search-specific options for Perplexity's web search */
-  searchOptions?: PerplexitySearchOptions;
-}
 
 /**
  * Perplexity Agent using the official Perplexity SDK
