@@ -380,10 +380,10 @@ describe('RedTeamBlueTeamMode', () => {
 
       await mode.executeRound(agents, defaultContext, mockToolkit);
 
-      // Red team agent should receive context with _agentRole: 'red'
-      expect((receivedContexts[0] as any)._agentRole).toBe('red');
-      // Blue team agent should receive context with _agentRole: 'blue'
-      expect((receivedContexts[1] as any)._agentRole).toBe('blue');
+      // Red team agent should receive context with _agentTeam: 'red'
+      expect((receivedContexts[0] as any)._agentTeam).toBe('red');
+      // Blue team agent should receive context with _agentTeam: 'blue'
+      expect((receivedContexts[1] as any)._agentTeam).toBe('blue');
     });
 
     it('should inject team-specific modePrompt via transformContext', async () => {

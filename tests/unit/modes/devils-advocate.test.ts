@@ -686,8 +686,8 @@ describe('DevilsAdvocateMode', () => {
       });
       const contextWithState = {
         ...defaultContext,
-        _roleBasedState: {
-          totalAgents: 5,
+        _devilsAdvocateState: {
+          totalAgentsInRound: 5,
           agentIndexMap,
         },
       };
@@ -718,8 +718,8 @@ describe('DevilsAdvocateMode', () => {
       });
       const contextWithState = {
         ...defaultContext,
-        _roleBasedState: {
-          totalAgents: 6,
+        _devilsAdvocateState: {
+          totalAgentsInRound: 6,
           agentIndexMap,
         },
       };

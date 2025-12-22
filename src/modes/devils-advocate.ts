@@ -370,7 +370,7 @@ export class DevilsAdvocateMode extends BaseModeStrategy {
   private buildPrimaryRoleAddition(context: DebateContext, isFirstRound: boolean): string {
     let addition = `
 
-## Your Role: PRIMARY POSITION (AFFIRMATIVE)
+## Your Role: PRIMARY (AFFIRMATIVE)
 
 ${buildRoleAnchor(PRIMARY_ROLE_ANCHOR)}
 ${buildBehavioralContract(PRIMARY_BEHAVIORAL_CONTRACT, context.mode)}
@@ -399,7 +399,7 @@ FOCUS: ${context.focusQuestion}
   private buildOppositionRoleAddition(context: DebateContext, isFirstRound: boolean): string {
     let addition = `
 
-## Your Role: OPPOSITION ROLE (Devil's Advocate)
+## Your Role: OPPOSITION (Devil's Advocate)
 
 ┌────────────────────────────────────────────────────────────────┐
 │  Your assigned debate position: NO (argue AGAINST the topic)  │
@@ -443,7 +443,7 @@ ${PROMPT_SEPARATOR}
   private buildEvaluatorRoleAddition(context: DebateContext, isFirstRound: boolean): string {
     let addition = `
 
-## Your Role: EVALUATOR ROLE
+## Your Role: EVALUATOR
 
 ${buildRoleAnchor(EVALUATOR_ROLE_ANCHOR)}
 ${buildBehavioralContract(EVALUATOR_BEHAVIORAL_CONTRACT, context.mode)}
