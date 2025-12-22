@@ -301,7 +301,6 @@ All modes should use the 4-layer prompt structure via `modes/utils/prompt-builde
 - `buildVerificationLoop(config)` - Layer 4 only
 - `buildFocusQuestionSection(context, config)` - Optional focus question
 - `buildRoundContext(context)` - Build round context section
-- `formatPreviousResponses(responses)` - Format responses for context
 - `createOutputSections([...])` - Helper to create section arrays
 
 ## Execution Patterns
@@ -497,10 +496,10 @@ protected override transformContext(
 }
 ```
 
-| Processor | Purpose |
-|-----------|---------|
-| `AnonymizationProcessor` | Remove agent identities from previous responses |
-| `StatisticsProcessor` | Inject round statistics (confidence distribution, position clusters) |
+| Processor                | Purpose                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| `AnonymizationProcessor` | Remove agent identities from previous responses                      |
+| `StatisticsProcessor`    | Inject round statistics (confidence distribution, position clusters) |
 
 ### Response Validators (`modes/validators/`)
 
@@ -545,11 +544,11 @@ protected override validateResponse(
 }
 ```
 
-| Validator | Purpose |
-|-----------|---------|
-| `StanceValidator` | Validate stance matches expected value and mark violations (does not force-correct) |
-| `ConfidenceRangeValidator` | Clamp confidence to valid range [0, 1] |
-| `RequiredFieldsValidator` | Ensure position and reasoning fields are non-empty |
+| Validator                  | Purpose                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `StanceValidator`          | Validate stance matches expected value and mark violations (does not force-correct) |
+| `ConfidenceRangeValidator` | Clamp confidence to valid range [0, 1]                                              |
+| `RequiredFieldsValidator`  | Ensure position and reasoning fields are non-empty                                  |
 
 ### Tool Policy (`modes/tool-policy.ts`)
 
@@ -583,15 +582,15 @@ export class MyMode extends BaseModeStrategy {
 }
 ```
 
-| Mode | needsGroupthinkDetection | Rationale |
-|------|--------------------------|-----------|
-| collaborative | true (default) | Consensus-seeking, risk of groupthink |
-| adversarial | false | Built-in opposition |
-| socratic | false | Question-based inquiry, not consensus-seeking |
-| expert-panel | true (default) | Independent experts may still converge |
-| devils-advocate | false | Structural role-based opposition |
-| delphi | true (default) | Anonymous consensus, risk of conformity |
-| red-team-blue-team | false | Structural team opposition |
+| Mode               | needsGroupthinkDetection | Rationale                                     |
+| ------------------ | ------------------------ | --------------------------------------------- |
+| collaborative      | true (default)           | Consensus-seeking, risk of groupthink         |
+| adversarial        | false                    | Built-in opposition                           |
+| socratic           | false                    | Question-based inquiry, not consensus-seeking |
+| expert-panel       | true (default)           | Independent experts may still converge        |
+| devils-advocate    | false                    | Structural role-based opposition              |
+| delphi             | true (default)           | Anonymous consensus, risk of conformity       |
+| red-team-blue-team | false                    | Structural team opposition                    |
 
 ## Checklist
 

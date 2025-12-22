@@ -15,11 +15,11 @@ import {
   withProviderErrorHandling,
 } from './setup.js';
 import { AgentRegistry } from '../../src/agents/registry.js';
-import { ClaudeAgent } from '../../src/agents/claude.js';
-import { ChatGPTAgent } from '../../src/agents/chatgpt.js';
-import { GeminiAgent } from '../../src/agents/gemini.js';
-import { PerplexityAgent } from '../../src/agents/perplexity/index.js';
-import { ConsensusAnalyzer } from '../../src/core/consensus-analyzer.js';
+import { ClaudeAgent } from '../../src/agents/anthropic/claude.js';
+import { ChatGPTAgent } from '../../src/agents/openai/chatgpt.js';
+import { GeminiAgent } from '../../src/agents/google/gemini.js';
+import { PerplexityAgent } from '../../src/agents/perplexity/perplexity.js';
+import { AIConsensusAnalyzer as ConsensusAnalyzer } from '../../src/core/ai-consensus-analyzer.js';
 import { resetGlobalModeRegistry } from '../../src/modes/registry.js';
 import { DefaultAgentToolkit } from '../../src/tools/toolkit.js';
 import type { DebateContext, AgentResponse } from '../../src/types/index.js';

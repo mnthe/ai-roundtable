@@ -62,7 +62,7 @@ export function cleanLLMResponse(rawResponse: string): string {
 /**
  * Safely extract a number from potentially partial data
  */
-export function extractNumber(value: unknown): number | null {
+function extractNumber(value: unknown): number | null {
   if (typeof value === 'number' && !isNaN(value)) {
     return value;
   }
@@ -78,7 +78,7 @@ export function extractNumber(value: unknown): number | null {
 /**
  * Safely extract string array from potentially partial data
  */
-export function extractStringArray(value: unknown): string[] {
+function extractStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -90,7 +90,7 @@ export function extractStringArray(value: unknown): string[] {
 /**
  * Safely extract clusters from potentially partial data
  */
-export function extractClusters(
+function extractClusters(
   value: unknown
 ): Array<{ theme: string; agentIds: string[]; summary: string }> | undefined {
   if (!Array.isArray(value)) {
@@ -114,7 +114,7 @@ export function extractClusters(
 /**
  * Safely extract nuances from potentially partial data
  */
-export function extractNuances(value: unknown): AIConsensusResult['nuances'] {
+function extractNuances(value: unknown): AIConsensusResult['nuances'] {
   if (typeof value !== 'object' || value === null) {
     return undefined;
   }
@@ -139,7 +139,7 @@ export function extractNuances(value: unknown): AIConsensusResult['nuances'] {
 /**
  * Safely extract groupthink warning from AI response
  */
-export function extractGroupthinkWarning(
+function extractGroupthinkWarning(
   value: unknown
 ): { detected: boolean; indicators: string[]; recommendation: string } | undefined {
   if (typeof value !== 'object' || value === null) {
@@ -230,7 +230,7 @@ export function parsePartialJsonResponse(
  * Parse JSON string into AIConsensusResult
  * Uses jsonrepair to handle malformed JSON from AI models
  */
-export function parseJsonToResult(json: string, analyzerId: string): AIConsensusResult {
+function parseJsonToResult(json: string, analyzerId: string): AIConsensusResult {
   // Clean up common issues before repair
   const cleanedJson = json
     // Remove trailing commas before closing brackets

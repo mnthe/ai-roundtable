@@ -120,7 +120,7 @@ export const SearchOptionsSchema = z.object({
 // MCP Input Schemas
 // ============================================
 
-export const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
+const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
 
 export const StartRoundtableInputSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
@@ -139,7 +139,7 @@ export const StartRoundtableInputSchema = z.object({
 /**
  * Schema for context result provided by caller
  */
-export const ContextResultSchema = z.object({
+const ContextResultSchema = z.object({
   requestId: z.string().min(1, 'Request ID is required'),
   success: z.boolean(),
   result: z.string().optional(),

@@ -19,8 +19,6 @@ import {
   type RequestContextInput,
 } from './schemas.js';
 
-// Re-export types from types.ts for backwards compatibility
-export type { AgentTool, AgentToolkit, ToolDefinition, ToolExecutor } from './types.js';
 
 /**
  * Interface for retrieving debate evidence from sessions

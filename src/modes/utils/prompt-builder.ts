@@ -5,7 +5,7 @@
  * Implements the 4-layer prompt structure used across all debate modes.
  */
 
-import type { DebateContext, AgentResponse, DebateMode } from '../../types/index.js';
+import type { DebateContext, DebateMode } from '../../types/index.js';
 import { getToolGuidanceForMode, getToolPolicy, isSequentialMode } from '../tool-policy.js';
 import { PROMPT_SEPARATOR } from './constants.js';
 
@@ -279,7 +279,7 @@ function buildOutputSection(section: OutputSection): string {
 /**
  * Build the Structural Enforcement layer (Layer 3)
  */
-export function buildStructuralEnforcement(
+function buildStructuralEnforcement(
   config: StructuralEnforcementConfig,
   context: DebateContext
 ): string {
@@ -391,54 +391,6 @@ Mode: ${config.modeName}
   prompt += buildFocusQuestionSection(context, config.focusQuestion);
 
   return prompt;
-}
-
-/**
- * Format previous responses for display in prompts
- *
- * Creates a structured summary of previous responses that can be
- * included in context for agents.
- */
-export function formatPreviousResponses(responses: AgentResponse[]): string {
-  if (responses.length === 0) {
-    return '';
-  }
-
-  let formatted = 'Previous Responses:\n\n';
-
-  for (const response of responses) {
-    formatted += `--- ${response.agentName} ---\n`;
-    formatted += `Position: ${response.position}\n`;
-    formatted += `Confidence: ${(response.confidence * 100).toFixed(0)}%\n`;
-    if (response.reasoning) {
-      // Truncate long reasoning to first 500 chars
-      const truncatedReasoning =
-        response.reasoning.length > 500
-          ? response.reasoning.substring(0, 500) + '...'
-          : response.reasoning;
-      formatted += `Reasoning: ${truncatedReasoning}\n`;
-    }
-    formatted += '\n';
-  }
-
-  return formatted;
-}
-
-/**
- * Build round-specific context information
- *
- * Provides context about the current round that can be appended
- * to prompts for non-first rounds.
- */
-export function buildRoundContext(context: DebateContext): string {
-  if (context.currentRound === 1) {
-    return '';
-  }
-
-  return `
-ROUND ${context.currentRound} OF ${context.totalRounds}:
-Build upon the previous discussion. Reference and respond to points raised earlier.
-`;
 }
 
 /**

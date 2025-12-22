@@ -66,21 +66,3 @@ export function createLightAgentFromBase(
 ): BaseAgent {
   return createLightModelAgent(baseAgent, registry, options);
 }
-
-/**
- * Select and create a light model agent in one step
- *
- * Combines agent selection and light model creation for common use cases.
- *
- * @param config - Configuration for light agent selection and creation
- * @returns A light model agent or null if no active agents available
- */
-export function selectAndCreateLightAgent(config: LightAgentConfig): BaseAgent | null {
-  const baseAgent = selectPreferredAgent(config.registry, config.preferredProvider);
-  if (!baseAgent) return null;
-
-  return createLightAgentFromBase(baseAgent, config.registry, {
-    idSuffix: config.idSuffix,
-    maxTokens: config.maxTokens,
-  });
-}
