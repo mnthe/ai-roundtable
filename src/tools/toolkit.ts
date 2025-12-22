@@ -42,17 +42,6 @@ export interface SessionDataProvider {
   }>>;
 }
 
-// Counter for generating unique request IDs
-let requestIdCounter = 0;
-
-/**
- * Generate a unique ID for context requests
- */
-function generateRequestId(): string {
-  requestIdCounter++;
-  return `ctx-${Date.now()}-${requestIdCounter}`;
-}
-
 /**
  * Default toolkit implementation
  *
@@ -72,6 +61,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
   private currentContext?: DebateContext;
   private pendingContextRequests: ContextRequest[] = [];
   private currentAgentId: string = 'unknown';
+  private requestIdCounter = 0;
 
   constructor(
     private sessionDataProvider?: SessionDataProvider
@@ -112,6 +102,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
    */
   hasPendingRequests(): boolean {
     return this.pendingContextRequests.length > 0;
+  }
+
+  /**
+   * Generate a unique ID for context requests
+   */
+  private generateRequestId(): string {
+    this.requestIdCounter++;
+    return `ctx-${Date.now()}-${this.requestIdCounter}`;
   }
 
   /**
@@ -288,10 +286,11 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
     // Create the context request
     const request: ContextRequest = {
-      id: generateRequestId(),
+      id: this.generateRequestId(),
       agentId: this.currentAgentId,
       query: data.query,
       reason: data.reason,
+      // Safe cast: priority is validated by RequestContextInputSchema as 'required' | 'optional'
       priority: data.priority as ContextRequestPriority,
       timestamp: new Date(),
     };
