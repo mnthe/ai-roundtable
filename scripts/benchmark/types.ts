@@ -2,7 +2,7 @@
  * Benchmark Script Type Definitions
  */
 
-import type { DebateMode, AgentResponse, ConsensusResult } from '../../src/types/index.js';
+import type { DebateMode, AgentResponse, ConsensusResult, ContextRequest } from '../../src/types/index.js';
 
 // ============================================================================
 // Configuration Types
@@ -71,6 +71,8 @@ export interface RoundData {
     level: string;
     score: number;
   };
+  /** Context requests made during this round (if any) */
+  contextRequests?: ContextRequest[];
   durationMs: number;
 }
 

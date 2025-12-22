@@ -234,7 +234,7 @@ export class BenchmarkRunner {
         await this.sessionManager.addResponse(session.id, response, result.roundNumber);
       }
 
-      // Collect round data
+      // Collect round data (including any context requests)
       roundsData.push({
         roundNumber: result.roundNumber,
         responses: result.responses,
@@ -244,6 +244,7 @@ export class BenchmarkRunner {
               score: result.consensus.agreementLevel,
             }
           : undefined,
+        contextRequests: result.contextRequests,
         durationMs: 0, // Could track this per round if needed
       });
     }
