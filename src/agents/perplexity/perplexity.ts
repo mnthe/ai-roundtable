@@ -6,10 +6,7 @@
  */
 
 import Perplexity from '@perplexity-ai/perplexity_ai';
-import type {
-  ChatMessageInput,
-  ChatMessageOutput,
-} from '@perplexity-ai/perplexity_ai/resources';
+import type { ChatMessageInput } from '@perplexity-ai/perplexity_ai/resources';
 import type { StreamChunk } from '@perplexity-ai/perplexity_ai/resources/chat/chat';
 import type {
   CompletionCreateParams,
@@ -22,6 +19,11 @@ import { convertSDKError } from '../utils/index.js';
 import { buildPerplexityTools } from './utils.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import type { PerplexitySearchOptions, PerplexityAgentOptions } from './types.js';
+import {
+  extractContentText,
+  extractPerplexityCitations,
+  createSearchToolCall,
+} from './search.js';
 
 const logger = createLogger('PerplexityAgent');
 
@@ -144,28 +146,15 @@ export class PerplexityAgent extends BaseAgent {
     }
 
     // Extract text from final response
-    const rawText = this.extractContentText(choice?.message);
+    const rawText = extractContentText(choice?.message);
 
     // Extract citations from Perplexity's native search_results field
-    const perplexityCitations = this.extractPerplexityCitations(response, rawText);
+    const perplexityCitations = extractPerplexityCitations(response, rawText);
     if (perplexityCitations.length > 0) {
       citations.push(...perplexityCitations);
 
       // Record built-in web search as a tool call for consistency with other agents
-      toolCalls.push({
-        toolName: 'perplexity_search',
-        input: { query: context.topic },
-        output: {
-          success: true,
-          data: {
-            results: perplexityCitations.map((c) => ({
-              title: c.title,
-              url: c.url,
-            })),
-          },
-        },
-        timestamp: new Date(),
-      });
+      toolCalls.push(createSearchToolCall(perplexityCitations, context.topic));
     }
 
     return {
@@ -205,121 +194,6 @@ export class PerplexityAgent extends BaseAgent {
   }
 
   /**
-   * Extract text content from message (handles both string and array content)
-   */
-  private extractContentText(message: ChatMessageOutput | undefined): string {
-    if (!message) return '';
-
-    const content = message.content;
-    if (typeof content === 'string') {
-      return content;
-    }
-
-    if (Array.isArray(content)) {
-      return content
-        .filter((chunk): chunk is ChatMessageOutput.ChatMessageContentTextChunk => chunk.type === 'text')
-        .map((chunk) => chunk.text)
-        .join('');
-    }
-
-    return '';
-  }
-
-  /**
-   * Extract domain name from URL for use as a readable title
-   * @example "https://www.example.com/path" -> "example.com"
-   */
-  private extractDomainFromUrl(url: string): string {
-    try {
-      const hostname = new URL(url).hostname;
-      // Remove 'www.' prefix for cleaner titles
-      return hostname.replace(/^www\./, '');
-    } catch {
-      // If URL parsing fails, return the original string
-      return url;
-    }
-  }
-
-  /**
-   * Extract citation reference numbers from response text
-   * Looks for patterns like [1], [2], [3], etc.
-   * @returns Set of referenced citation indices (1-based)
-   */
-  private extractCitedIndices(responseText: string): Set<number> {
-    const citedIndices = new Set<number>();
-    // Match citation markers like [1], [2], [1,2], [1][2], [1, 2, 3]
-    const markerPattern = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
-    let match;
-
-    while ((match = markerPattern.exec(responseText)) !== null) {
-      // match[1] is guaranteed to exist by the regex pattern
-      const captured = match[1];
-      if (captured) {
-        // Split by comma to handle [1,2,3] format
-        const numbers = captured.split(/\s*,\s*/);
-        for (const num of numbers) {
-          const index = parseInt(num, 10);
-          if (!isNaN(index) && index > 0) {
-            citedIndices.add(index);
-          }
-        }
-      }
-    }
-
-    return citedIndices;
-  }
-
-  /**
-   * Extract citations from Perplexity response's native search_results field
-   * The official SDK provides search_results directly in the response
-   */
-  private extractPerplexityCitations(response: StreamChunk, responseText?: string): Citation[] {
-    const allCitations: Citation[] = [];
-
-    // Extract citations from native search_results field (preferred)
-    // Defensive check: ensure search_results is an array
-    if (response.search_results && Array.isArray(response.search_results) && response.search_results.length > 0) {
-      for (const result of response.search_results) {
-        // Skip malformed results without URL
-        if (!result || typeof result.url !== 'string') continue;
-        allCitations.push({
-          title: result.title ?? this.extractDomainFromUrl(result.url),
-          url: result.url,
-          snippet: result.date ? `Published: ${result.date}` : result.snippet,
-        });
-      }
-    }
-    // Fallback to deprecated citations field (string URLs)
-    // Defensive check: ensure citations is an array
-    else if (response.citations && Array.isArray(response.citations) && response.citations.length > 0) {
-      for (const url of response.citations) {
-        // Skip non-string citations
-        if (typeof url !== 'string') continue;
-        allCitations.push({
-          title: this.extractDomainFromUrl(url),
-          url: url,
-        });
-      }
-    }
-
-    if (allCitations.length === 0) {
-      logger.debug({ responseId: response.id }, 'No citations found in response');
-      return [];
-    }
-
-    // Filter citations to only those actually referenced in the response text
-    if (responseText && allCitations.length > 0) {
-      const citedIndices = this.extractCitedIndices(responseText);
-      if (citedIndices.size > 0) {
-        // Only include citations that are actually referenced (1-based index)
-        return allCitations.filter((_, index) => citedIndices.has(index + 1));
-      }
-    }
-
-    return allCitations;
-  }
-
-  /**
    * Generate a raw text completion without parsing into structured format
    * Used by AIConsensusAnalyzer and synthesis features
    */
@@ -344,7 +218,7 @@ export class PerplexityAgent extends BaseAgent {
         { maxRetries: 3 }
       );
 
-      return this.extractContentText(response.choices[0]?.message);
+      return extractContentText(response.choices[0]?.message);
     } catch (error) {
       const convertedError = this.convertError(error);
       logger.error({ err: convertedError, agentId: this.id }, 'Failed to generate raw completion');
