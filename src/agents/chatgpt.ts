@@ -3,6 +3,12 @@
  *
  * Uses the Responses API for native web search capabilities with built-in
  * URL citations, replacing the legacy Chat Completions API.
+ *
+ * Native Web Search + Function Calling:
+ * The Responses API supports both web_search and function tools together.
+ * However, to maximize web search usage for evidence gathering:
+ * - get_context is NOT passed (context already in prompt, model would skip web search)
+ * - fact_check IS passed (complements web search for claim verification)
  */
 
 import OpenAI from 'openai';
@@ -10,9 +16,9 @@ import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js'
 import { withRetry } from '../utils/retry.js';
 import {
   convertSDKError,
-  buildResponsesFunctionTools,
   executeResponsesCompletion,
   executeSimpleResponsesCompletion,
+  buildResponsesFunctionTools,
   type ResponsesWebSearchConfig,
 } from './utils/index.js';
 import type { AgentConfig, DebateContext } from '../types/index.js';
@@ -75,10 +81,22 @@ export class ChatGPTAgent extends BaseAgent {
    *
    * Implements the provider-specific API call for the template method pattern.
    * Uses the Responses API for native web search with automatic citations.
+   *
+   * Native Web Search + Function Calling Strategy:
+   * - web_search: Always enabled for evidence gathering with auto-citations
+   * - get_context: EXCLUDED (context already in prompt; including it causes model
+   *   to skip web search, resulting in 0 citations)
+   * - fact_check: INCLUDED (complements web search for claim verification)
+   * - submit_response: EXCLUDED (validation happens in BaseAgent after parsing)
    */
   protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
     const systemPrompt = this.buildSystemPrompt(context);
     const userMessage = this.buildUserMessage(context);
+
+    // Build function tools, excluding get_context and submit_response
+    // get_context is redundant (context in prompt) and causes model to skip web search
+    // submit_response is handled by BaseAgent validation
+    const functionTools = this.buildSelectiveFunctionTools();
 
     return executeResponsesCompletion({
       client: this.client,
@@ -87,11 +105,38 @@ export class ChatGPTAgent extends BaseAgent {
       temperature: this.temperature,
       instructions: systemPrompt,
       input: userMessage,
-      functionTools: buildResponsesFunctionTools(this.toolkit),
+      functionTools,
       webSearch: this.webSearchConfig,
-      executeTool: (name, input) => this.executeTool(name, input),
-      extractToolCitations: (toolName, result) => this.extractCitationsFromToolResult(toolName, result),
+      executeTool: functionTools.length > 0 ? (name, input) => this.executeTool(name, input) : undefined,
+      extractToolCitations: functionTools.length > 0
+        ? (name, result) => this.extractCitationsFromToolResult(name, result)
+        : undefined,
     });
+  }
+
+  /**
+   * Build function tools for Responses API, excluding tools that interfere with web search
+   *
+   * Excluded tools:
+   * - get_context: Redundant (context in prompt), causes model to skip web search
+   * - submit_response: Handled by BaseAgent validation after response parsing
+   *
+   * Included tools:
+   * - fact_check: Complements web search for claim verification
+   * - Any future tools that don't duplicate prompt context
+   */
+  private buildSelectiveFunctionTools() {
+    if (!this.toolkit) {
+      return [];
+    }
+
+    const excludedTools = new Set(['get_context', 'submit_response']);
+    const filteredToolkit = {
+      getTools: () => this.toolkit!.getTools().filter((t) => !excludedTools.has(t.name)),
+      executeTool: this.toolkit.executeTool.bind(this.toolkit),
+    };
+
+    return buildResponsesFunctionTools(filteredToolkit);
   }
 
   /**
@@ -148,7 +193,7 @@ export class ChatGPTAgent extends BaseAgent {
       () =>
         this.client.responses.create({
           model: this.model,
-          max_output_tokens: 10,
+          max_output_tokens: 16,
           input: 'test',
         }),
       { maxRetries: 3 }

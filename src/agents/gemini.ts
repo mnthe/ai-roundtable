@@ -1,5 +1,28 @@
 /**
  * Gemini Agent - Google Gemini implementation using the new @google/genai SDK
+ *
+ * **API CONSTRAINT: Google Search + Function Calling Incompatibility**
+ *
+ * The Google Gen AI Standard API does NOT support combining Google Search grounding
+ * with function calling in the same request. This is a documented API limitation:
+ * - Google Search grounding: `tools: [{ googleSearch: {} }]`
+ * - Function calling: `tools: [{ functionDeclarations: [...] }]`
+ * - CANNOT use both together (only available in Live API with different SDK)
+ *
+ * **Solution: Two-Phase Approach**
+ *
+ * To provide both web search citations AND toolkit access, we use a Two-Phase approach:
+ *
+ * Phase 1 (Web Search): Call with Google Search grounding enabled
+ * - Collects web citations and grounding metadata
+ * - Uses the heavy model for comprehensive search
+ *
+ * Phase 2 (Function Calling): Call with function tools (if toolkit available)
+ * - Includes Phase 1 search results in context
+ * - Enables toolkit functions (get_context, fact_check, etc.)
+ * - Allows agent to use tools for additional verification
+ *
+ * This ensures equal tool access across all agents despite the API constraint.
  */
 
 import { GoogleGenAI, Type } from '@google/genai';
@@ -70,9 +93,23 @@ export class GeminiAgent extends BaseAgent {
   }
 
   /**
-   * Call Gemini API to generate a response
+   * Call Gemini API to generate a response using Two-Phase approach
    *
-   * Implements the provider-specific API call for the template method pattern.
+   * **API CONSTRAINT**: Google Search grounding and function calling CANNOT be
+   * combined in the same request (Standard API limitation).
+   *
+   * **Two-Phase Implementation**:
+   *
+   * Phase 1 (Web Search):
+   * - Calls API with Google Search grounding enabled
+   * - Collects citations from grounding metadata
+   * - Gets initial response with web-sourced evidence
+   *
+   * Phase 2 (Function Calling) - Only if toolkit available:
+   * - Calls API with function tools (no Google Search)
+   * - Includes Phase 1 search results in context
+   * - Handles function call loop for toolkit access
+   * - Merges results with Phase 1 citations
    */
   protected override async callProviderApi(context: DebateContext): Promise<ProviderApiResult> {
     const systemPrompt = this.buildSystemPrompt(context);
@@ -81,107 +118,175 @@ export class GeminiAgent extends BaseAgent {
     const toolCalls: ToolCallRecord[] = [];
     const citations: Citation[] = [];
 
-    // Build all tools: toolkit tools + Google Search grounding
-    const tools = this.buildAllTools();
+    // ============================================================
+    // PHASE 1: Web Search with Google Search Grounding
+    // ============================================================
+    logger.debug({ agentId: this.id }, 'Phase 1: Executing with Google Search grounding');
 
-    // Build chat history
-    const history: Content[] = [];
+    let phase1Response: Awaited<ReturnType<Chat['sendMessage']>> | null = null;
+    let phase1Text = '';
 
-    // Create chat session with system instruction in config
-    const chat: Chat = this.client.chats.create({
-      model: this.model,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: this.temperature,
-        maxOutputTokens: this.maxTokens,
-        tools: tools.length > 0 ? tools : undefined,
-      },
-      history,
-    });
+    if (this.googleSearchConfig.enabled) {
+      const phase1Chat: Chat = this.client.chats.create({
+        model: this.model,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: this.temperature,
+          maxOutputTokens: this.maxTokens,
+          tools: [{ googleSearch: {} }],
+        },
+        history: [],
+      });
 
-    // Send message with retry logic
-    let response = await withRetry(() => chat.sendMessage({ message: userMessage }), {
-      maxRetries: 3,
-    });
+      phase1Response = await withRetry(() => phase1Chat.sendMessage({ message: userMessage }), {
+        maxRetries: 3,
+      });
 
-    // Handle function calling loop
-    while (response.functionCalls && response.functionCalls.length > 0) {
-      const functionCalls = response.functionCalls;
-      const functionResponses: Array<{
-        id?: string;
-        name: string;
-        response: Record<string, unknown>;
-      }> = [];
+      phase1Text = phase1Response.text ?? '';
 
-      for (const functionCall of functionCalls) {
-        const toolResult = await this.executeTool(functionCall.name ?? '', functionCall.args);
+      // Extract grounding metadata and citations from Google Search
+      const groundingMetadata = phase1Response.candidates?.[0]?.groundingMetadata;
+      if (groundingMetadata) {
+        const groundingCitations = this.extractCitationsFromGrounding(groundingMetadata);
+        citations.push(...groundingCitations);
 
-        toolCalls.push({
-          toolName: functionCall.name ?? 'unknown',
-          input: functionCall.args,
-          output: toolResult,
-          timestamp: new Date(),
-        });
-
-        // Extract citations from search results
-        const extractedCitations = this.extractCitationsFromToolResult(
-          functionCall.name ?? '',
-          toolResult
-        );
-        citations.push(...extractedCitations);
-
-        functionResponses.push({
-          id: functionCall.id,
-          name: functionCall.name ?? '',
-          response: toolResult as Record<string, unknown>,
-        });
-      }
-
-      // Send function responses back
-      response = await withRetry(
-        () =>
-          chat.sendMessage({
-            message: functionResponses.map((fr) => ({
-              functionResponse: {
-                id: fr.id,
-                name: fr.name,
-                response: fr.response,
+        // Record tool call for Google Search grounding
+        if (groundingMetadata.groundingChunks && groundingMetadata.groundingChunks.length > 0) {
+          toolCalls.push({
+            toolName: 'google_search',
+            input: { queries: groundingMetadata.webSearchQueries ?? [] },
+            output: {
+              success: true,
+              data: {
+                results: groundingMetadata.groundingChunks.map((chunk) => ({
+                  title: chunk.web?.title,
+                  url: chunk.web?.uri,
+                })),
               },
-            })),
-          }),
-        { maxRetries: 3 }
-      );
-    }
-
-    // Extract grounding metadata and citations from Google Search
-    const groundingMetadata = response.candidates?.[0]?.groundingMetadata;
-    if (groundingMetadata) {
-      const groundingCitations = this.extractCitationsFromGrounding(groundingMetadata);
-      citations.push(...groundingCitations);
-
-      // Record tool call for Google Search grounding
-      if (groundingMetadata.groundingChunks && groundingMetadata.groundingChunks.length > 0) {
-        toolCalls.push({
-          toolName: 'google_search',
-          input: { queries: groundingMetadata.webSearchQueries ?? [] },
-          output: {
-            success: true,
-            data: {
-              results: groundingMetadata.groundingChunks.map((chunk) => ({
-                title: chunk.web?.title,
-                url: chunk.web?.uri,
-              })),
             },
-          },
-          timestamp: new Date(),
-        });
+            timestamp: new Date(),
+          });
+        }
+
+        logger.debug(
+          { agentId: this.id, citationCount: groundingCitations.length },
+          'Phase 1 complete: Extracted citations from Google Search'
+        );
       }
     }
 
-    // Extract text from final response
-    const rawText = response.text ?? '';
+    // ============================================================
+    // PHASE 2: Function Calling (if toolkit available)
+    // ============================================================
+    if (this.toolkit && this.toolkit.getTools().length > 0) {
+      logger.debug({ agentId: this.id }, 'Phase 2: Executing with function tools');
 
-    return { rawText, toolCalls, citations };
+      // Build enhanced prompt with Phase 1 search results
+      const phase2UserMessage = this.buildPhase2Message(userMessage, phase1Text, citations);
+
+      const phase2Chat: Chat = this.client.chats.create({
+        model: this.model,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: this.temperature,
+          maxOutputTokens: this.maxTokens,
+          tools: [{ functionDeclarations: this.buildGeminiTools() }],
+        },
+        history: [],
+      });
+
+      let response = await withRetry(() => phase2Chat.sendMessage({ message: phase2UserMessage }), {
+        maxRetries: 3,
+      });
+
+      // Handle function calling loop
+      while (response.functionCalls && response.functionCalls.length > 0) {
+        const functionCalls = response.functionCalls;
+        const functionResponses: Array<{
+          id?: string;
+          name: string;
+          response: Record<string, unknown>;
+        }> = [];
+
+        for (const functionCall of functionCalls) {
+          const toolResult = await this.executeTool(functionCall.name ?? '', functionCall.args);
+
+          toolCalls.push({
+            toolName: functionCall.name ?? 'unknown',
+            input: functionCall.args,
+            output: toolResult,
+            timestamp: new Date(),
+          });
+
+          // Extract citations from toolkit tool results
+          const extractedCitations = this.extractCitationsFromToolResult(
+            functionCall.name ?? '',
+            toolResult
+          );
+          citations.push(...extractedCitations);
+
+          functionResponses.push({
+            id: functionCall.id,
+            name: functionCall.name ?? '',
+            response: toolResult as Record<string, unknown>,
+          });
+        }
+
+        // Send function responses back
+        response = await withRetry(
+          () =>
+            phase2Chat.sendMessage({
+              message: functionResponses.map((fr) => ({
+                functionResponse: {
+                  id: fr.id,
+                  name: fr.name,
+                  response: fr.response,
+                },
+              })),
+            }),
+          { maxRetries: 3 }
+        );
+      }
+
+      // Use Phase 2 response as final text (includes both search context and tool results)
+      const rawText = response.text ?? '';
+      logger.debug({ agentId: this.id }, 'Phase 2 complete: Function calling finished');
+
+      return { rawText, toolCalls, citations };
+    }
+
+    // If no toolkit, use Phase 1 response directly
+    return { rawText: phase1Text, toolCalls, citations };
+  }
+
+  /**
+   * Build Phase 2 message with Phase 1 search results included
+   *
+   * This ensures the model has access to web search results even though
+   * Google Search grounding is not available in the function calling phase.
+   */
+  private buildPhase2Message(
+    originalMessage: string,
+    phase1Response: string,
+    citations: Citation[]
+  ): string {
+    if (!phase1Response && citations.length === 0) {
+      return originalMessage;
+    }
+
+    const searchResultsSummary = citations.length > 0
+      ? `\n\nWeb Search Results (from Phase 1):\n${citations
+          .map((c, i) => `[${i + 1}] ${c.title}: ${c.url}`)
+          .join('\n')}`
+      : '';
+
+    const previousAnalysis = phase1Response
+      ? `\n\nPrevious Analysis (with web search):\n${phase1Response}`
+      : '';
+
+    return `${originalMessage}${searchResultsSummary}${previousAnalysis}
+
+Please provide your final response. You have access to additional tools (get_context, fact_check) if you need to verify any claims or get more context.`;
   }
 
   /**
@@ -274,25 +379,6 @@ export class GeminiAgent extends BaseAgent {
     if (response.text === undefined) {
       throw new Error('No response text');
     }
-  }
-
-  /**
-   * Build all tools: toolkit tools + Google Search grounding
-   */
-  private buildAllTools(): Tool[] {
-    const tools: Tool[] = [];
-
-    // Add toolkit tools (function declarations)
-    if (this.toolkit) {
-      tools.push({ functionDeclarations: this.buildGeminiTools() });
-    }
-
-    // Add Google Search grounding if enabled
-    if (this.googleSearchConfig.enabled) {
-      tools.push({ googleSearch: {} });
-    }
-
-    return tools;
   }
 
   /**

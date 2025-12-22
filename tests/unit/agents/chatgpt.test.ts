@@ -265,18 +265,16 @@ describe('ChatGPTAgent', () => {
     });
   });
 
-  describe('function tool calls', () => {
-    it('should handle function calls', async () => {
-      const mockClient = createMockResponsesClientWithToolCalls(
-        'get_context',
-        {},
-        createJsonResponse({
-          position: 'Based on context',
-          reasoning: 'Used debate context',
-          confidence: 0.85,
-        })
-      );
+  describe('selective function tools', () => {
+    // ChatGPT agent passes selective function tools to the Responses API:
+    // - EXCLUDED: get_context (context in prompt, causes model to skip web search)
+    // - EXCLUDED: submit_response (handled by BaseAgent validation)
+    // - INCLUDED: fact_check and other tools that complement web search
 
+    it('should pass fact_check tool but exclude get_context', async () => {
+      const mockClient = createMockResponsesClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
+      );
       const mockToolkit: AgentToolkit = createMockToolkit({
         tools: [
           {
@@ -284,37 +282,10 @@ describe('ChatGPTAgent', () => {
             description: 'Get debate context',
             parameters: {},
           },
-        ],
-        executeTool: vi.fn().mockResolvedValue({
-          success: true,
-          data: {
-            topic: 'Test topic',
-            mode: 'collaborative',
-          },
-        }),
-      });
-
-      const agent = new ChatGPTAgent(defaultConfig, {
-        client: mockClient as unknown as ConstructorParameters<typeof ChatGPTAgent>[1]['client'],
-      });
-      agent.setToolkit(mockToolkit);
-
-      const response = await agent.generateResponse(defaultContext);
-
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('get_context', {});
-      expect(response.toolCalls?.some((tc) => tc.toolName === 'get_context')).toBe(true);
-    });
-
-    it('should provide function tools to API when toolkit is set', async () => {
-      const mockClient = createMockResponsesClient(
-        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
-      );
-      const mockToolkit: AgentToolkit = createMockToolkit({
-        tools: [
           {
-            name: 'test_tool',
-            description: 'A test tool',
-            parameters: { input: { type: 'string', description: 'Input' } },
+            name: 'fact_check',
+            description: 'Verify claims',
+            parameters: { claim: { type: 'string', description: 'Claim to verify' } },
           },
         ],
       });
@@ -327,32 +298,36 @@ describe('ChatGPTAgent', () => {
       await agent.generateResponse(defaultContext);
 
       const call = mockClient.responses.create.mock.calls[0]?.[0];
-      const functionTool = call?.tools?.find(
-        (t: { type: string; name?: string }) => t.type === 'function' && t.name === 'test_tool'
+      const tools = call?.tools ?? [];
+
+      // Should have web_search + fact_check (get_context excluded)
+      expect(tools).toHaveLength(2);
+      expect(tools.some((t: { type: string }) => t.type === 'web_search')).toBe(true);
+      expect(tools.some((t: { type: string; name?: string }) => t.name === 'fact_check')).toBe(
+        true
       );
-      expect(functionTool).toBeDefined();
+      expect(tools.some((t: { type: string; name?: string }) => t.name === 'get_context')).toBe(
+        false
+      );
     });
 
-    it('should handle tool execution errors', async () => {
-      const mockClient = createMockResponsesClientWithToolCalls(
-        'failing_tool',
-        { input: 'test' },
-        createJsonResponse({
-          position: 'Handled error',
-          reasoning: 'Continued',
-          confidence: 0.6,
-        })
+    it('should only include web_search when toolkit only has excluded tools', async () => {
+      const mockClient = createMockResponsesClient(
+        createJsonResponse({ position: 'test', reasoning: 'test', confidence: 0.5 })
       );
-
       const mockToolkit: AgentToolkit = createMockToolkit({
         tools: [
           {
-            name: 'failing_tool',
-            description: 'A failing tool',
-            parameters: { input: { type: 'string', description: 'Input' } },
+            name: 'get_context',
+            description: 'Get debate context',
+            parameters: {},
+          },
+          {
+            name: 'submit_response',
+            description: 'Submit response',
+            parameters: {},
           },
         ],
-        executeTool: vi.fn().mockRejectedValue(new Error('Tool failed')),
       });
 
       const agent = new ChatGPTAgent(defaultConfig, {
@@ -360,8 +335,12 @@ describe('ChatGPTAgent', () => {
       });
       agent.setToolkit(mockToolkit);
 
-      const response = await agent.generateResponse(defaultContext);
-      expect(response.toolCalls?.some((tc) => tc.output && 'error' in tc.output)).toBe(true);
+      await agent.generateResponse(defaultContext);
+
+      const call = mockClient.responses.create.mock.calls[0]?.[0];
+      // Should only have web_search tool (all toolkit tools are excluded)
+      expect(call?.tools).toHaveLength(1);
+      expect(call?.tools?.[0]?.type).toBe('web_search');
     });
   });
 });

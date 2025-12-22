@@ -17,10 +17,14 @@ import type {
   ResponseOutputText,
   WebSearchTool,
   FunctionTool,
+  ResponseInputItem,
 } from 'openai/resources/responses/responses';
 import { withRetry } from '../../utils/retry.js';
 import { createLogger } from '../../utils/logger.js';
 import type { ToolCallRecord, Citation } from '../../types/index.js';
+
+/** Maximum number of function call iterations to prevent infinite loops */
+const MAX_FUNCTION_CALL_ITERATIONS = 10;
 
 const logger = createLogger('OpenAIResponses');
 
@@ -203,13 +207,20 @@ export function recordWebSearchToolCall(
 }
 
 /**
+ * Check if response contains function calls that need handling
+ */
+function hasFunctionCalls(response: Response): boolean {
+  return response.output.some((item) => item.type === 'function_call');
+}
+
+/**
  * Execute a Responses API completion with web search support
  *
  * This utility handles the Responses API pattern:
  * 1. Building tools array with web search
  * 2. Making API call via responses.create()
- * 3. Extracting text and citations from response
- * 4. Handling custom tool calls if provided
+ * 3. Handling function call loop (execute functions, send results back)
+ * 4. Extracting text and citations from final response
  *
  * @param params - Completion parameters
  * @returns Completion result with text, tool calls, and citations
@@ -238,8 +249,8 @@ export async function executeResponsesCompletion(
 
   logger.debug({ model, hasWebSearch: webSearch?.enabled !== false }, 'Executing Responses API call');
 
-  // Make the API call with retry logic
-  const response = await withRetry(
+  // Make the initial API call with retry logic
+  let response = await withRetry(
     () =>
       client.responses.create({
         model,
@@ -252,43 +263,100 @@ export async function executeResponsesCompletion(
     { maxRetries: 3 }
   );
 
-  // Extract text from response
+  // Function call loop: handle tool calls and continue conversation
+  let iterations = 0;
+  while (hasFunctionCalls(response) && iterations < MAX_FUNCTION_CALL_ITERATIONS) {
+    iterations++;
+    logger.debug({ iteration: iterations }, 'Processing function calls');
+
+    // Collect function call outputs
+    const functionOutputs: ResponseInputItem[] = [];
+
+    for (const item of response.output) {
+      if (item.type !== 'function_call') continue;
+
+      // Execute custom tool
+      if (executeTool && 'name' in item && 'arguments' in item && 'call_id' in item) {
+        const functionName = item.name;
+        const functionArgs = JSON.parse(item.arguments as string);
+        const callId = item.call_id as string;
+
+        const result = await executeTool(functionName, functionArgs);
+
+        toolCalls.push({
+          toolName: functionName,
+          input: functionArgs,
+          output: result,
+          timestamp: new Date(),
+        });
+
+        // Extract citations from custom tool results
+        if (extractToolCitations) {
+          const extractedCitations = extractToolCitations(functionName, result);
+          citations.push(...extractedCitations);
+        }
+
+        // Add function output to send back to API
+        functionOutputs.push({
+          type: 'function_call_output',
+          call_id: callId,
+          output: JSON.stringify(result),
+        } as ResponseInputItem);
+      }
+    }
+
+    // If we have function outputs, continue the conversation
+    if (functionOutputs.length > 0) {
+      logger.debug(
+        { functionOutputCount: functionOutputs.length },
+        'Sending function outputs back to API'
+      );
+
+      response = await withRetry(
+        () =>
+          client.responses.create({
+            model,
+            instructions,
+            input: functionOutputs,
+            max_output_tokens: maxTokens,
+            temperature,
+            tools: tools.length > 0 ? tools : undefined,
+            // Include previous response to maintain context
+            previous_response_id: response.id,
+          }),
+        { maxRetries: 3 }
+      );
+    } else {
+      break;
+    }
+  }
+
+  if (iterations >= MAX_FUNCTION_CALL_ITERATIONS) {
+    logger.warn('Max function call iterations reached');
+  }
+
+  // Extract text from final response
   const rawText = extractTextFromResponse(response);
+
+  // Debug: Log final response output structure
+  logger.debug(
+    {
+      outputLength: response.output.length,
+      outputTypes: response.output.map((item) => item.type),
+      outputSample: JSON.stringify(response.output.slice(0, 2), null, 2).slice(0, 1000),
+    },
+    'Final response output structure'
+  );
 
   // Extract citations from web search annotations
   const webCitations = extractCitationsFromResponseOutput(response.output);
+  logger.debug({ citationCount: webCitations.length }, 'Extracted citations from web search');
   citations.push(...webCitations);
 
   // Record web search tool call if used
   const webSearchToolCall = recordWebSearchToolCall(response.output, webCitations);
   if (webSearchToolCall) {
     toolCalls.push(webSearchToolCall);
-  }
-
-  // Handle custom function tool calls
-  for (const item of response.output) {
-    if (item.type !== 'function_call') continue;
-
-    // Execute custom tool
-    if (executeTool && 'name' in item && 'arguments' in item) {
-      const functionName = item.name;
-      const functionArgs = JSON.parse(item.arguments as string);
-
-      const result = await executeTool(functionName, functionArgs);
-
-      toolCalls.push({
-        toolName: functionName,
-        input: functionArgs,
-        output: result,
-        timestamp: new Date(),
-      });
-
-      // Extract citations from custom tool results
-      if (extractToolCitations) {
-        const extractedCitations = extractToolCitations(functionName, result);
-        citations.push(...extractedCitations);
-      }
-    }
   }
 
   return { rawText, toolCalls, citations };
