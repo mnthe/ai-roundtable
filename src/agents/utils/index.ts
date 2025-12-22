@@ -20,3 +20,11 @@ export {
   type ResponsesWebSearchConfig,
   type SimpleResponsesCompletionParams,
 } from './openai-responses.js';
+export {
+  PerplexityExtendedResponseSchema,
+  parsePerplexityExtensions,
+  isCitationString,
+  type PerplexityCitationItem,
+  type PerplexitySearchResult,
+  type PerplexityExtendedResponse,
+} from './perplexity-schemas.js';

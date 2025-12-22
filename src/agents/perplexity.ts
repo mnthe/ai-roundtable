@@ -12,64 +12,15 @@ import type {
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from './base.js';
 import { withRetry } from '../utils/retry.js';
 import { createLogger } from '../utils/logger.js';
-import { buildOpenAITools, convertSDKError } from './utils/index.js';
+import {
+  buildOpenAITools,
+  convertSDKError,
+  parsePerplexityExtensions,
+  isCitationString,
+} from './utils/index.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../types/index.js';
 
 const logger = createLogger('PerplexityAgent');
-
-// ============================================
-// Perplexity Extended Response Type Guard
-// ============================================
-
-/**
- * Perplexity-specific extended response fields
- * These fields are not part of the standard OpenAI API response
- */
-interface PerplexityExtendedResponse {
-  /** Deprecated citations field (array of URLs or citation objects) */
-  citations?: Array<string | { url: string; title?: string }>;
-  /** New search_results field (2025+) */
-  search_results?: Array<{ url: string; title?: string; date?: string }>;
-}
-
-/**
- * Type guard to check if a response has Perplexity extended fields
- * Validates the structure of Perplexity-specific metadata
- */
-function hasPerplexityExtensions(response: unknown): response is PerplexityExtendedResponse {
-  if (typeof response !== 'object' || response === null) {
-    return false;
-  }
-
-  const obj = response as Record<string, unknown>;
-
-  // Check citations field (deprecated format)
-  if (obj.citations !== undefined) {
-    if (!Array.isArray(obj.citations)) return false;
-    for (const citation of obj.citations) {
-      if (typeof citation !== 'string') {
-        if (typeof citation !== 'object' || citation === null) return false;
-        const citationObj = citation as Record<string, unknown>;
-        if (typeof citationObj.url !== 'string') return false;
-        if (citationObj.title !== undefined && typeof citationObj.title !== 'string') return false;
-      }
-    }
-  }
-
-  // Check search_results field (new format)
-  if (obj.search_results !== undefined) {
-    if (!Array.isArray(obj.search_results)) return false;
-    for (const result of obj.search_results) {
-      if (typeof result !== 'object' || result === null) return false;
-      const resultObj = result as Record<string, unknown>;
-      if (typeof resultObj.url !== 'string') return false;
-      if (resultObj.title !== undefined && typeof resultObj.title !== 'string') return false;
-      if (resultObj.date !== undefined && typeof resultObj.date !== 'string') return false;
-    }
-  }
-
-  return true;
-}
 
 /**
  * Search recency filter options
@@ -347,8 +298,9 @@ export class PerplexityAgent extends BaseAgent {
   ): Citation[] {
     const allCitations: Citation[] = [];
 
-    // Use type guard to safely validate Perplexity extended fields
-    if (!hasPerplexityExtensions(response)) {
+    // Use Zod schema validation to safely parse Perplexity extended fields
+    const perplexityExtensions = parsePerplexityExtensions(response);
+    if (!perplexityExtensions) {
       logger.debug(
         { responseId: response.id },
         'Response does not have valid Perplexity extensions, returning empty citations'
@@ -356,11 +308,9 @@ export class PerplexityAgent extends BaseAgent {
       return [];
     }
 
-    const perplexityResponse = response;
-
     // Extract citations from search_results (new format, preferred)
-    if (perplexityResponse.search_results) {
-      for (const result of perplexityResponse.search_results) {
+    if (perplexityExtensions.search_results) {
+      for (const result of perplexityExtensions.search_results) {
         allCitations.push({
           title: result.title ?? this.extractDomainFromUrl(result.url),
           url: result.url,
@@ -369,9 +319,9 @@ export class PerplexityAgent extends BaseAgent {
       }
     }
     // Fallback to deprecated citations field for backward compatibility
-    else if (perplexityResponse.citations) {
-      for (const citation of perplexityResponse.citations) {
-        if (typeof citation === 'string') {
+    else if (perplexityExtensions.citations) {
+      for (const citation of perplexityExtensions.citations) {
+        if (isCitationString(citation)) {
           allCitations.push({
             title: this.extractDomainFromUrl(citation),
             url: citation,
