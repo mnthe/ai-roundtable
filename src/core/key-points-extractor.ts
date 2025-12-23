@@ -12,6 +12,10 @@ import { AgentError } from '../errors/index.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import { selectPreferredAgent, createLightAgentFromBase } from '../agents/utils/light-agent-selector.js';
+import {
+  getCachedHealthStatus,
+  setCachedHealthStatus,
+} from '../agents/utils/health-cache.js';
 
 const logger = createLogger('KeyPointsExtractor');
 
@@ -152,20 +156,41 @@ export class KeyPointsExtractor {
 
   /**
    * Get or create a light model agent for extraction
+   *
+   * Uses TTL-based health cache to avoid redundant health check API calls.
    */
   private async getOrCreateLightAgent(): Promise<BaseAgent | null> {
-    // Check cached agent health before returning
+    // Check cached agent health before performing actual health check
     if (this.lightAgent) {
-      const health = await this.lightAgent.healthCheck();
-      if (health.healthy) {
-        return this.lightAgent;
+      const agentId = this.lightAgent.getInfo().id;
+      const cachedHealth = getCachedHealthStatus(agentId);
+
+      if (cachedHealth !== null) {
+        // Use cached health status
+        if (cachedHealth) {
+          return this.lightAgent;
+        }
+        // Cached as unhealthy, invalidate and try to create new agent
+        logger.debug(
+          { agentId },
+          'Cached health status indicates unhealthy, invalidating agent'
+        );
+        this.lightAgent = null;
+      } else {
+        // No cache, perform actual health check
+        const health = await this.lightAgent.healthCheck();
+        setCachedHealthStatus(agentId, health.healthy);
+
+        if (health.healthy) {
+          return this.lightAgent;
+        }
+        // Invalidate unhealthy agent
+        logger.debug(
+          { agentId, error: health.error },
+          'Light agent unhealthy, invalidating'
+        );
+        this.lightAgent = null;
       }
-      // Invalidate unhealthy agent
-      logger.debug(
-        { agentId: this.lightAgent.getInfo().id, error: health.error },
-        'Cached light agent unhealthy, invalidating'
-      );
-      this.lightAgent = null;
     }
 
     // Use shared utility for agent selection

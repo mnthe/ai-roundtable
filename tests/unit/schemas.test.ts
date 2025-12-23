@@ -321,6 +321,36 @@ describe('Zod Schemas', () => {
       const result = StartRoundtableInputSchema.safeParse(input);
       expect(result.success).toBe(false);
     });
+
+    it('should accept topic at exactly 2000 characters', () => {
+      const input = {
+        topic: 'a'.repeat(2000),
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it('should reject topic exceeding 2000 characters', () => {
+      const input = {
+        topic: 'a'.repeat(2001),
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toBe('Topic cannot exceed 2000 characters');
+      }
+    });
+
+    it('should accept topic at 1999 characters (boundary test)', () => {
+      const input = {
+        topic: 'a'.repeat(1999),
+      };
+
+      const result = StartRoundtableInputSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
   });
 
   describe('ContinueRoundtableInputSchema', () => {

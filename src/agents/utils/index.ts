@@ -18,3 +18,10 @@ export {
   createLightAgentFromBase,
   type LightAgentConfig,
 } from './light-agent-selector.js';
+export {
+  getCachedHealthStatus,
+  setCachedHealthStatus,
+  clearHealthCache,
+  getHealthCacheSize,
+  DEFAULT_HEALTH_CACHE_TTL_MS,
+} from './health-cache.js';
