@@ -3,6 +3,7 @@
  */
 
 export { BaseAgent, MockAgent, type AgentTool, type AgentToolkit } from './base.js';
+export type { BaseAgentOptions } from './types/index.js';
 export {
   AgentRegistry,
   getGlobalRegistry,

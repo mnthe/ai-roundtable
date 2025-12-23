@@ -144,8 +144,7 @@ export class ChatGPTAgent extends BaseAgent {
       model: this.model,
       maxTokens: this.maxTokens,
       temperature: this.temperature,
-      instructions:
-        systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.',
+      instructions: this.getEffectiveSystemPrompt(systemPrompt),
       input: prompt,
       agentId: this.id,
       convertError: (error) => this.convertError(error),

@@ -96,6 +96,10 @@ export abstract class BaseAgent {
   protected readonly maxTokens: number;
   protected toolkit?: AgentToolkit;
 
+  /** Default system prompt for raw completion calls */
+  protected static readonly DEFAULT_RAW_SYSTEM_PROMPT =
+    'You are a helpful AI assistant. Respond exactly as instructed.';
+
   constructor(config: AgentConfig) {
     this.id = config.id;
     this.name = config.name;
@@ -390,6 +394,13 @@ Instructions:
     return `You are ${this.name}, an AI participating in a structured roundtable discussion.
 Your role is to provide thoughtful, well-reasoned perspectives on the topic at hand.
 Be respectful of other participants' views while clearly articulating your own position.`;
+  }
+
+  /**
+   * Get effective system prompt for raw completion calls, using default if not provided
+   */
+  protected getEffectiveSystemPrompt(systemPrompt?: string): string {
+    return systemPrompt ?? BaseAgent.DEFAULT_RAW_SYSTEM_PROMPT;
   }
 
   /**

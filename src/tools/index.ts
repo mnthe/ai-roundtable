@@ -18,5 +18,8 @@ export {
   type RequestContextInput,
 } from './schemas.js';
 
+// Export utility functions
+export { zodToToolParameters } from './utils/index.js';
+
 // Export providers
 export { SessionManagerAdapter, createSessionManagerAdapter } from './providers/index.js';

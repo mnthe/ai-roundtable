@@ -9,7 +9,14 @@ import type {
   ContextRequest,
   ContextRequestPriority,
 } from '../types/index.js';
-import { validateToolInput, type FactCheckInput, type RequestContextInput } from './schemas.js';
+import {
+  validateToolInput,
+  FactCheckInputSchema,
+  RequestContextInputSchema,
+  type FactCheckInput,
+  type RequestContextInput,
+} from './schemas.js';
+import { zodToToolParameters } from './utils/index.js';
 
 /**
  * Interface for retrieving debate evidence from sessions
@@ -108,9 +115,13 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Register default tools
+   *
+   * Tool parameters are derived from Zod schemas to eliminate duplication.
+   * The Zod schemas in schemas.ts are the single source of truth.
    */
   private registerDefaultTools(): void {
     // Tool 1: Fact Check
+    // Parameters derived from FactCheckInputSchema
     this.registerTool({
       tool: {
         name: 'fact_check',
@@ -118,21 +129,13 @@ export class DefaultAgentToolkit implements AgentToolkit {
           'Check claims against evidence from the current debate. ' +
           'Returns all positions and reasoning from other participants. ' +
           'Use this to verify claims made by other agents.',
-        parameters: {
-          claim: {
-            type: 'string',
-            description: 'The claim to verify',
-          },
-          source_agent: {
-            type: 'string',
-            description: 'Agent who made the claim (will be excluded from results)',
-          },
-        },
+        parameters: zodToToolParameters(FactCheckInputSchema),
       },
       executor: async (input) => this.executeFactCheck(input),
     });
 
     // Tool 2: Request Context (External Context Integration)
+    // Parameters derived from RequestContextInputSchema
     // Note: This tool is handled specially in executeTool() to pass agentId
     this.registerTool({
       tool: {
@@ -141,26 +144,12 @@ export class DefaultAgentToolkit implements AgentToolkit {
           'Request additional context or information from the caller (an AI agent like Claude Code). ' +
           'Describe WHAT you need in natural language - the caller will determine HOW to obtain it.\n\n' +
           'Examples:\n' +
-          '- "src/auth.ts 파일의 내용을 읽어주세요"\n' +
-          '- "authenticate 함수를 호출하는 코드를 찾아주세요"\n' +
-          '- "이 프로젝트의 테스트 커버리지를 확인해주세요"\n\n' +
+          '- "src/auth.ts - read file content"\n' +
+          '- "Find code that calls the authenticate function"\n' +
+          '- "Check test coverage for this project"\n\n' +
           'Do NOT specify tool names or technical details - just describe what you need. ' +
           'The result will be available in the next round.',
-        parameters: {
-          query: {
-            type: 'string',
-            description: 'What information do you need? (natural language)',
-          },
-          reason: {
-            type: 'string',
-            description: 'Why do you need this information?',
-          },
-          priority: {
-            type: 'string',
-            description:
-              '"required" if debate cannot continue without it, "optional" if helpful but not essential. Default: "required"',
-          },
-        },
+        parameters: zodToToolParameters(RequestContextInputSchema),
       },
       // Executor is bypassed - executeTool() handles request_context specially
       // to pass agentId for proper tracking in parallel execution

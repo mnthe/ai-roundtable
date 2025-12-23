@@ -3,6 +3,7 @@
  */
 
 import type { GoogleGenAI } from '@google/genai';
+import type { BaseAgentOptions } from '../types/index.js';
 
 /**
  * Google Search grounding configuration options
@@ -15,11 +16,7 @@ export interface GoogleSearchConfig {
 /**
  * Configuration options for Gemini Agent
  */
-export interface GeminiAgentOptions {
-  /** Google AI API key (defaults to GOOGLE_API_KEY env var) */
-  apiKey?: string;
-  /** Custom GoogleGenAI instance (for testing) */
-  client?: GoogleGenAI;
+export interface GeminiAgentOptions extends BaseAgentOptions<GoogleGenAI> {
   /** Google Search grounding configuration (default: enabled) */
   googleSearch?: GoogleSearchConfig;
   /** Use light model for Phase 1 web search (default: true for cost/speed optimization) */

@@ -3,6 +3,7 @@
  */
 
 import type Perplexity from '@perplexity-ai/perplexity_ai';
+import type { BaseAgentOptions } from '../types/index.js';
 
 /**
  * Search recency filter options
@@ -23,11 +24,7 @@ export interface PerplexitySearchOptions {
 /**
  * Configuration options for Perplexity Agent
  */
-export interface PerplexityAgentOptions {
-  /** Perplexity API key (defaults to PERPLEXITY_API_KEY env var) */
-  apiKey?: string;
-  /** Custom Perplexity client instance (for testing) */
-  client?: Perplexity;
+export interface PerplexityAgentOptions extends BaseAgentOptions<Perplexity> {
   /** Search-specific options for Perplexity's web search */
   searchOptions?: PerplexitySearchOptions;
 }

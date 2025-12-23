@@ -250,8 +250,7 @@ export class GeminiAgent extends BaseAgent {
    * Used by AIConsensusAnalyzer and synthesis features
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    const effectiveSystemPrompt =
-      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+    const effectiveSystemPrompt = this.getEffectiveSystemPrompt(systemPrompt);
 
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
