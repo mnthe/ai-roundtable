@@ -39,12 +39,9 @@ GOOGLE_API_KEY=...               # For Gemini agents
 PERPLEXITY_API_KEY=pplx-...      # For Perplexity agents
 ```
 
-### Claude Desktop Integration
+### MCP Client Configuration
 
-Add to your Claude Desktop configuration:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+Add to your MCP client configuration (e.g., Claude Desktop, IDE plugins):
 
 ```json
 {
