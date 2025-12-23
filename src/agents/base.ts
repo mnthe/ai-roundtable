@@ -116,6 +116,9 @@ export abstract class BaseAgent {
   /**
    * Execute a tool call using the toolkit
    * Provides common error handling for all agent implementations
+   *
+   * Passes this.id as the agentId to ensure correct attribution
+   * of context requests in parallel execution.
    */
   protected async executeTool(name: string, input: unknown): Promise<unknown> {
     if (!this.toolkit) {
@@ -123,7 +126,7 @@ export abstract class BaseAgent {
     }
 
     try {
-      return await this.toolkit.executeTool(name, input);
+      return await this.toolkit.executeTool(name, input, this.id);
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Tool execution failed',

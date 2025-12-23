@@ -67,6 +67,11 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Set the current agent ID (called by mode strategy before agent turn)
+   *
+   * @deprecated Use agentId parameter in executeTool instead.
+   * This method has race conditions in parallel execution where multiple
+   * agents call setCurrentAgentId concurrently, causing the last call to
+   * overwrite all previous values.
    */
   setCurrentAgentId(agentId: string): void {
     this.currentAgentId = agentId;
@@ -128,6 +133,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
     });
 
     // Tool 2: Request Context (External Context Integration)
+    // Note: This tool is handled specially in executeTool() to pass agentId
     this.registerTool({
       tool: {
         name: 'request_context',
@@ -156,7 +162,11 @@ export class DefaultAgentToolkit implements AgentToolkit {
           },
         },
       },
-      executor: async (input) => this.executeRequestContext(input),
+      // Executor is bypassed - executeTool() handles request_context specially
+      // to pass agentId for proper tracking in parallel execution
+      executor: async () => {
+        throw new Error('request_context should be handled specially in executeTool()');
+      },
     });
   }
 
@@ -179,8 +189,13 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * Input is validated against the tool's Zod schema before execution.
    * Returns an error result if validation fails.
+   *
+   * @param name - Tool name
+   * @param input - Tool input
+   * @param agentId - ID of the agent making the call (for request_context tracking).
+   *                  Falls back to currentAgentId for backwards compatibility.
    */
-  async executeTool(name: string, input: unknown): Promise<unknown> {
+  async executeTool(name: string, input: unknown, agentId?: string): Promise<unknown> {
     const definition = this.tools.get(name);
     if (!definition) {
       return {
@@ -199,6 +214,12 @@ export class DefaultAgentToolkit implements AgentToolkit {
     }
 
     try {
+      // For request_context, use provided agentId or fall back to currentAgentId
+      if (name === 'request_context') {
+        const effectiveAgentId = agentId ?? this.currentAgentId;
+        return await this.executeRequestContext(validation.data, effectiveAgentId);
+      }
+
       const result = await definition.executor(validation.data);
       return result;
     } catch (error) {
@@ -267,8 +288,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
    * The result will be available in the next round.
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
+   *
+   * @param input - Validated input from Zod schema
+   * @param agentId - ID of the agent making the request
    */
-  private async executeRequestContext(input: unknown): Promise<
+  private async executeRequestContext(
+    input: unknown,
+    agentId: string
+  ): Promise<
     ToolResult<{
       requestId: string;
       message: string;
@@ -280,7 +307,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
     // Create the context request
     const request: ContextRequest = {
       id: this.generateRequestId(),
-      agentId: this.currentAgentId,
+      agentId: agentId,
       query: data.query,
       reason: data.reason,
       // Safe cast: priority is validated by RequestContextInputSchema as 'required' | 'optional'

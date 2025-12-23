@@ -201,9 +201,11 @@ describe('ClaudeAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
-        query: 'AI regulation',
-      });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith(
+        'search_web',
+        { query: 'AI regulation' },
+        'claude-test'
+      );
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
       expect(response.citations).toHaveLength(1);
@@ -320,10 +322,11 @@ describe('ClaudeAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('perplexity_search', {
-        query: 'AI regulation',
-        recency_filter: 'week',
-      });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith(
+        'perplexity_search',
+        { query: 'AI regulation', recency_filter: 'week' },
+        'claude-test'
+      );
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('perplexity_search');
       expect(response.citations).toHaveLength(2);

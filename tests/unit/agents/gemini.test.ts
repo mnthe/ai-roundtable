@@ -281,9 +281,11 @@ describe('GeminiAgent', () => {
       expect(mockClient.chats.create).toHaveBeenCalledTimes(2);
 
       // Verify function was called in Phase 2
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('fact_check', {
-        claim: 'AI regulation helps',
-      });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith(
+        'fact_check',
+        { claim: 'AI regulation helps' },
+        'gemini-test'
+      );
 
       // Verify toolCalls includes both google_search (Phase 1) and fact_check (Phase 2)
       expect(response.toolCalls?.some((tc) => tc.toolName === 'google_search')).toBe(true);

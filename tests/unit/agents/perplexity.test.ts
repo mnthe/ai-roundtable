@@ -405,9 +405,11 @@ describe('PerplexityAgent', () => {
 
       const response = await agent.generateResponse(defaultContext);
 
-      expect(mockToolkit.executeTool).toHaveBeenCalledWith('search_web', {
-        query: 'AI regulation',
-      });
+      expect(mockToolkit.executeTool).toHaveBeenCalledWith(
+        'search_web',
+        { query: 'AI regulation' },
+        'perplexity-test'
+      );
       expect(response.toolCalls).toHaveLength(1);
       expect(response.toolCalls?.[0]?.toolName).toBe('search_web');
       expect(response.citations).toHaveLength(1);
