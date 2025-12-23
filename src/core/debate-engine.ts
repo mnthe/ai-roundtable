@@ -6,24 +6,32 @@ import type { BaseAgent, AgentToolkit } from '../agents/base.js';
 import { EXIT_CRITERIA_CONFIG, type ExitCriteriaConfig } from '../config/exit-criteria.js';
 import { ConfigurationError } from '../errors/index.js';
 import type { DebateModeStrategy } from '../modes/base.js';
-import { getGlobalModeRegistry } from '../modes/registry.js';
+import type { ModeRegistry } from '../modes/registry.js';
+// Default import - can be overridden via options for dependency injection
+import { getGlobalModeRegistry as defaultGetGlobalModeRegistry } from '../modes/registry.js';
 import type {
   DebateContext,
   AgentResponse,
   RoundResult,
   ConsensusResult,
   Session,
+  ExitCriteria,
 } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { AIConsensusAnalyzer } from './ai-consensus-analyzer.js';
-import { checkExitCriteria, type ExitCriteria } from './exit-criteria.js';
+import { checkExitCriteria } from './exit-criteria.js';
 
 const logger = createLogger('DebateEngine');
+
+/** Type for mode registry getter function */
+export type GetModeRegistryFn = () => ModeRegistry;
 
 export interface DebateEngineOptions {
   toolkit?: AgentToolkit;
   aiConsensusAnalyzer?: AIConsensusAnalyzer;
   exitCriteriaConfig?: ExitCriteriaConfig;
+  /** Optional mode registry getter (for dependency injection/testing) */
+  getModeRegistry?: GetModeRegistryFn;
 }
 
 /**
@@ -40,6 +48,7 @@ export class DebateEngine {
   private modeStrategies: Map<string, DebateModeStrategy> = new Map();
   private aiConsensusAnalyzer?: AIConsensusAnalyzer;
   private exitCriteriaConfig: ExitCriteriaConfig;
+  private getModeRegistry: GetModeRegistryFn;
 
   constructor(options: DebateEngineOptions = {}) {
     // Toolkit must be provided as it's an interface
@@ -51,6 +60,8 @@ export class DebateEngine {
     this.toolkit = options.toolkit;
     this.aiConsensusAnalyzer = options.aiConsensusAnalyzer;
     this.exitCriteriaConfig = options.exitCriteriaConfig ?? EXIT_CRITERIA_CONFIG;
+    // Allow injection but keep default for backward compatibility
+    this.getModeRegistry = options.getModeRegistry ?? defaultGetGlobalModeRegistry;
   }
 
   /**
@@ -74,8 +85,8 @@ export class DebateEngine {
     // Get the appropriate mode strategy (local first, then global registry)
     let strategy = this.modeStrategies.get(context.mode);
     if (!strategy) {
-      // Try global mode registry
-      const globalRegistry = getGlobalModeRegistry();
+      // Try global mode registry using injected function
+      const globalRegistry = this.getModeRegistry();
       strategy = globalRegistry.getMode(context.mode);
     }
 

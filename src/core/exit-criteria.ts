@@ -9,47 +9,12 @@
  */
 
 import { EXIT_CRITERIA_CONFIG } from '../config/exit-criteria.js';
-import type { AgentResponse, ConsensusResult } from '../types/index.js';
-
-// ============================================
-// Types
-// ============================================
-
-/**
- * Exit criteria configuration for automatic debate termination
- */
-export interface ExitCriteria {
-  /** Consensus agreement level threshold (default: 0.9) */
-  consensusThreshold?: number;
-
-  /** Number of rounds with stable positions to trigger convergence exit (default: 2) */
-  convergenceRounds?: number;
-
-  /** Minimum confidence level for all agents to trigger exit (default: 0.85) */
-  confidenceThreshold?: number;
-
-  /** Maximum rounds (required, existing behavior) */
-  maxRounds: number;
-}
-
-/**
- * Exit reason types
- */
-export type ExitReason = 'consensus' | 'convergence' | 'confidence' | 'max_rounds';
-
-/**
- * Result of checking exit criteria
- */
-export interface ExitResult {
-  /** Whether the debate should exit */
-  shouldExit: boolean;
-
-  /** Reason for exit (null if shouldExit is false) */
-  reason: ExitReason | null;
-
-  /** Human-readable explanation */
-  details: string;
-}
+import type {
+  AgentResponse,
+  ConsensusResult,
+  ExitCriteria,
+  ExitResult,
+} from '../types/index.js';
 
 // ============================================
 // Default Values (from centralized config)
