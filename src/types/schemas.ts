@@ -120,17 +120,11 @@ export const SearchOptionsSchema = z.object({
 // MCP Input Schemas
 // ============================================
 
-const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
-
 export const StartRoundtableInputSchema = z.object({
   topic: z.string().min(1, 'Topic is required').max(2000, 'Topic cannot exceed 2000 characters'),
   mode: DebateModeSchema.optional().default('collaborative'),
   agents: z.array(z.string().min(1)).optional(),
   rounds: z.number().int().positive().optional().default(3),
-  // Session-level feature flag overrides
-  parallel: ParallelizationLevelSchema.optional().describe(
-    'Parallelization level for agent execution (none: sequential, last-only: parallel except last agent, full: all parallel)'
-  ),
   exitOnConsensus: z
     .boolean()
     .optional()
