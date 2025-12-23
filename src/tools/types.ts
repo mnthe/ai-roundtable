@@ -34,12 +34,6 @@ export interface AgentToolkit {
   // Context management
   setContext(context: DebateContext): void;
 
-  /**
-   * @deprecated Use agentId parameter in executeTool instead.
-   * This method has race condition issues in parallel execution.
-   */
-  setCurrentAgentId(agentId: string): void;
-
   // Context request management
   getPendingContextRequests(): ContextRequest[];
   clearPendingRequests(): void;

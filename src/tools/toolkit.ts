@@ -72,16 +72,6 @@ export class DefaultAgentToolkit implements AgentToolkit {
   }
 
   /**
-   * @deprecated Use agentId parameter in executeTool instead.
-   * This method has race conditions in parallel execution where multiple
-   * agents call setCurrentAgentId concurrently, causing the last call to
-   * overwrite all previous values.
-   */
-  setCurrentAgentId(_agentId: string): void {
-    // No-op: agentId is now passed directly to executeTool()
-  }
-
-  /**
    * Get pending context requests collected during this round
    */
   getPendingContextRequests(): ContextRequest[] {
