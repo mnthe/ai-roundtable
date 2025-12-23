@@ -223,6 +223,22 @@ sequenceDiagram
 | **Delphi**             | Parallel + Revise | Anonymous summaries   | Reducing bias              |
 | **Red Team/Blue Team** | Team-based        | Team members only     | Security/risk analysis     |
 
+### Mode Descriptions
+
+- **Collaborative**: All agents respond in parallel, focusing on finding common ground and building on each other's ideas. Best for brainstorming and consensus formation.
+
+- **Adversarial**: Agents respond sequentially, challenging previous positions with counter-arguments. Best for stress-testing ideas and identifying weaknesses.
+
+- **Socratic**: Sequential dialogue focused on probing questions rather than direct answers. Explores assumptions and seeks deeper understanding.
+
+- **Expert Panel**: Parallel independent assessments from each agent acting as a domain expert. Best for multi-disciplinary analysis.
+
+- **Devil's Advocate**: Three-role structure - primary position, opposition, and evaluator. Best for preventing groupthink and thorough risk assessment.
+
+- **Delphi**: Anonymized parallel rounds with statistical aggregation. Responses from previous rounds are anonymized ("Participant 1", "Participant 2") to reduce bias.
+
+- **Red Team/Blue Team**: Agents split into attack (Red) and defense (Blue) teams. Even-indexed agents are Red Team (identify risks/weaknesses), odd-indexed are Blue Team (propose solutions/defenses).
+
 ### Mode Execution Patterns
 
 ```mermaid
@@ -384,16 +400,16 @@ Round 2: Revision Based on Anonymous Summary
 > **Note:** Groupthink detection is configurable per mode via `needsGroupthinkDetection` property.
 > Modes with built-in opposition (adversarial, devils-advocate) disable it by default.
 
-### Light Models for Analysis
+### Model Tiers
 
-AI consensus analysis uses lightweight models for cost efficiency:
+AI Roundtable uses different model tiers for different purposes:
 
-| Provider   | Light Model             |
-| ---------- | ----------------------- |
-| Anthropic  | `claude-haiku-4-5`      |
-| OpenAI     | `gpt-5-mini`            |
-| Google     | `gemini-2.5-flash-lite` |
-| Perplexity | `sonar`                 |
+| Tier      | Purpose                       | Models                                                                |
+| --------- | ----------------------------- | --------------------------------------------------------------------- |
+| **Heavy** | Debate participation          | `claude-sonnet-4-5`, `gpt-5.2`, `gemini-3-flash-preview`, `sonar-pro` |
+| **Light** | Consensus analysis, synthesis | `claude-haiku-4-5`, `gpt-5-mini`, `gemini-2.5-flash-lite`, `sonar`    |
+
+Light models are automatically used for `AIConsensusAnalyzer` and `synthesize_debate` to reduce costs and latency.
 
 ### Rule-Based vs AI-Based Analysis
 
