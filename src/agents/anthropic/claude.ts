@@ -12,6 +12,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 import { createLogger } from '../../utils/logger.js';
 import { withRetry } from '../../utils/retry.js';
+import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { convertSDKError } from '../utils/error-converter.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
@@ -90,7 +91,9 @@ export class ClaudeAgent extends BaseAgent {
     );
 
     // Handle tool use loop (both regular tools and server tools like web_search)
-    while (response.stop_reason === 'tool_use') {
+    let toolIterationCount = 0;
+    while (response.stop_reason === 'tool_use' && toolIterationCount < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
+      toolIterationCount++;
       // Handle regular toolkit tools
       const toolUseBlocks = response.content.filter(
         (block): block is ToolUseBlock => block.type === 'tool_use'
@@ -157,6 +160,14 @@ export class ClaudeAgent extends BaseAgent {
             temperature: this.temperature,
           }),
         { maxRetries: 3 }
+      );
+    }
+
+    // Warn if tool iteration limit was reached
+    if (toolIterationCount >= AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
+      logger.warn(
+        { agentId: this.id, iterations: toolIterationCount, limit: AGENT_DEFAULTS.MAX_TOOL_ITERATIONS },
+        'Tool call iteration limit reached'
       );
     }
 

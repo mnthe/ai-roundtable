@@ -225,18 +225,18 @@ export class DebateEngine {
     agents: BaseAgent[],
     context: DebateContext
   ): Promise<AgentResponse[]> {
-    const responses: AgentResponse[] = [];
+    const results = await Promise.allSettled(
+      agents.map(agent => agent.generateResponse(context))
+    );
 
-    for (const agent of agents) {
-      try {
-        const response = await agent.generateResponse(context);
-        responses.push(response);
-      } catch (error) {
-        // Log error but continue with other agents
-        logger.error({ err: error, agentId: agent.id }, 'Error from agent');
+    const responses: AgentResponse[] = [];
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        responses.push(result.value);
+      } else {
+        logger.error({ err: result.reason }, 'Agent failed in simple round');
       }
     }
-
     return responses;
   }
 

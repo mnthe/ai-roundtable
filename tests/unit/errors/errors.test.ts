@@ -65,7 +65,9 @@ describe('Error Classes', () => {
       expect(json.provider).toBe('test-provider');
       expect(json.retryable).toBe(true);
       expect(json.cause).toBe('Original error');
-      expect(json.stack).toBeDefined();
+      // Note: stack is intentionally excluded from toJSON() for security
+      // Stack trace is still available via error.stack property
+      expect(json.stack).toBeUndefined();
     });
   });
 

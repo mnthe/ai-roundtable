@@ -3,6 +3,7 @@
  */
 
 import { jsonrepair } from 'jsonrepair';
+import { AGENT_DEFAULTS } from '../config/agent-defaults.js';
 import { createLogger } from '../utils/logger.js';
 import type {
   AgentConfig,
@@ -101,8 +102,8 @@ export abstract class BaseAgent {
     this.provider = config.provider;
     this.model = config.model;
     this.systemPrompt = config.systemPrompt;
-    this.temperature = config.temperature ?? 0.7;
-    this.maxTokens = config.maxTokens ?? 4096;
+    this.temperature = config.temperature ?? AGENT_DEFAULTS.TEMPERATURE;
+    this.maxTokens = config.maxTokens ?? AGENT_DEFAULTS.MAX_TOKENS;
   }
 
   /**

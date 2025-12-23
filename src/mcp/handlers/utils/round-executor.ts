@@ -73,11 +73,13 @@ export async function executeAndSaveRounds(
   // Update session round tracking (session.currentRound is already updated by executeRounds)
   await sessionManager.updateSessionRound(session.id, session.currentRound);
 
-  // Save all responses
+  // Save all responses (parallel within each round)
   for (const result of roundResults) {
-    for (const response of result.responses) {
-      await sessionManager.addResponse(session.id, response, result.roundNumber);
-    }
+    await Promise.all(
+      result.responses.map(response =>
+        sessionManager.addResponse(session.id, response, result.roundNumber)
+      )
+    );
   }
 
   // Extract key points from the latest round using AI (if available)

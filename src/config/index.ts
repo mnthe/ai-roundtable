@@ -22,3 +22,6 @@ export {
   ExitCriteriaConfigSchema,
   EXIT_CRITERIA_CONFIG,
 } from './exit-criteria.js';
+
+// Agent default configuration
+export { AGENT_DEFAULTS } from './agent-defaults.js';
