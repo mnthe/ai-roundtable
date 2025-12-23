@@ -4,7 +4,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { handleExportSession, handleSynthesizeDebate } from '../../../../src/mcp/handlers/export.js';
+import {
+  handleExportSession,
+  handleSynthesizeDebate,
+} from '../../../../src/mcp/handlers/export.js';
 import type { SessionManager } from '../../../../src/core/session-manager.js';
 import type { AgentRegistry } from '../../../../src/agents/registry.js';
 import type {
@@ -216,7 +219,10 @@ describe('handleExportSession', () => {
       expect(parsed).toHaveProperty('consensus');
       const exportedConsensus = parsed.consensus as Record<string, unknown>;
       expect(exportedConsensus.agreementLevel).toBe(0.75);
-      expect(exportedConsensus.commonGround).toEqual(['Safety is important', 'Oversight is needed']);
+      expect(exportedConsensus.commonGround).toEqual([
+        'Safety is important',
+        'Oversight is needed',
+      ]);
     });
 
     it('should handle unknown agents gracefully', async () => {

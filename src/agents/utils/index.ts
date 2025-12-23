@@ -9,10 +9,7 @@
  */
 
 export { convertSDKError, isRetryableError } from './error-converter.js';
-export {
-  createLightModelAgent,
-  type LightModelAgentOptions,
-} from './light-model-factory.js';
+export { createLightModelAgent, type LightModelAgentOptions } from './light-model-factory.js';
 export {
   selectPreferredAgent,
   createLightAgentFromBase,

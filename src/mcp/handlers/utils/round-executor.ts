@@ -76,7 +76,7 @@ export async function executeAndSaveRounds(
   // Save all responses (parallel within each round)
   for (const result of roundResults) {
     await Promise.all(
-      result.responses.map(response =>
+      result.responses.map((response) =>
         sessionManager.addResponse(session.id, response, result.roundNumber)
       )
     );

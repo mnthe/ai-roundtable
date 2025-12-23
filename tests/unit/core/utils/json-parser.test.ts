@@ -281,8 +281,7 @@ describe('extractAgreementLevelFromText', () => {
   });
 
   it('should extract agreementLevel from text with other content', () => {
-    const input =
-      'Some text before {"agreementLevel": 0.42, more broken stuff} and after';
+    const input = 'Some text before {"agreementLevel": 0.42, more broken stuff} and after';
     const result = extractAgreementLevelFromText(input);
     expect(result).toBe(0.42);
   });
@@ -332,8 +331,7 @@ describe('extractAgreementLevelFromText', () => {
 
 describe('extractSummaryFromText', () => {
   it('should extract summary from partial JSON', () => {
-    const input =
-      '{"agreementLevel": 0.5, "summary": "This is a test summary", "other';
+    const input = '{"agreementLevel": 0.5, "summary": "This is a test summary", "other';
     const result = extractSummaryFromText(input);
     expect(result).toBe('This is a test summary');
   });
@@ -396,9 +394,7 @@ describe('parseAIConsensusResponse', () => {
         commonGround: ['Common 1'],
         disagreementPoints: ['Diff 1'],
         summary: 'Full summary',
-        clusters: [
-          { theme: 'Theme1', agentIds: ['a1', 'a2'], summary: 'Cluster sum' },
-        ],
+        clusters: [{ theme: 'Theme1', agentIds: ['a1', 'a2'], summary: 'Cluster sum' }],
         nuances: {
           partialAgreements: ['Partial'],
           conditionalPositions: ['Conditional'],
@@ -443,8 +439,7 @@ describe('parseAIConsensusResponse', () => {
     });
 
     it('should handle markdown without json tag', () => {
-      const input =
-        '```\n{"agreementLevel": 0.65, "summary": "No tag"}\n```';
+      const input = '```\n{"agreementLevel": 0.65, "summary": "No tag"}\n```';
       const result = parseAIConsensusResponse(input, options);
 
       expect(result.agreementLevel).toBe(0.65);
@@ -462,7 +457,8 @@ describe('parseAIConsensusResponse', () => {
 
   describe('malformed JSON handling with jsonrepair', () => {
     it('should handle JSON with trailing commas', () => {
-      const input = '{"agreementLevel": 0.8, "commonGround": ["point1", "point2",], "summary": "Test",}';
+      const input =
+        '{"agreementLevel": 0.8, "commonGround": ["point1", "point2",], "summary": "Test",}';
       const result = parseAIConsensusResponse(input, options);
 
       expect(result.agreementLevel).toBe(0.8);
@@ -495,8 +491,7 @@ describe('parseAIConsensusResponse', () => {
 
   describe('regex extraction fallback', () => {
     it('should use regex extraction as fallback', () => {
-      const input =
-        '{"agreementLevel": 0.42 malformed content without proper JSON structure';
+      const input = '{"agreementLevel": 0.42 malformed content without proper JSON structure';
       const result = parseAIConsensusResponse(input, options);
 
       expect(result.agreementLevel).toBe(0.42);
@@ -504,8 +499,7 @@ describe('parseAIConsensusResponse', () => {
     });
 
     it('should extract both agreementLevel and summary with regex', () => {
-      const input =
-        '{"agreementLevel": 0.55, "summary": "Extracted summary" broken stuff here';
+      const input = '{"agreementLevel": 0.55, "summary": "Extracted summary" broken stuff here';
       const result = parseAIConsensusResponse(input, options);
 
       expect(result.agreementLevel).toBe(0.55);

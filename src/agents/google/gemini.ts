@@ -171,7 +171,11 @@ export class GeminiAgent extends BaseAgent {
 
       // Handle function calling loop
       let toolIterations = 0;
-      while (response.functionCalls && response.functionCalls.length > 0 && toolIterations < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
+      while (
+        response.functionCalls &&
+        response.functionCalls.length > 0 &&
+        toolIterations < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS
+      ) {
         toolIterations++;
         const functionCalls = response.functionCalls;
         const functionResponses: Array<{

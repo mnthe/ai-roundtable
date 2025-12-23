@@ -92,7 +92,10 @@ export class ClaudeAgent extends BaseAgent {
 
     // Handle tool use loop (both regular tools and server tools like web_search)
     let toolIterationCount = 0;
-    while (response.stop_reason === 'tool_use' && toolIterationCount < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
+    while (
+      response.stop_reason === 'tool_use' &&
+      toolIterationCount < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS
+    ) {
       toolIterationCount++;
       // Handle regular toolkit tools
       const toolUseBlocks = response.content.filter(
@@ -166,7 +169,11 @@ export class ClaudeAgent extends BaseAgent {
     // Warn if tool iteration limit was reached
     if (toolIterationCount >= AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
       logger.warn(
-        { agentId: this.id, iterations: toolIterationCount, limit: AGENT_DEFAULTS.MAX_TOOL_ITERATIONS },
+        {
+          agentId: this.id,
+          iterations: toolIterationCount,
+          limit: AGENT_DEFAULTS.MAX_TOOL_ITERATIONS,
+        },
         'Tool call iteration limit reached'
       );
     }

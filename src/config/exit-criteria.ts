@@ -62,7 +62,10 @@ function loadConfig(): ExitCriteriaConfig {
       consensusThreshold >= 0 && consensusThreshold <= 1
         ? consensusThreshold
         : DEFAULTS.consensusThreshold,
-    convergenceRounds: getEnvNumber('ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS', DEFAULTS.convergenceRounds),
+    convergenceRounds: getEnvNumber(
+      'ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS',
+      DEFAULTS.convergenceRounds
+    ),
     confidenceThreshold:
       confidenceThreshold >= 0 && confidenceThreshold <= 1
         ? confidenceThreshold

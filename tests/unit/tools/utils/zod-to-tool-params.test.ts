@@ -5,10 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { zodToToolParameters } from '../../../../src/tools/utils/zod-to-tool-params.js';
-import {
-  FactCheckInputSchema,
-  RequestContextInputSchema,
-} from '../../../../src/tools/schemas.js';
+import { FactCheckInputSchema, RequestContextInputSchema } from '../../../../src/tools/schemas.js';
 
 describe('zodToToolParameters', () => {
   describe('basic type conversion', () => {

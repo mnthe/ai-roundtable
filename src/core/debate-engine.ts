@@ -237,7 +237,7 @@ export class DebateEngine {
     context: DebateContext
   ): Promise<AgentResponse[]> {
     const results = await Promise.allSettled(
-      agents.map(agent => agent.generateResponse(context))
+      agents.map((agent) => agent.generateResponse(context))
     );
 
     const responses: AgentResponse[] = [];

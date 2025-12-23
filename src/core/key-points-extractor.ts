@@ -11,11 +11,11 @@ import type { AgentRegistry } from '../agents/registry.js';
 import { AgentError } from '../errors/index.js';
 import type { AgentResponse, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
-import { selectPreferredAgent, createLightAgentFromBase } from '../agents/utils/light-agent-selector.js';
 import {
-  getCachedHealthStatus,
-  setCachedHealthStatus,
-} from '../agents/utils/health-cache.js';
+  selectPreferredAgent,
+  createLightAgentFromBase,
+} from '../agents/utils/light-agent-selector.js';
+import { getCachedHealthStatus, setCachedHealthStatus } from '../agents/utils/health-cache.js';
 
 const logger = createLogger('KeyPointsExtractor');
 
@@ -171,10 +171,7 @@ export class KeyPointsExtractor {
           return this.lightAgent;
         }
         // Cached as unhealthy, invalidate and try to create new agent
-        logger.debug(
-          { agentId },
-          'Cached health status indicates unhealthy, invalidating agent'
-        );
+        logger.debug({ agentId }, 'Cached health status indicates unhealthy, invalidating agent');
         this.lightAgent = null;
       } else {
         // No cache, perform actual health check
@@ -185,10 +182,7 @@ export class KeyPointsExtractor {
           return this.lightAgent;
         }
         // Invalidate unhealthy agent
-        logger.debug(
-          { agentId, error: health.error },
-          'Light agent unhealthy, invalidating'
-        );
+        logger.debug({ agentId, error: health.error }, 'Light agent unhealthy, invalidating');
         this.lightAgent = null;
       }
     }

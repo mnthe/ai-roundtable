@@ -9,12 +9,7 @@
  */
 
 import { EXIT_CRITERIA_CONFIG } from '../config/exit-criteria.js';
-import type {
-  AgentResponse,
-  ConsensusResult,
-  ExitCriteria,
-  ExitResult,
-} from '../types/index.js';
+import type { AgentResponse, ConsensusResult, ExitCriteria, ExitResult } from '../types/index.js';
 
 // ============================================
 // Default Values (from centralized config)

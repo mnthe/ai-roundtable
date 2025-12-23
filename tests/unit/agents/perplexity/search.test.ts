@@ -306,9 +306,7 @@ describe('extractPerplexityCitations', () => {
   it('should use domain as title when title is missing', () => {
     const response = {
       id: 'resp-123',
-      search_results: [
-        { url: 'https://www.notitle.com/page' },
-      ],
+      search_results: [{ url: 'https://www.notitle.com/page' }],
     } as StreamChunk;
 
     const citations = extractPerplexityCitations(response);
@@ -320,10 +318,7 @@ describe('extractPerplexityCitations', () => {
   it('should skip results without URL', () => {
     const response = {
       id: 'resp-123',
-      search_results: [
-        { title: 'No URL' },
-        { title: 'Has URL', url: 'https://valid.com' },
-      ],
+      search_results: [{ title: 'No URL' }, { title: 'Has URL', url: 'https://valid.com' }],
     } as unknown as StreamChunk;
 
     const citations = extractPerplexityCitations(response);
@@ -359,9 +354,7 @@ describe('extractPerplexityCitations', () => {
   it('should handle response with date but no snippet', () => {
     const response = {
       id: 'resp-123',
-      search_results: [
-        { title: 'Article', url: 'https://article.com', date: '2024-06-01' },
-      ],
+      search_results: [{ title: 'Article', url: 'https://article.com', date: '2024-06-01' }],
     } as StreamChunk;
 
     const citations = extractPerplexityCitations(response);
