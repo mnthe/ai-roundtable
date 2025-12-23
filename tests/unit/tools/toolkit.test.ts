@@ -266,13 +266,16 @@ describe('request_context tool', () => {
   it('should create a context request with required priority', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
-    const result = (await toolkit.executeTool('request_context', {
-      query: 'What are the latest EU AI regulations?',
-      reason: 'Need current regulatory context for accurate discussion',
-      priority: 'required',
-    })) as { success: boolean; data?: { requestId: string; message: string } };
+    const result = (await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'What are the latest EU AI regulations?',
+        reason: 'Need current regulatory context for accurate discussion',
+        priority: 'required',
+      },
+      'agent-1'
+    )) as { success: boolean; data?: { requestId: string; message: string } };
 
     expect(result.success).toBe(true);
     expect(result.data?.requestId).toBeDefined();
@@ -283,13 +286,16 @@ describe('request_context tool', () => {
   it('should create a context request with optional priority', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
-    const result = (await toolkit.executeTool('request_context', {
-      query: 'Historical examples of AI regulation',
-      reason: 'Would help but not essential',
-      priority: 'optional',
-    })) as { success: boolean; data?: { requestId: string; message: string } };
+    const result = (await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Historical examples of AI regulation',
+        reason: 'Would help but not essential',
+        priority: 'optional',
+      },
+      'agent-1'
+    )) as { success: boolean; data?: { requestId: string; message: string } };
 
     expect(result.success).toBe(true);
     expect(result.data?.requestId).toBeDefined();
@@ -298,12 +304,15 @@ describe('request_context tool', () => {
   it('should default to required priority when not specified', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
-    await toolkit.executeTool('request_context', {
-      query: 'Test query',
-      reason: 'Test reason',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Test query',
+        reason: 'Test reason',
+      },
+      'agent-1'
+    );
 
     const requests = toolkit.getPendingContextRequests();
     expect(requests).toHaveLength(1);
@@ -404,12 +413,15 @@ describe('request_context tool', () => {
   it('should include agentId in context request', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('test-agent-123');
 
-    await toolkit.executeTool('request_context', {
-      query: 'Test query',
-      reason: 'Test reason',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Test query',
+        reason: 'Test reason',
+      },
+      'test-agent-123'
+    );
 
     const requests = toolkit.getPendingContextRequests();
     expect(requests[0]?.agentId).toBe('test-agent-123');
@@ -418,13 +430,16 @@ describe('request_context tool', () => {
   it('should include timestamp in context request', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
     const before = new Date();
-    await toolkit.executeTool('request_context', {
-      query: 'Test query',
-      reason: 'Test reason',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Test query',
+        reason: 'Test reason',
+      },
+      'agent-1'
+    );
     const after = new Date();
 
     const requests = toolkit.getPendingContextRequests();
@@ -448,16 +463,23 @@ describe('context request management', () => {
   it('should accumulate multiple context requests', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
-    await toolkit.executeTool('request_context', {
-      query: 'First query',
-      reason: 'First reason',
-    });
-    await toolkit.executeTool('request_context', {
-      query: 'Second query',
-      reason: 'Second reason',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'First query',
+        reason: 'First reason',
+      },
+      'agent-1'
+    );
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Second query',
+        reason: 'Second reason',
+      },
+      'agent-1'
+    );
 
     const requests = toolkit.getPendingContextRequests();
     expect(requests).toHaveLength(2);
@@ -468,16 +490,23 @@ describe('context request management', () => {
   it('should clear all pending requests', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
-    await toolkit.executeTool('request_context', {
-      query: 'Query 1',
-      reason: 'Reason 1',
-    });
-    await toolkit.executeTool('request_context', {
-      query: 'Query 2',
-      reason: 'Reason 2',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Query 1',
+        reason: 'Reason 1',
+      },
+      'agent-1'
+    );
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Query 2',
+        reason: 'Reason 2',
+      },
+      'agent-1'
+    );
 
     expect(toolkit.getPendingContextRequests()).toHaveLength(2);
 
@@ -489,14 +518,17 @@ describe('context request management', () => {
   it('should report hasPendingRequests correctly', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
     expect(toolkit.hasPendingRequests()).toBe(false);
 
-    await toolkit.executeTool('request_context', {
-      query: 'Test query',
-      reason: 'Test reason',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Test query',
+        reason: 'Test reason',
+      },
+      'agent-1'
+    );
 
     expect(toolkit.hasPendingRequests()).toBe(true);
 
@@ -508,16 +540,23 @@ describe('context request management', () => {
   it('should generate unique request IDs', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
-    toolkit.setCurrentAgentId('agent-1');
 
-    await toolkit.executeTool('request_context', {
-      query: 'Query 1',
-      reason: 'Reason 1',
-    });
-    await toolkit.executeTool('request_context', {
-      query: 'Query 2',
-      reason: 'Reason 2',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Query 1',
+        reason: 'Reason 1',
+      },
+      'agent-1'
+    );
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Query 2',
+        reason: 'Reason 2',
+      },
+      'agent-1'
+    );
 
     const requests = toolkit.getPendingContextRequests();
     const ids = requests.map((r) => r.id);
@@ -528,17 +567,23 @@ describe('context request management', () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);
 
-    toolkit.setCurrentAgentId('agent-1');
-    await toolkit.executeTool('request_context', {
-      query: 'Query from agent 1',
-      reason: 'Reason 1',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Query from agent 1',
+        reason: 'Reason 1',
+      },
+      'agent-1'
+    );
 
-    toolkit.setCurrentAgentId('agent-2');
-    await toolkit.executeTool('request_context', {
-      query: 'Query from agent 2',
-      reason: 'Reason 2',
-    });
+    await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Query from agent 2',
+        reason: 'Reason 2',
+      },
+      'agent-2'
+    );
 
     const requests = toolkit.getPendingContextRequests();
     expect(requests).toHaveLength(2);

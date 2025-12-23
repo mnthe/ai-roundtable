@@ -58,7 +58,6 @@ export class DefaultAgentToolkit implements AgentToolkit {
   private tools: Map<string, ToolDefinition> = new Map();
   private currentContext?: DebateContext;
   private pendingContextRequests: ContextRequest[] = [];
-  private currentAgentId: string = 'unknown';
   private requestIdCounter = 0;
 
   constructor(private sessionDataProvider?: SessionDataProvider) {
@@ -73,15 +72,13 @@ export class DefaultAgentToolkit implements AgentToolkit {
   }
 
   /**
-   * Set the current agent ID (called by mode strategy before agent turn)
-   *
    * @deprecated Use agentId parameter in executeTool instead.
    * This method has race conditions in parallel execution where multiple
    * agents call setCurrentAgentId concurrently, causing the last call to
    * overwrite all previous values.
    */
-  setCurrentAgentId(agentId: string): void {
-    this.currentAgentId = agentId;
+  setCurrentAgentId(_agentId: string): void {
+    // No-op: agentId is now passed directly to executeTool()
   }
 
   /**
@@ -181,8 +178,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * @param name - Tool name
    * @param input - Tool input
-   * @param agentId - ID of the agent making the call (for request_context tracking).
-   *                  Falls back to currentAgentId for backwards compatibility.
+   * @param agentId - Agent ID for request tracking (required for request_context)
    */
   async executeTool(name: string, input: unknown, agentId?: string): Promise<unknown> {
     const definition = this.tools.get(name);
@@ -203,12 +199,10 @@ export class DefaultAgentToolkit implements AgentToolkit {
     }
 
     try {
-      // For request_context, use provided agentId or fall back to currentAgentId
+      // Special handling for request_context to pass agentId
       if (name === 'request_context') {
-        const effectiveAgentId = agentId ?? this.currentAgentId;
-        return await this.executeRequestContext(validation.data, effectiveAgentId);
+        return await this.executeRequestContext(validation.data, agentId ?? 'unknown');
       }
-
       const result = await definition.executor(validation.data);
       return result;
     } catch (error) {
