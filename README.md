@@ -1,5 +1,7 @@
 # AI Roundtable
 
+[![CI](https://github.com/mnthe/ai-roundtable/actions/workflows/ci.yml/badge.svg)](https://github.com/mnthe/ai-roundtable/actions/workflows/ci.yml)
+
 A Multi-AI debate platform that enables structured discussions between different AI models (Claude, ChatGPT, Gemini, Perplexity) through the Model Context Protocol (MCP).
 
 ## Overview
