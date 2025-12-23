@@ -241,8 +241,13 @@ Extended with context request management:
 interface AgentToolkit {
   // ... existing methods ...
 
-  /** Set the current agent ID for tracking requests */
-  setCurrentAgentId(agentId: string): void;
+  /**
+   * Execute a tool by name
+   * @param name - Tool name
+   * @param input - Tool input
+   * @param agentId - Agent ID for request tracking (required for request_context)
+   */
+  executeTool(name: string, input: unknown, agentId?: string): Promise<unknown>;
 
   /** Get all pending context requests */
   getPendingContextRequests(): ContextRequest[];

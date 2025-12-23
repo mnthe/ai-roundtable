@@ -139,7 +139,6 @@ describe('BaseModeStrategy Hooks', () => {
       getTools: () => [],
       executeTool: vi.fn().mockResolvedValue({}),
       setContext: vi.fn(),
-      setCurrentAgentId: vi.fn(),
       getPendingContextRequests: () => [],
       clearPendingRequests: vi.fn(),
       hasPendingRequests: () => false,
