@@ -66,17 +66,7 @@ jobs:
           path: coverage/
 
       - name: Coverage Report Summary
-        uses: irongut/CodeCoverageSummary@v1.3.0
+        uses: davelosert/vitest-coverage-report-action@v2
         with:
-          filename: coverage/coverage-summary.json
-          badge: true
-          format: markdown
-          output: both
-          thresholds: '60 80'
-
-      - name: Add coverage PR comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        if: github.event_name == 'pull_request'
-        with:
-          recreate: true
-          path: code-coverage-results.md
+          json-summary-path: coverage/coverage-summary.json
+          json-final-path: coverage/coverage-final.json

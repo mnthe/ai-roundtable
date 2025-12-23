@@ -123,7 +123,7 @@ export const SearchOptionsSchema = z.object({
 const ParallelizationLevelSchema = z.enum(['none', 'last-only', 'full']);
 
 export const StartRoundtableInputSchema = z.object({
-  topic: z.string().min(1, 'Topic is required'),
+  topic: z.string().min(1, 'Topic is required').max(2000, 'Topic cannot exceed 2000 characters'),
   mode: DebateModeSchema.optional().default('collaborative'),
   agents: z.array(z.string().min(1)).optional(),
   rounds: z.number().int().positive().optional().default(3),

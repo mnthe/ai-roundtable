@@ -9,12 +9,16 @@
  */
 
 export { convertSDKError, isRetryableError } from './error-converter.js';
-export {
-  createLightModelAgent,
-  type LightModelAgentOptions,
-} from './light-model-factory.js';
+export { createLightModelAgent, type LightModelAgentOptions } from './light-model-factory.js';
 export {
   selectPreferredAgent,
   createLightAgentFromBase,
   type LightAgentConfig,
 } from './light-agent-selector.js';
+export {
+  getCachedHealthStatus,
+  setCachedHealthStatus,
+  clearHealthCache,
+  getHealthCacheSize,
+  DEFAULT_HEALTH_CACHE_TTL_MS,
+} from './health-cache.js';

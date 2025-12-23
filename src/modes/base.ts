@@ -161,11 +161,9 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
     };
 
     // Execute all agents in parallel with error handling
+    // Note: agentId is now passed through executeTool() to avoid race conditions
     const responsePromises = agents.map((agent) => {
       agent.setToolkit(toolkit);
-
-      // Set current agent ID for context request tracking
-      toolkit.setCurrentAgentId(agent.id);
 
       // Apply transformContext hook if defined
       const agentContext = this.transformContext
@@ -254,9 +252,7 @@ export abstract class BaseModeStrategy implements DebateModeStrategy {
           : baseContext;
 
         agent.setToolkit(toolkit);
-
-        // Set current agent ID for context request tracking
-        toolkit.setCurrentAgentId(agent.id);
+        // Note: agentId is now passed through executeTool() to avoid race conditions
 
         let response = await agent.generateResponse(agentContext);
 

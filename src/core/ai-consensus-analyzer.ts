@@ -7,16 +7,34 @@
 
 import type { BaseAgent } from '../agents/base.js';
 import type { AgentRegistry } from '../agents/registry.js';
+import type { LightModelAgentOptions } from '../agents/utils/light-model-factory.js';
 import { ConfigurationError } from '../errors/index.js';
 import type { AgentResponse, AIConsensusResult, AIProvider } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import { parseAIConsensusResponse } from './utils/json-parser.js';
-import { selectPreferredAgent, createLightAgentFromBase } from '../agents/utils/light-agent-selector.js';
+// Default imports - can be overridden via config for dependency injection
+import {
+  selectPreferredAgent as defaultSelectPreferredAgent,
+  createLightAgentFromBase as defaultCreateLightAgentFromBase,
+} from '../agents/utils/light-agent-selector.js';
 
 const logger = createLogger('AIConsensusAnalyzer');
 
 /** Constant for self-analysis identifier when only one response is provided */
 const SELF_ANALYZER_ID = 'self';
+
+/** Type for agent selection function */
+export type SelectAgentFn = (
+  registry: AgentRegistry,
+  preferredProvider?: AIProvider
+) => BaseAgent | null;
+
+/** Type for light agent creation function */
+export type CreateLightAgentFn = (
+  baseAgent: BaseAgent,
+  registry: AgentRegistry,
+  options: Omit<LightModelAgentOptions, 'registry'>
+) => BaseAgent;
 
 /**
  * Configuration for AIConsensusAnalyzer
@@ -26,6 +44,10 @@ export interface AIConsensusAnalyzerConfig {
   registry: AgentRegistry;
   /** Preferred provider for analysis (uses first available if not specified) */
   preferredProvider?: AIProvider;
+  /** Optional function injection for agent selection (for dependency injection/testing) */
+  selectAgent?: SelectAgentFn;
+  /** Optional function injection for light agent creation (for dependency injection/testing) */
+  createLightAgent?: CreateLightAgentFn;
 }
 
 /**
@@ -140,10 +162,15 @@ function buildAnalysisPrompt(includeGroupthink: boolean): string {
 export class AIConsensusAnalyzer {
   private registry: AgentRegistry;
   private preferredProvider?: AIProvider;
+  private selectAgent: SelectAgentFn;
+  private createLightAgent: CreateLightAgentFn;
 
   constructor(config: AIConsensusAnalyzerConfig) {
     this.registry = config.registry;
     this.preferredProvider = config.preferredProvider;
+    // Allow injection but keep defaults for backward compatibility
+    this.selectAgent = config.selectAgent ?? defaultSelectPreferredAgent;
+    this.createLightAgent = config.createLightAgent ?? defaultCreateLightAgentFromBase;
   }
 
   /**
@@ -249,8 +276,8 @@ export class AIConsensusAnalyzer {
   }> {
     const diagnostics = this.getDiagnostics();
 
-    // Use shared utility for agent selection
-    const baseAgent = selectPreferredAgent(this.registry, this.preferredProvider);
+    // Use injected function for agent selection
+    const baseAgent = this.selectAgent(this.registry, this.preferredProvider);
     if (!baseAgent) {
       logger.warn(
         {
@@ -286,8 +313,8 @@ export class AIConsensusAnalyzer {
       );
     }
 
-    // Create light model agent using shared utility
-    const lightAgent = createLightAgentFromBase(baseAgent, this.registry, {
+    // Create light model agent using injected function
+    const lightAgent = this.createLightAgent(baseAgent, this.registry, {
       idSuffix: 'consensus',
       maxTokens: 8192, // Higher limit for detailed analysis
     });

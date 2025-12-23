@@ -9,7 +9,14 @@ import type {
   ContextRequest,
   ContextRequestPriority,
 } from '../types/index.js';
-import { validateToolInput, type FactCheckInput, type RequestContextInput } from './schemas.js';
+import {
+  validateToolInput,
+  FactCheckInputSchema,
+  RequestContextInputSchema,
+  type FactCheckInput,
+  type RequestContextInput,
+} from './schemas.js';
+import { zodToToolParameters } from './utils/index.js';
 
 /**
  * Interface for retrieving debate evidence from sessions
@@ -67,6 +74,11 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Set the current agent ID (called by mode strategy before agent turn)
+   *
+   * @deprecated Use agentId parameter in executeTool instead.
+   * This method has race conditions in parallel execution where multiple
+   * agents call setCurrentAgentId concurrently, causing the last call to
+   * overwrite all previous values.
    */
   setCurrentAgentId(agentId: string): void {
     this.currentAgentId = agentId;
@@ -103,9 +115,13 @@ export class DefaultAgentToolkit implements AgentToolkit {
 
   /**
    * Register default tools
+   *
+   * Tool parameters are derived from Zod schemas to eliminate duplication.
+   * The Zod schemas in schemas.ts are the single source of truth.
    */
   private registerDefaultTools(): void {
     // Tool 1: Fact Check
+    // Parameters derived from FactCheckInputSchema
     this.registerTool({
       tool: {
         name: 'fact_check',
@@ -113,21 +129,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
           'Check claims against evidence from the current debate. ' +
           'Returns all positions and reasoning from other participants. ' +
           'Use this to verify claims made by other agents.',
-        parameters: {
-          claim: {
-            type: 'string',
-            description: 'The claim to verify',
-          },
-          source_agent: {
-            type: 'string',
-            description: 'Agent who made the claim (will be excluded from results)',
-          },
-        },
+        parameters: zodToToolParameters(FactCheckInputSchema),
       },
       executor: async (input) => this.executeFactCheck(input),
     });
 
     // Tool 2: Request Context (External Context Integration)
+    // Parameters derived from RequestContextInputSchema
+    // Note: This tool is handled specially in executeTool() to pass agentId
     this.registerTool({
       tool: {
         name: 'request_context',
@@ -135,28 +144,18 @@ export class DefaultAgentToolkit implements AgentToolkit {
           'Request additional context or information from the caller (an AI agent like Claude Code). ' +
           'Describe WHAT you need in natural language - the caller will determine HOW to obtain it.\n\n' +
           'Examples:\n' +
-          '- "src/auth.ts 파일의 내용을 읽어주세요"\n' +
-          '- "authenticate 함수를 호출하는 코드를 찾아주세요"\n' +
-          '- "이 프로젝트의 테스트 커버리지를 확인해주세요"\n\n' +
+          '- "src/auth.ts - read file content"\n' +
+          '- "Find code that calls the authenticate function"\n' +
+          '- "Check test coverage for this project"\n\n' +
           'Do NOT specify tool names or technical details - just describe what you need. ' +
           'The result will be available in the next round.',
-        parameters: {
-          query: {
-            type: 'string',
-            description: 'What information do you need? (natural language)',
-          },
-          reason: {
-            type: 'string',
-            description: 'Why do you need this information?',
-          },
-          priority: {
-            type: 'string',
-            description:
-              '"required" if debate cannot continue without it, "optional" if helpful but not essential. Default: "required"',
-          },
-        },
+        parameters: zodToToolParameters(RequestContextInputSchema),
       },
-      executor: async (input) => this.executeRequestContext(input),
+      // Executor is bypassed - executeTool() handles request_context specially
+      // to pass agentId for proper tracking in parallel execution
+      executor: async () => {
+        throw new Error('request_context should be handled specially in executeTool()');
+      },
     });
   }
 
@@ -179,8 +178,13 @@ export class DefaultAgentToolkit implements AgentToolkit {
    *
    * Input is validated against the tool's Zod schema before execution.
    * Returns an error result if validation fails.
+   *
+   * @param name - Tool name
+   * @param input - Tool input
+   * @param agentId - ID of the agent making the call (for request_context tracking).
+   *                  Falls back to currentAgentId for backwards compatibility.
    */
-  async executeTool(name: string, input: unknown): Promise<unknown> {
+  async executeTool(name: string, input: unknown, agentId?: string): Promise<unknown> {
     const definition = this.tools.get(name);
     if (!definition) {
       return {
@@ -199,6 +203,12 @@ export class DefaultAgentToolkit implements AgentToolkit {
     }
 
     try {
+      // For request_context, use provided agentId or fall back to currentAgentId
+      if (name === 'request_context') {
+        const effectiveAgentId = agentId ?? this.currentAgentId;
+        return await this.executeRequestContext(validation.data, effectiveAgentId);
+      }
+
       const result = await definition.executor(validation.data);
       return result;
     } catch (error) {
@@ -267,8 +277,14 @@ export class DefaultAgentToolkit implements AgentToolkit {
    * The result will be available in the next round.
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
+   *
+   * @param input - Validated input from Zod schema
+   * @param agentId - ID of the agent making the request
    */
-  private async executeRequestContext(input: unknown): Promise<
+  private async executeRequestContext(
+    input: unknown,
+    agentId: string
+  ): Promise<
     ToolResult<{
       requestId: string;
       message: string;
@@ -280,7 +296,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
     // Create the context request
     const request: ContextRequest = {
       id: this.generateRequestId(),
-      agentId: this.currentAgentId,
+      agentId: agentId,
       query: data.query,
       reason: data.reason,
       // Safe cast: priority is validated by RequestContextInputSchema as 'required' | 'optional'

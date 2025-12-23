@@ -2,6 +2,9 @@
  * Anthropic (Claude) Agent Types
  */
 
+import type Anthropic from '@anthropic-ai/sdk';
+import type { BaseAgentOptions } from '../types/index.js';
+
 /**
  * Web search configuration options
  */
@@ -19,11 +22,7 @@ export interface WebSearchConfig {
 /**
  * Configuration options for Claude Agent
  */
-export interface ClaudeAgentOptions {
-  /** Anthropic API key (defaults to ANTHROPIC_API_KEY env var) */
-  apiKey?: string;
-  /** Custom Anthropic client instance (for testing) */
-  client?: import('@anthropic-ai/sdk').default;
+export interface ClaudeAgentOptions extends BaseAgentOptions<Anthropic> {
   /** Web search configuration (default: enabled) */
   webSearch?: WebSearchConfig;
 }

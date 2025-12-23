@@ -147,11 +147,7 @@ export abstract class RoleBasedModeStrategy<TRole extends string> extends BaseMo
    * Get the role for an agent based on their index.
    * Hook implementation for BaseModeStrategy.
    */
-  protected override getAgentRole(
-    agent: BaseAgent,
-    index: number,
-    context: DebateContext
-  ): TRole {
+  protected override getAgentRole(agent: BaseAgent, index: number, context: DebateContext): TRole {
     const state = (context as RoleBasedContext<TRole>)._roleBasedState;
     const agentIndex = state?.agentIndexMap.get(agent.id) ?? index;
     const totalAgents = state?.totalAgents ?? 3;

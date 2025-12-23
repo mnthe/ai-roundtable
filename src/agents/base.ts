@@ -3,6 +3,7 @@
  */
 
 import { jsonrepair } from 'jsonrepair';
+import { AGENT_DEFAULTS } from '../config/agent-defaults.js';
 import { createLogger } from '../utils/logger.js';
 import type {
   AgentConfig,
@@ -95,14 +96,18 @@ export abstract class BaseAgent {
   protected readonly maxTokens: number;
   protected toolkit?: AgentToolkit;
 
+  /** Default system prompt for raw completion calls */
+  protected static readonly DEFAULT_RAW_SYSTEM_PROMPT =
+    'You are a helpful AI assistant. Respond exactly as instructed.';
+
   constructor(config: AgentConfig) {
     this.id = config.id;
     this.name = config.name;
     this.provider = config.provider;
     this.model = config.model;
     this.systemPrompt = config.systemPrompt;
-    this.temperature = config.temperature ?? 0.7;
-    this.maxTokens = config.maxTokens ?? 4096;
+    this.temperature = config.temperature ?? AGENT_DEFAULTS.TEMPERATURE;
+    this.maxTokens = config.maxTokens ?? AGENT_DEFAULTS.MAX_TOKENS;
   }
 
   /**
@@ -115,6 +120,9 @@ export abstract class BaseAgent {
   /**
    * Execute a tool call using the toolkit
    * Provides common error handling for all agent implementations
+   *
+   * Passes this.id as the agentId to ensure correct attribution
+   * of context requests in parallel execution.
    */
   protected async executeTool(name: string, input: unknown): Promise<unknown> {
     if (!this.toolkit) {
@@ -122,7 +130,7 @@ export abstract class BaseAgent {
     }
 
     try {
-      return await this.toolkit.executeTool(name, input);
+      return await this.toolkit.executeTool(name, input, this.id);
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'Tool execution failed',
@@ -386,6 +394,13 @@ Instructions:
     return `You are ${this.name}, an AI participating in a structured roundtable discussion.
 Your role is to provide thoughtful, well-reasoned perspectives on the topic at hand.
 Be respectful of other participants' views while clearly articulating your own position.`;
+  }
+
+  /**
+   * Get effective system prompt for raw completion calls, using default if not provided
+   */
+  protected getEffectiveSystemPrompt(systemPrompt?: string): string {
+    return systemPrompt ?? BaseAgent.DEFAULT_RAW_SYSTEM_PROMPT;
   }
 
   /**

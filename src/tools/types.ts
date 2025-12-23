@@ -21,10 +21,23 @@ export interface AgentTool {
  */
 export interface AgentToolkit {
   getTools(): AgentTool[];
-  executeTool(name: string, input: unknown): Promise<unknown>;
+
+  /**
+   * Execute a tool by name
+   *
+   * @param name - Tool name
+   * @param input - Tool input
+   * @param agentId - ID of the agent making the call (for request_context tracking)
+   */
+  executeTool(name: string, input: unknown, agentId?: string): Promise<unknown>;
 
   // Context management
   setContext(context: DebateContext): void;
+
+  /**
+   * @deprecated Use agentId parameter in executeTool instead.
+   * This method has race conditions in parallel execution.
+   */
   setCurrentAgentId(agentId: string): void;
 
   // Context request management

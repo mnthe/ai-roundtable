@@ -29,6 +29,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { Chat } from '@google/genai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { withRetry } from '../../utils/retry.js';
+import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
 import { convertSDKError } from '../utils/error-converter.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
@@ -169,7 +170,13 @@ export class GeminiAgent extends BaseAgent {
       });
 
       // Handle function calling loop
-      while (response.functionCalls && response.functionCalls.length > 0) {
+      let toolIterations = 0;
+      while (
+        response.functionCalls &&
+        response.functionCalls.length > 0 &&
+        toolIterations < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS
+      ) {
+        toolIterations++;
         const functionCalls = response.functionCalls;
         const functionResponses: Array<{
           id?: string;
@@ -217,6 +224,13 @@ export class GeminiAgent extends BaseAgent {
         );
       }
 
+      if (toolIterations >= AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
+        logger.warn(
+          { agentId: this.id, iterations: toolIterations },
+          'Tool call iteration limit reached, returning current response'
+        );
+      }
+
       // Use Phase 2 response as final text (includes both search context and tool results)
       const rawText = response.text ?? '';
       logger.debug({ agentId: this.id }, 'Phase 2 complete: Function calling finished');
@@ -240,8 +254,7 @@ export class GeminiAgent extends BaseAgent {
    * Used by AIConsensusAnalyzer and synthesis features
    */
   async generateRawCompletion(prompt: string, systemPrompt?: string): Promise<string> {
-    const effectiveSystemPrompt =
-      systemPrompt ?? 'You are a helpful AI assistant. Respond exactly as instructed.';
+    const effectiveSystemPrompt = this.getEffectiveSystemPrompt(systemPrompt);
 
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 

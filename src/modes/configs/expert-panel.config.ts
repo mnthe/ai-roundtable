@@ -2,7 +2,11 @@
  * Expert Panel Mode Configuration
  */
 
-import { createOutputSections, type ModePromptConfig, type RoleAnchorConfig } from '../utils/index.js';
+import {
+  createOutputSections,
+  type ModePromptConfig,
+  type RoleAnchorConfig,
+} from '../utils/index.js';
 
 /**
  * Perspective anchors for expert panel analysis

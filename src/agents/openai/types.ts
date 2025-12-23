@@ -5,6 +5,7 @@
 import type OpenAI from 'openai';
 import type { FunctionTool } from 'openai/resources/responses/responses';
 import type { ToolCallRecord, Citation } from '../../types/index.js';
+import type { BaseAgentOptions } from '../types/index.js';
 
 /**
  * Web search configuration for ChatGPT Agent
@@ -19,11 +20,7 @@ export interface ChatGPTWebSearchConfig {
 /**
  * Configuration options for ChatGPT Agent
  */
-export interface ChatGPTAgentOptions {
-  /** OpenAI API key (defaults to OPENAI_API_KEY env var) */
-  apiKey?: string;
-  /** Custom OpenAI client instance (for testing) */
-  client?: OpenAI;
+export interface ChatGPTAgentOptions extends BaseAgentOptions<OpenAI> {
   /** Web search configuration (default: enabled) */
   webSearch?: ChatGPTWebSearchConfig;
 }

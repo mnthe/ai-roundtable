@@ -33,13 +33,15 @@ export class RoundtableError extends Error {
   }
 
   toJSON(): Record<string, unknown> {
+    // Note: Stack trace is intentionally excluded from JSON serialization
+    // to prevent exposing internal implementation details in API responses
+    // or logs that may be visible to external systems.
     return {
       name: this.name,
       message: this.message,
       code: this.code,
       provider: this.provider,
       retryable: this.retryable,
-      stack: this.stack,
       cause: this.cause?.message,
     };
   }

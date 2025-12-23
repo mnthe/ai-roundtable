@@ -399,8 +399,7 @@ export interface RoundtableResponse {
 // Exit Criteria Types
 // ============================================
 
-// Re-export from core/exit-criteria to avoid duplicate definitions
-export type { ExitCriteria, ExitReason, ExitResult } from '../core/exit-criteria.js';
+export type { ExitCriteria, ExitReason, ExitResult } from './exit-criteria.js';
 
 // ============================================
 // Context Request Types (External Context Integration)
