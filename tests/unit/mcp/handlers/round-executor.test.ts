@@ -85,25 +85,6 @@ describe('executeAndSaveRounds', () => {
     );
   });
 
-  it('should execute specified number of rounds', async () => {
-    await executeAndSaveRounds(
-      mockDebateEngine,
-      mockSessionManager,
-      mockSession,
-      mockAgents,
-      null,
-      { rounds: 2 }
-    );
-
-    expect(mockDebateEngine.executeRounds).toHaveBeenCalledWith(
-      mockAgents,
-      mockSession,
-      2,
-      undefined,
-      undefined
-    );
-  });
-
   it('should pass focusQuestion to debateEngine', async () => {
     await executeAndSaveRounds(
       mockDebateEngine,
@@ -209,42 +190,22 @@ describe('executeAndSaveRounds', () => {
     expect(result.roundResults[0].responses).toHaveLength(2);
   });
 
-  it('should handle multiple rounds', async () => {
-    (mockDebateEngine.executeRounds as any).mockResolvedValue([
-      createMockRoundResult(1),
-      createMockRoundResult(2),
-    ]);
-
-    const result = await executeAndSaveRounds(
-      mockDebateEngine,
-      mockSessionManager,
-      mockSession,
-      mockAgents,
-      null,
-      { rounds: 2 }
-    );
-
-    expect(result.roundResults).toHaveLength(2);
-    // Should save 4 responses total (2 agents × 2 rounds)
-    expect(mockSessionManager.addResponse).toHaveBeenCalledTimes(4);
-  });
-
-  it('should extract key points only from latest round', async () => {
-    (mockDebateEngine.executeRounds as any).mockResolvedValue([
-      createMockRoundResult(1),
-      createMockRoundResult(2),
-    ]);
-
+  it('should always execute exactly one round', async () => {
     await executeAndSaveRounds(
       mockDebateEngine,
       mockSessionManager,
       mockSession,
       mockAgents,
-      mockKeyPointsExtractor,
-      { rounds: 2 }
+      null
     );
 
-    // Should only call extractKeyPointsBatch once for the latest round
-    expect(mockKeyPointsExtractor.extractKeyPointsBatch).toHaveBeenCalledTimes(1);
+    // Verify that executeRounds is always called with 1 round
+    expect(mockDebateEngine.executeRounds).toHaveBeenCalledWith(
+      mockAgents,
+      mockSession,
+      1,
+      undefined,
+      undefined
+    );
   });
 });

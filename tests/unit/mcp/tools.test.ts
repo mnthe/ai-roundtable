@@ -85,7 +85,6 @@ describe('MCP Tools', () => {
     it('should validate continue_roundtable input', () => {
       const validInput = {
         sessionId: 'test-session-id',
-        rounds: 2,
       };
 
       const result = ContinueRoundtableInputSchema.safeParse(validInput);
@@ -93,9 +92,7 @@ describe('MCP Tools', () => {
     });
 
     it('should reject continue_roundtable without sessionId', () => {
-      const invalidInput = {
-        rounds: 2,
-      };
+      const invalidInput = {};
 
       const result = ContinueRoundtableInputSchema.safeParse(invalidInput);
       expect(result.success).toBe(false);
@@ -390,17 +387,6 @@ describe('MCP Tools', () => {
     it('should reject continue_roundtable with empty sessionId', () => {
       const invalidInput = {
         sessionId: '',
-        rounds: 2,
-      };
-
-      const result = ContinueRoundtableInputSchema.safeParse(invalidInput);
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject continue_roundtable with non-positive rounds', () => {
-      const invalidInput = {
-        sessionId: 'test-session-id',
-        rounds: 0,
       };
 
       const result = ContinueRoundtableInputSchema.safeParse(invalidInput);

@@ -1047,14 +1047,13 @@ Start a new AI debate roundtable.
 
 #### continue_roundtable
 
-Continue an existing debate with additional rounds. Supports the Context Request Pattern for providing additional context requested by agents.
+Continue an existing debate with one additional round. Supports the Context Request Pattern for providing additional context requested by agents.
 
 ```typescript
 // Input schema
 {
   sessionId: string;      // Required
-  rounds?: number;        // Default: 1, min: 1
-  focusQuestion?: string;
+  focusQuestion?: string; // Guide the discussion for this round
   contextResults?: Array<{  // Results for pending context requests
     requestId: string;      // ID of the original ContextRequest
     success: boolean;

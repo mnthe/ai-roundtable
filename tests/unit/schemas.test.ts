@@ -366,7 +366,6 @@ describe('Zod Schemas', () => {
     it('should validate with optional fields', () => {
       const input = {
         sessionId: 'session-123',
-        rounds: 2,
         focusQuestion: 'What about privacy?',
       };
 

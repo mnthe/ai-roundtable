@@ -51,11 +51,11 @@ const START_ROUNDTABLE_TOOL: Tool = {
 /**
  * Tool: continue_roundtable
  *
- * Continue an existing debate with additional rounds
+ * Continue an existing debate with one additional round
  */
 const CONTINUE_ROUNDTABLE_TOOL: Tool = {
   name: 'continue_roundtable',
-  description: `Continue an existing debate roundtable with additional rounds.
+  description: `Continue an existing debate roundtable with one additional round.
 
 ## CRITICAL: Handling contextRequests (READ THIS FIRST)
 
@@ -81,8 +81,7 @@ If priority is "required", the debate CANNOT proceed without this information.
 Ignoring contextRequests will result in degraded debate quality.
 
 ## Optional Parameters
-- focusQuestion: Guide the next round's discussion topic
-- rounds: Number of additional rounds (default: 1)`,
+- focusQuestion: Guide the next round's discussion topic`,
   inputSchema: toMcpJsonSchema(ContinueRoundtableInputSchema),
 };
 

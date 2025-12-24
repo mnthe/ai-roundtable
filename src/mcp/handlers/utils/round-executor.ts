@@ -12,12 +12,10 @@ import type { BaseAgent } from '../../../agents/base.js';
 import type { Session, RoundResult, ContextResult } from '../../../types/index.js';
 
 /**
- * Options for executing rounds
+ * Options for executing a single round
  */
 export interface ExecuteRoundsOptions {
-  /** Number of rounds to execute (default: 1) */
-  rounds?: number;
-  /** Optional focus question for the rounds */
+  /** Optional focus question for the round */
   focusQuestion?: string;
   /** Optional context results from previous requests */
   contextResults?: ContextResult[];
@@ -34,11 +32,11 @@ export interface ExecuteRoundsResult {
 }
 
 /**
- * Execute rounds, save responses, and extract key points
+ * Execute a single round, save responses, and extract key points
  *
  * This function centralizes the common logic used by both start_roundtable
  * and continue_roundtable handlers:
- * 1. Execute rounds via debateEngine
+ * 1. Execute one round via debateEngine
  * 2. Update session round tracking
  * 3. Save all responses to storage
  * 4. Extract key points using AI (if available)
@@ -59,13 +57,13 @@ export async function executeAndSaveRounds(
   keyPointsExtractor: KeyPointsExtractor | null,
   options: ExecuteRoundsOptions = {}
 ): Promise<ExecuteRoundsResult> {
-  const { rounds = 1, focusQuestion, contextResults } = options;
+  const { focusQuestion, contextResults } = options;
 
-  // Execute rounds
+  // Execute one round
   const roundResults = await debateEngine.executeRounds(
     agents,
     session,
-    rounds,
+    1, // Always execute exactly one round
     focusQuestion,
     contextResults
   );

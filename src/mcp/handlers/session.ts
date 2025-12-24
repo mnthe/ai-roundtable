@@ -75,8 +75,7 @@ export async function handleStartRoundtable(
       sessionManager,
       session,
       agents,
-      keyPointsExtractor,
-      { rounds: 1 }
+      keyPointsExtractor
     );
 
     // Build 4-layer response
@@ -135,7 +134,7 @@ export async function handleContinueRoundtable(
         ? await sessionManager.getResponsesForRound(session.id, session.currentRound)
         : [];
 
-    // Execute additional rounds (handles saving and key points extraction)
+    // Execute one additional round (handles saving and key points extraction)
     const { roundResults, keyPointsMap } = await executeAndSaveRounds(
       debateEngine,
       sessionManager,
@@ -143,7 +142,6 @@ export async function handleContinueRoundtable(
       agents,
       keyPointsExtractor,
       {
-        rounds: input.rounds || 1,
         focusQuestion: input.focusQuestion,
         contextResults: input.contextResults,
       }

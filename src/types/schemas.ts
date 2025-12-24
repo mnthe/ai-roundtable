@@ -143,7 +143,6 @@ const ContextResultSchema = z.object({
 
 export const ContinueRoundtableInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
-  rounds: z.number().int().positive().optional(),
   focusQuestion: z.string().optional(),
   contextResults: z.array(ContextResultSchema).optional(),
 });

@@ -531,7 +531,6 @@ Expected result:
 // Arguments:
 {
   "sessionId": "<sessionId from previous response>",
-  "rounds": 1,
   "focusQuestion": "What specific regulations should be implemented?"
 }
 ```
