@@ -86,7 +86,7 @@ See [API Reference](docs/API.md) for detailed parameters and responses.
 | **Collaborative**      | Parallel   | Consensus building, brainstorming |
 | **Adversarial**        | Sequential | Stress-testing ideas              |
 | **Socratic**           | Sequential | Deep exploration via questions    |
-| **Expert Panel**       | Parallel   | Independent expert assessments    |
+| **Expert Panel**       | Parallel   | Independent expert assessments (supports custom perspectives) |
 | **Devil's Advocate**   | Sequential | Preventing groupthink             |
 | **Delphi**             | Parallel   | Anonymized iterative consensus    |
 | **Red Team/Blue Team** | Hybrid     | Security/risk analysis            |
