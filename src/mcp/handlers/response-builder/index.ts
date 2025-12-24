@@ -112,14 +112,16 @@ export function buildRoundtableResponse(
   // Build verification hints (Layer 4)
   const verificationHints = buildVerificationHints(responses, session.id);
 
-  // Determine status based on context requests
+  // Determine status based on context requests and round position
+  // Note: On the final round, context requests cannot be fulfilled (no next round)
+  // so we mark as 'completed' regardless of pending requests
+  const isFinalRound = session.currentRound >= session.totalRounds;
   const hasRequiredRequests = contextRequests.some((r) => r.priority === 'required');
-  const status: RoundtableStatus =
-    contextRequests.length > 0 && hasRequiredRequests
+  const status: RoundtableStatus = isFinalRound
+    ? 'completed'
+    : contextRequests.length > 0 && hasRequiredRequests
       ? 'needs_context'
-      : session.currentRound >= session.totalRounds
-        ? 'completed'
-        : 'in_progress';
+      : 'in_progress';
 
   const result: RoundtableResponse = {
     sessionId: session.id,

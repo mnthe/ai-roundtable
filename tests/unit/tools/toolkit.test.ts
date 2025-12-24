@@ -263,6 +263,77 @@ describe('request_context tool', () => {
     previousResponses: [],
   };
 
+  it('should reject request_context on final round', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    const finalRoundContext: DebateContext = {
+      ...defaultContext,
+      currentRound: 3,
+      totalRounds: 3,
+    };
+    toolkit.setContext(finalRoundContext);
+
+    const result = (await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Need more information',
+        reason: 'To complete analysis',
+        priority: 'required',
+      },
+      'agent-1'
+    )) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Cannot request context on the final round');
+    expect(result.error).toContain('round 3 of 3');
+    expect(toolkit.getPendingContextRequests()).toHaveLength(0);
+  });
+
+  it('should reject request_context when currentRound exceeds totalRounds', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    const exceededRoundContext: DebateContext = {
+      ...defaultContext,
+      currentRound: 5,
+      totalRounds: 3,
+    };
+    toolkit.setContext(exceededRoundContext);
+
+    const result = (await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Need more information',
+        reason: 'To complete analysis',
+      },
+      'agent-1'
+    )) as { success: boolean; error?: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Cannot request context on the final round');
+  });
+
+  it('should allow request_context on non-final rounds', async () => {
+    const toolkit = new DefaultAgentToolkit();
+    const nonFinalContext: DebateContext = {
+      ...defaultContext,
+      currentRound: 2,
+      totalRounds: 3,
+    };
+    toolkit.setContext(nonFinalContext);
+
+    const result = (await toolkit.executeTool(
+      'request_context',
+      {
+        query: 'Need more information',
+        reason: 'To complete analysis',
+        priority: 'required',
+      },
+      'agent-1'
+    )) as { success: boolean; data?: { requestId: string } };
+
+    expect(result.success).toBe(true);
+    expect(result.data?.requestId).toBeDefined();
+    expect(toolkit.getPendingContextRequests()).toHaveLength(1);
+  });
+
   it('should create a context request with required priority', async () => {
     const toolkit = new DefaultAgentToolkit();
     toolkit.setContext(defaultContext);

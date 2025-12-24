@@ -261,6 +261,7 @@ export class DefaultAgentToolkit implements AgentToolkit {
    * The result will be available in the next round.
    *
    * Note: Input is pre-validated by Zod schema in executeTool()
+   * Note: On the final round, context requests are rejected since there's no next round
    *
    * @param input - Validated input from Zod schema
    * @param agentId - ID of the agent making the request
@@ -276,6 +277,24 @@ export class DefaultAgentToolkit implements AgentToolkit {
   > {
     // Input is already validated by Zod schema
     const data = input as RequestContextInput;
+
+    // Check if this is the final round - context requests are meaningless on the last round
+    if (this.currentContext) {
+      const { currentRound, totalRounds } = this.currentContext;
+      if (currentRound >= totalRounds) {
+        return {
+          success: false,
+          error:
+            'Cannot request context on the final round. ' +
+            'This is round ' +
+            currentRound +
+            ' of ' +
+            totalRounds +
+            '. ' +
+            'Please provide your best response with available information.',
+        };
+      }
+    }
 
     // Create the context request
     const request: ContextRequest = {

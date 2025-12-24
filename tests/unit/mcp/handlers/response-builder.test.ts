@@ -399,6 +399,56 @@ describe('buildRoundtableResponse', () => {
     expect(response.status).toBe('completed');
   });
 
+  it('should set status to "completed" on final round even with required context requests', () => {
+    const session = createMockSession({ currentRound: 3, totalRounds: 3 });
+    const roundResult: RoundResult = {
+      roundNumber: 3,
+      responses: [createMockAgentResponse()],
+      consensus: { agreementLevel: 0.8, summary: 'Summary', keyPoints: [] },
+    };
+    // Context requests that would normally trigger 'needs_context' status
+    const contextRequests = [
+      {
+        id: 'ctx-1',
+        query: 'Need more info',
+        agentId: 'agent-1',
+        priority: 'required' as const,
+        reason: 'For verification',
+        timestamp: new Date(),
+      },
+    ];
+
+    const response = buildRoundtableResponse(session, roundResult, [], new Map(), contextRequests);
+
+    // On final round, status should be 'completed' regardless of context requests
+    expect(response.status).toBe('completed');
+    // Context requests should still be included for informational purposes
+    expect(response.contextRequests).toHaveLength(1);
+  });
+
+  it('should prioritize final round completion over optional context requests', () => {
+    const session = createMockSession({ currentRound: 5, totalRounds: 5 });
+    const roundResult: RoundResult = {
+      roundNumber: 5,
+      responses: [createMockAgentResponse()],
+      consensus: { agreementLevel: 0.8, summary: 'Summary', keyPoints: [] },
+    };
+    const contextRequests = [
+      {
+        id: 'ctx-1',
+        query: 'Optional info',
+        agentId: 'agent-1',
+        priority: 'optional' as const,
+        reason: 'Nice to have',
+        timestamp: new Date(),
+      },
+    ];
+
+    const response = buildRoundtableResponse(session, roundResult, [], new Map(), contextRequests);
+
+    expect(response.status).toBe('completed');
+  });
+
   it('should set status to "in_progress" for intermediate rounds', () => {
     const session = createMockSession({ currentRound: 2, totalRounds: 5 });
     const roundResult: RoundResult = {
