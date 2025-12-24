@@ -82,6 +82,9 @@ export class DebateEngine {
     // Clear any pending context requests from previous operations
     this.toolkit.clearPendingRequests();
 
+    // Set current context for toolkit tools (e.g., fact_check needs sessionId)
+    this.toolkit.setContext(context);
+
     // Get the appropriate mode strategy (local first, then global registry)
     let strategy = this.modeStrategies.get(context.mode);
     if (!strategy) {
