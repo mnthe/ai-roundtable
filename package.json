@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/mnthe/ai-roundtable#readme",
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
+    "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
@@ -35,7 +35,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "prepare": "pnpm run build",
+    "prepare": "npm run build",
     "prepublishOnly": "pnpm run test && pnpm run lint",
     "benchmark": "tsx scripts/benchmark/cli.ts",
     "benchmark:matrix": "tsx scripts/benchmark/cli.ts matrix",
