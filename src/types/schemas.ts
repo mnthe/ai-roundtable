@@ -52,6 +52,35 @@ export const AgentResponseSchema = z.object({
 });
 
 // ============================================
+// Perspective Schemas (Expert Panel Mode)
+// ============================================
+
+/**
+ * Schema for user-provided perspective input
+ * Can be either a simple string (name only) or an object with name and optional description
+ */
+export const PerspectiveSchema = z.union([
+  z.string().min(1),
+  z.object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+  }),
+]);
+
+/**
+ * Schema for generated perspective with full prompt context
+ * Created by Light Model auto-generation or normalized from user input
+ */
+export const GeneratedPerspectiveSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional(),
+  focusAreas: z.array(z.string()),
+  evidenceTypes: z.array(z.string()),
+  keyQuestions: z.array(z.string()),
+  antiPatterns: z.array(z.string()),
+});
+
+// ============================================
 // Debate Schemas
 // ============================================
 
@@ -71,6 +100,7 @@ export const DebateConfigSchema = z.object({
   agents: z.array(z.string().min(1)).min(1),
   rounds: z.number().int().positive().optional().default(3),
   focusQuestion: z.string().optional(),
+  perspectives: z.array(PerspectiveSchema).optional(),
 });
 
 // ============================================
@@ -103,6 +133,7 @@ export const SessionSchema = z.object({
   totalRounds: z.number().int().positive(),
   responses: z.array(AgentResponseSchema),
   consensus: ConsensusResultSchema.optional(),
+  perspectives: z.array(GeneratedPerspectiveSchema).optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
@@ -129,6 +160,10 @@ export const StartRoundtableInputSchema = z.object({
     .boolean()
     .optional()
     .describe('Whether to exit early when consensus is reached'),
+  perspectives: z
+    .array(PerspectiveSchema)
+    .optional()
+    .describe('Custom perspectives for expert-panel mode (overrides auto-generation)'),
 });
 
 /**
@@ -228,6 +263,7 @@ export const StoredSessionRowSchema = z.object({
   status: SessionStatusSchema,
   current_round: z.number(),
   total_rounds: z.number(),
+  perspectives: z.string().nullable(), // JSON array of GeneratedPerspective or null
   created_at: z.number(), // Unix timestamp
   updated_at: z.number(), // Unix timestamp
 });
@@ -280,3 +316,8 @@ export const StoredToolCallsArraySchema = z.array(
     timestamp: z.union([z.string(), z.number(), z.coerce.date()]),
   })
 );
+
+/**
+ * Schema for perspectives array parsed from JSON in storage
+ */
+export const StoredPerspectivesArraySchema = z.array(GeneratedPerspectiveSchema);

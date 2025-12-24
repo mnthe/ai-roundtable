@@ -463,8 +463,10 @@ describe('ExpertPanelMode', () => {
 
         vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
           await new Promise((resolve) => setTimeout(resolve, delay));
-          // Extract perspective from modePrompt
-          const perspectiveMatch = ctx.modePrompt?.match(/\((\w+) Perspective\)/i);
+          // Extract perspective from modePrompt - new format uses **Technical perspective**
+          const perspectiveMatch = ctx.modePrompt?.match(
+            /analyzing from: \*\*(\w+) perspective\*\*/i
+          );
           targetPerspectives.push(perspectiveMatch?.[1]);
           return {
             agentId: id,
@@ -508,7 +510,7 @@ describe('ExpertPanelMode', () => {
   });
 
   describe('perspective-specific prompts', () => {
-    it('should include perspective in mode name', async () => {
+    it('should include perspective assignment in prompt', async () => {
       const receivedContext: DebateContext[] = [];
 
       const agent = new MockAgent({
@@ -532,10 +534,12 @@ describe('ExpertPanelMode', () => {
 
       await mode.executeRound([agent], defaultContext, mockToolkit);
 
-      expect(receivedContext[0].modePrompt).toContain('Expert Panel (Technical Perspective)');
+      // New format: perspective assigned in transformContext hook
+      expect(receivedContext[0].modePrompt).toContain('Your Perspective Assignment');
+      expect(receivedContext[0].modePrompt).toContain('Technical perspective');
     });
 
-    it('should include perspective-specific MUST behavior', async () => {
+    it('should include perspective-specific analysis guidance', async () => {
       const receivedContext: DebateContext[] = [];
 
       const agent = new MockAgent({
@@ -559,9 +563,9 @@ describe('ExpertPanelMode', () => {
 
       await mode.executeRound([agent], defaultContext, mockToolkit);
 
-      expect(receivedContext[0].modePrompt).toContain(
-        'MUST analyze from the TECHNICAL perspective'
-      );
+      // New format: analyzing from guidance
+      expect(receivedContext[0].modePrompt).toContain('analyzing from:');
+      expect(receivedContext[0].modePrompt).toContain('Technical perspective');
     });
 
     it('should include perspective-specific verification checklist item', async () => {
@@ -588,8 +592,9 @@ describe('ExpertPanelMode', () => {
 
       await mode.executeRound([agent], defaultContext, mockToolkit);
 
+      // New format: perspective name capitalized
       expect(receivedContext[0].modePrompt).toContain(
-        'Did I analyze primarily from the technical perspective?'
+        'Did I analyze primarily from the Technical perspective'
       );
     });
 
@@ -621,7 +626,7 @@ describe('ExpertPanelMode', () => {
       expect(receivedContext[0].modePrompt).toContain(PERSPECTIVE_DESCRIPTIONS.technical);
     });
 
-    it('should use perspective-specific role anchor for technical', async () => {
+    it('should use unified role anchor with perspective differentiation', async () => {
       const receivedContext: DebateContext[] = [];
 
       const agent = new MockAgent({
@@ -645,10 +650,13 @@ describe('ExpertPanelMode', () => {
 
       await mode.executeRound([agent], defaultContext, mockToolkit);
 
-      expect(receivedContext[0].modePrompt).toContain('TECHNICAL DOMAIN EXPERT');
+      // New design: unified role anchor + perspective assignment section
+      expect(receivedContext[0].modePrompt).toContain('INDEPENDENT DOMAIN EXPERT');
+      expect(receivedContext[0].modePrompt).toContain('Your Perspective Assignment');
+      expect(receivedContext[0].modePrompt).toContain('Technical perspective');
     });
 
-    it('should use perspective-specific role anchor for each perspective', async () => {
+    it('should differentiate perspectives through assignment section', async () => {
       const receivedContexts: DebateContext[] = [];
 
       const createCapturingAgent = (id: string) => {
@@ -683,11 +691,530 @@ describe('ExpertPanelMode', () => {
 
       await mode.executeRound(agents, defaultContext, mockToolkit);
 
-      // Verify each perspective has its specific role anchor
-      expect(receivedContexts[0].modePrompt).toContain('TECHNICAL DOMAIN EXPERT');
-      expect(receivedContexts[1].modePrompt).toContain('ECONOMIC DOMAIN EXPERT');
-      expect(receivedContexts[2].modePrompt).toContain('ETHICS DOMAIN EXPERT');
-      expect(receivedContexts[3].modePrompt).toContain('SOCIAL IMPACT DOMAIN EXPERT');
+      // All agents share base role anchor
+      receivedContexts.forEach((ctx) => {
+        expect(ctx.modePrompt).toContain('INDEPENDENT DOMAIN EXPERT');
+      });
+
+      // But each has unique perspective assignment
+      expect(receivedContexts[0].modePrompt).toContain('Technical perspective');
+      expect(receivedContexts[1].modePrompt).toContain('Economic perspective');
+      expect(receivedContexts[2].modePrompt).toContain('Ethical perspective');
+      expect(receivedContexts[3].modePrompt).toContain('Social perspective');
+    });
+  });
+
+  describe('custom perspectives via context.perspectives', () => {
+    it('should use custom perspectives when provided in context', async () => {
+      const receivedContexts: DebateContext[] = [];
+
+      const createCapturingAgent = (id: string) => {
+        const agent = new MockAgent({
+          id,
+          name: `Expert ${id}`,
+          provider: 'anthropic',
+          model: 'mock',
+        });
+
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+          receivedContexts.push(ctx);
+          return {
+            agentId: id,
+            agentName: `Expert ${id}`,
+            position: `Position from ${id}`,
+            reasoning: 'Test reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+
+        return agent;
+      };
+
+      const contextWithCustomPerspectives: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Security Analysis',
+            description: 'Focus on security vulnerabilities and threats',
+            focusAreas: ['Threat modeling', 'Risk assessment'],
+            evidenceTypes: ['CVE reports', 'Penetration test results'],
+            keyQuestions: ['What attack vectors exist?'],
+            antiPatterns: ['Ignoring edge cases'],
+          },
+          {
+            name: 'Performance Analysis',
+            description: 'Focus on system performance',
+            focusAreas: ['Latency', 'Throughput'],
+            evidenceTypes: ['Benchmarks', 'Load tests'],
+            keyQuestions: ['What are the bottlenecks?'],
+            antiPatterns: ['Premature optimization'],
+          },
+        ],
+      };
+
+      const agents = [createCapturingAgent('agent-0'), createCapturingAgent('agent-1')];
+
+      await mode.executeRound(agents, contextWithCustomPerspectives, mockToolkit);
+
+      // Verify custom perspectives are used instead of defaults
+      expect(receivedContexts[0].modePrompt).toContain('Security Analysis');
+      expect(receivedContexts[0].modePrompt).toContain('security vulnerabilities');
+      expect(receivedContexts[1].modePrompt).toContain('Performance Analysis');
+      expect(receivedContexts[1].modePrompt).toContain('system performance');
+    });
+
+    it('should include focus areas in custom perspective prompts', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const contextWithPerspective: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Custom Perspective',
+            description: 'Custom description',
+            focusAreas: ['Focus Area 1', 'Focus Area 2', 'Focus Area 3'],
+            evidenceTypes: ['Evidence Type 1'],
+            keyQuestions: ['Key Question 1?'],
+            antiPatterns: ['Anti Pattern 1'],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], contextWithPerspective, mockToolkit);
+
+      expect(receivedContext[0].modePrompt).toContain('Focus Area 1');
+      expect(receivedContext[0].modePrompt).toContain('Focus Area 2');
+    });
+
+    it('should include evidence types in custom perspective prompts', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const contextWithPerspective: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Custom Perspective',
+            description: 'Custom description',
+            focusAreas: ['Focus'],
+            evidenceTypes: ['Research papers', 'Statistical data', 'Case studies'],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], contextWithPerspective, mockToolkit);
+
+      expect(receivedContext[0].modePrompt).toContain('Research papers');
+      expect(receivedContext[0].modePrompt).toContain('Statistical data');
+    });
+
+    it('should include anti-patterns in custom perspective prompts', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const contextWithPerspective: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Custom Perspective',
+            description: 'Custom description',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: ['Making assumptions without data', 'Ignoring edge cases'],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], contextWithPerspective, mockToolkit);
+
+      expect(receivedContext[0].modePrompt).toContain('Making assumptions without data');
+      expect(receivedContext[0].modePrompt).toContain('Ignoring edge cases');
+    });
+
+    it('should show other perspectives in differentiation prompt', async () => {
+      const receivedContexts: DebateContext[] = [];
+
+      const createCapturingAgent = (id: string) => {
+        const agent = new MockAgent({
+          id,
+          name: `Expert ${id}`,
+          provider: 'anthropic',
+          model: 'mock',
+        });
+
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+          receivedContexts.push(ctx);
+          return {
+            agentId: id,
+            agentName: `Expert ${id}`,
+            position: `Position from ${id}`,
+            reasoning: 'Test reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+
+        return agent;
+      };
+
+      const contextWithPerspectives: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Security',
+            description: 'Security focus',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+          {
+            name: 'Performance',
+            description: 'Performance focus',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+          {
+            name: 'Usability',
+            description: 'Usability focus',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      const agents = [
+        createCapturingAgent('agent-0'),
+        createCapturingAgent('agent-1'),
+        createCapturingAgent('agent-2'),
+      ];
+
+      await mode.executeRound(agents, contextWithPerspectives, mockToolkit);
+
+      // Agent with Security perspective should see Performance and Usability as other perspectives
+      expect(receivedContexts[0].modePrompt).toContain('Security');
+      expect(receivedContexts[0].modePrompt).toContain('Other panelists cover');
+      expect(receivedContexts[0].modePrompt).toContain('Performance');
+      expect(receivedContexts[0].modePrompt).toContain('Usability');
+    });
+
+    it('should use round-robin for custom perspectives with more agents than perspectives', async () => {
+      const receivedContexts: DebateContext[] = [];
+
+      const createCapturingAgent = (id: string) => {
+        const agent = new MockAgent({
+          id,
+          name: `Expert ${id}`,
+          provider: 'anthropic',
+          model: 'mock',
+        });
+
+        vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+          receivedContexts.push(ctx);
+          return {
+            agentId: id,
+            agentName: `Expert ${id}`,
+            position: `Position from ${id}`,
+            reasoning: 'Test reasoning',
+            confidence: 0.8,
+            timestamp: new Date(),
+          };
+        });
+
+        return agent;
+      };
+
+      const contextWithPerspectives: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Alpha',
+            description: 'Alpha perspective',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+          {
+            name: 'Beta',
+            description: 'Beta perspective',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      // 4 agents but only 2 perspectives - should wrap around
+      const agents = [
+        createCapturingAgent('agent-0'),
+        createCapturingAgent('agent-1'),
+        createCapturingAgent('agent-2'),
+        createCapturingAgent('agent-3'),
+      ];
+
+      await mode.executeRound(agents, contextWithPerspectives, mockToolkit);
+
+      expect(receivedContexts[0].modePrompt).toContain('Alpha');
+      expect(receivedContexts[1].modePrompt).toContain('Beta');
+      expect(receivedContexts[2].modePrompt).toContain('Alpha'); // Wraps around
+      expect(receivedContexts[3].modePrompt).toContain('Beta'); // Wraps around
+    });
+  });
+
+  describe('round-based behavior with custom perspectives', () => {
+    it('should use first round sections for round 1', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const contextRound1: DebateContext = {
+        ...defaultContext,
+        currentRound: 1,
+        perspectives: [
+          {
+            name: 'Test Perspective',
+            description: 'Test',
+            focusAreas: ['Focus 1'],
+            evidenceTypes: [],
+            keyQuestions: ['Question 1?'],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], contextRound1, mockToolkit);
+
+      // First round should include establishing position prompt
+      expect(receivedContext[0].modePrompt).toContain('Round 1');
+      expect(receivedContext[0].modePrompt).toContain('Establishing Position');
+      expect(receivedContext[0].modePrompt).toContain('Other experts have NOT yet spoken');
+    });
+
+    it('should use synthesis sections for subsequent rounds', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const contextRound2: DebateContext = {
+        ...defaultContext,
+        currentRound: 2,
+        previousResponses: [
+          {
+            agentId: 'other',
+            agentName: 'Other',
+            position: 'Other position',
+            reasoning: 'Other reasoning',
+            confidence: 0.7,
+            timestamp: new Date(),
+          },
+        ],
+        perspectives: [
+          {
+            name: 'Test Perspective',
+            description: 'Test',
+            focusAreas: ['Focus 1'],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], contextRound2, mockToolkit);
+
+      // Subsequent rounds should include synthesis prompt
+      expect(receivedContext[0].modePrompt).toContain('Round 2');
+      expect(receivedContext[0].modePrompt).toContain('Synthesis Mode');
+      expect(receivedContext[0].modePrompt).toContain('You have seen other perspectives');
+    });
+
+    it('should include key questions in first round prompt', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const context: DebateContext = {
+        ...defaultContext,
+        currentRound: 1,
+        perspectives: [
+          {
+            name: 'Test Perspective',
+            description: 'Test',
+            focusAreas: [],
+            evidenceTypes: [],
+            keyQuestions: ['What is the scalability impact?', 'How does it affect security?'],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], context, mockToolkit);
+
+      expect(receivedContext[0].modePrompt).toContain('What is the scalability impact?');
+      expect(receivedContext[0].modePrompt).toContain('How does it affect security?');
+    });
+  });
+
+  describe('enhanced verification with custom perspectives', () => {
+    it('should include perspective-specific verification checklist', async () => {
+      const receivedContext: DebateContext[] = [];
+
+      const agent = new MockAgent({
+        id: 'test-agent',
+        name: 'Test Agent',
+        provider: 'anthropic',
+        model: 'mock',
+      });
+
+      vi.spyOn(agent, 'generateResponse').mockImplementation(async (ctx: DebateContext) => {
+        receivedContext.push(ctx);
+        return {
+          agentId: 'test-agent',
+          agentName: 'Test Agent',
+          position: 'Test position',
+          reasoning: 'Test reasoning',
+          confidence: 0.8,
+          timestamp: new Date(),
+        };
+      });
+
+      const context: DebateContext = {
+        ...defaultContext,
+        perspectives: [
+          {
+            name: 'Security Analysis',
+            description: 'Security focus',
+            focusAreas: ['Threat modeling'],
+            evidenceTypes: [],
+            keyQuestions: [],
+            antiPatterns: [],
+          },
+        ],
+      };
+
+      await mode.executeRound([agent], context, mockToolkit);
+
+      // Should include perspective-specific verification
+      expect(receivedContext[0].modePrompt).toContain('Did I analyze primarily from the');
+      expect(receivedContext[0].modePrompt).toContain('Security Analysis');
+      expect(receivedContext[0].modePrompt).toContain('UNIQUE INSIGHT');
+      expect(receivedContext[0].modePrompt).toContain('BLIND SPOTS');
     });
   });
 });

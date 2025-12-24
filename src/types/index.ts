@@ -66,6 +66,34 @@ export interface ToolCallRecord {
 }
 
 // ============================================
+// Perspective Types (Expert Panel Mode)
+// ============================================
+
+/**
+ * Basic perspective definition for expert-panel mode
+ * Can be provided as input by users
+ */
+export interface Perspective {
+  name: string;
+  description?: string;
+}
+
+/**
+ * Generated perspective with full prompt context
+ * Created by Light Model auto-generation or normalized from user input
+ */
+export interface GeneratedPerspective extends Perspective {
+  /** Key areas to focus on for this perspective */
+  focusAreas: string[];
+  /** Types of evidence appropriate for this perspective */
+  evidenceTypes: string[];
+  /** Key questions this perspective should address */
+  keyQuestions: string[];
+  /** What this perspective should NOT do */
+  antiPatterns: string[];
+}
+
+// ============================================
 // Debate Types
 // ============================================
 
@@ -84,6 +112,8 @@ export interface DebateConfig {
   agents: string[]; // Agent IDs
   rounds?: number;
   focusQuestion?: string;
+  /** Custom perspectives for expert-panel mode (string or Perspective object) */
+  perspectives?: Array<string | Perspective>;
 }
 
 export interface DebateContext {
@@ -98,6 +128,8 @@ export interface DebateContext {
   modePrompt?: string;
   /** Results from previous context requests (provided by caller) */
   contextResults?: ContextResult[];
+  /** Generated perspectives for expert-panel mode */
+  perspectives?: GeneratedPerspective[];
 }
 
 // ============================================
@@ -116,6 +148,8 @@ export interface Session {
   totalRounds: number;
   responses: AgentResponse[];
   consensus?: ConsensusResult;
+  /** Generated perspectives for expert-panel mode */
+  perspectives?: GeneratedPerspective[];
   createdAt: Date;
   updatedAt: Date;
 }
