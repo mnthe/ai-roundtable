@@ -1040,10 +1040,43 @@ Start a new AI debate roundtable.
   mode?: DebateMode;    // Default: 'collaborative'
   agents?: string[];    // Default: all available
   rounds?: number;      // Default: 3, min: 1
+  perspectives?: Array<string | Perspective>;  // For expert-panel mode only
 }
+
+// Perspective type (for expert-panel mode)
+type Perspective = {
+  name: string;         // Required: Perspective name (e.g., "Technical", "Economic")
+  description?: string; // Optional: What this perspective focuses on
+};
 
 // Returns: RoundtableResponse (4-layer structure)
 ```
+
+**Expert Panel Perspectives:**
+
+When using `expert-panel` mode, you can optionally specify custom perspectives:
+
+```typescript
+// Simple string format
+{ perspectives: ["Technical", "Economic", "Ethical"] }
+
+// Detailed format with descriptions
+{
+  perspectives: [
+    { name: "Technical", description: "Focus on implementation feasibility" },
+    { name: "Economic", description: "Analyze cost-benefit and ROI" },
+    { name: "Ethical", description: "Consider moral implications" }
+  ]
+}
+```
+
+If perspectives are not provided for expert-panel mode, the system automatically generates relevant perspectives using a Light Model based on the topic. Generated perspectives include:
+- **focusAreas**: Specific areas the perspective should examine
+- **evidenceTypes**: Types of evidence to consider
+- **keyQuestions**: Important questions to address
+- **antiPatterns**: What to avoid
+
+Perspectives are assigned to agents in round-robin fashion, ensuring diverse viewpoints.
 
 #### continue_roundtable
 

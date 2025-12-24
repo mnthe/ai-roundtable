@@ -19,3 +19,9 @@ export {
 } from './prompt-builder.js';
 
 export { PROMPT_SEPARATOR } from './constants.js';
+
+export {
+  generatePerspectives,
+  normalizePerspectives,
+  needsPerspectiveGeneration,
+} from './perspective-generator.js';

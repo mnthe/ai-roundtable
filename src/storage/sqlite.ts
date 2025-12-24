@@ -13,6 +13,7 @@ import {
   AgentIdsArraySchema,
   StoredCitationsArraySchema,
   StoredToolCallsArraySchema,
+  StoredPerspectivesArraySchema,
 } from '../types/schemas.js';
 import type {
   Session,
@@ -21,6 +22,7 @@ import type {
   DebateMode,
   Citation,
   ToolCallRecord,
+  GeneratedPerspective,
 } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { Storage } from './index.js';
@@ -63,6 +65,7 @@ export interface StoredSession {
   status: SessionStatus;
   current_round: number;
   total_rounds: number;
+  perspectives: string | null; // JSON array of GeneratedPerspective or null
   created_at: number; // Unix timestamp
   updated_at: number; // Unix timestamp
 }
@@ -136,6 +139,7 @@ export class SQLiteStorage implements Storage {
         status TEXT NOT NULL,
         current_round INTEGER NOT NULL DEFAULT 0,
         total_rounds INTEGER NOT NULL,
+        perspectives TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -188,8 +192,8 @@ export class SQLiteStorage implements Storage {
     );
 
     db.run(
-      `INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, perspectives, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.id,
         session.topic,
@@ -198,6 +202,7 @@ export class SQLiteStorage implements Storage {
         session.status,
         session.currentRound,
         session.totalRounds,
+        session.perspectives ? JSON.stringify(session.perspectives) : null,
         session.createdAt.getTime(),
         session.updatedAt.getTime(),
       ]
@@ -276,6 +281,10 @@ export class SQLiteStorage implements Storage {
     if (updates.totalRounds !== undefined) {
       fields.push('total_rounds = ?');
       values.push(updates.totalRounds);
+    }
+    if (updates.perspectives !== undefined) {
+      fields.push('perspectives = ?');
+      values.push(updates.perspectives ? JSON.stringify(updates.perspectives) : null);
     }
 
     // Always update updated_at
@@ -613,6 +622,25 @@ export class SQLiteStorage implements Storage {
       throw error;
     }
 
+    // Parse and validate perspectives JSON
+    let perspectives: GeneratedPerspective[] | undefined;
+    if (stored.perspectives) {
+      try {
+        const parsed = JSON.parse(stored.perspectives);
+        perspectives = StoredPerspectivesArraySchema.parse(parsed);
+      } catch (error) {
+        if (error instanceof ZodError) {
+          logger.warn(
+            { sessionId: stored.id, perspectives: stored.perspectives, error: error.issues },
+            'Invalid perspectives JSON in session, skipping perspectives'
+          );
+          perspectives = undefined;
+        } else {
+          throw error;
+        }
+      }
+    }
+
     return {
       id: stored.id,
       topic: stored.topic,
@@ -622,6 +650,7 @@ export class SQLiteStorage implements Storage {
       currentRound: stored.current_round,
       totalRounds: stored.total_rounds,
       responses,
+      perspectives,
       createdAt: new Date(stored.created_at),
       updatedAt: new Date(stored.updated_at),
     };

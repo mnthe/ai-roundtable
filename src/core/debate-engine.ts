@@ -185,6 +185,8 @@ export class DebateEngine {
         // Only include contextResults in the first round of this batch
         // (they are responses to requests from the previous batch)
         contextResults: i === 0 ? contextResults : undefined,
+        // Include perspectives for expert-panel mode
+        perspectives: session.perspectives,
       };
 
       const result = await this.executeRound(agents, context);

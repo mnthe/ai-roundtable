@@ -231,7 +231,7 @@ sequenceDiagram
 
 - **Socratic**: Sequential dialogue focused on probing questions rather than direct answers. Explores assumptions and seeks deeper understanding.
 
-- **Expert Panel**: Parallel independent assessments from each agent acting as a domain expert. Best for multi-disciplinary analysis.
+- **Expert Panel**: Parallel independent assessments from each agent acting as a domain expert. Supports custom perspectives - either user-provided or auto-generated via Light Models. Each agent is assigned a unique perspective (Technical, Economic, Ethical, etc.) in round-robin fashion. Best for multi-disciplinary analysis requiring diverse viewpoints.
 
 - **Devil's Advocate**: Three-role structure - primary position, opposition, and evaluator. Best for preventing groupthink and thorough risk assessment.
 

@@ -24,6 +24,7 @@ describe('StoredSessionRowSchema', () => {
     status: 'active',
     current_round: 1,
     total_rounds: 3,
+    perspectives: null, // Optional field for expert-panel mode
     created_at: Date.now(),
     updated_at: Date.now(),
   };

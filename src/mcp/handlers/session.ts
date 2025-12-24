@@ -7,13 +7,26 @@ import type { DebateEngine } from '../../core/debate-engine.js';
 import type { SessionManager } from '../../core/session-manager.js';
 import type { KeyPointsExtractor } from '../../core/key-points-extractor.js';
 import type { AgentRegistry } from '../../agents/registry.js';
-import type { DebateConfig } from '../../types/index.js';
+import type { DebateConfig, GeneratedPerspective, Perspective } from '../../types/index.js';
 import {
   StartRoundtableInputSchema,
   ContinueRoundtableInputSchema,
   ControlSessionInputSchema,
   ListSessionsInputSchema,
 } from '../../types/schemas.js';
+import {
+  generatePerspectives,
+  normalizePerspectives,
+  needsPerspectiveGeneration,
+} from '../../modes/utils/index.js';
+import {
+  selectPreferredAgent,
+  createLightAgentFromBase,
+} from '../../agents/utils/light-agent-selector.js';
+import { createLogger } from '../../utils/logger.js';
+
+const logger = createLogger('SessionHandlers');
+
 import { createSuccessResponse, createErrorResponse, type ToolResponse } from '../tools.js';
 import { buildRoundtableResponse } from './response-builder/index.js';
 import {
@@ -56,15 +69,40 @@ export async function handleStartRoundtable(
     }
 
     // Create debate config
+    const mode = input.mode || 'collaborative';
     const config: DebateConfig = {
       topic: input.topic,
-      mode: input.mode || 'collaborative',
+      mode,
       agents: agentIds,
       rounds: input.rounds || 3,
+      perspectives: input.perspectives,
     };
 
-    // Create session
-    const session = await sessionManager.createSession(config);
+    // Handle perspectives for expert-panel mode
+    let perspectives: GeneratedPerspective[] | undefined;
+    if (mode === 'expert-panel') {
+      if (needsPerspectiveGeneration(mode, input.perspectives)) {
+        // Generate perspectives using Light Model
+        logger.info(
+          { topic: input.topic, agentCount: agentIds.length },
+          'Generating perspectives via Light Model'
+        );
+        const baseAgent = selectPreferredAgent(agentRegistry);
+        if (baseAgent) {
+          const lightAgent = createLightAgentFromBase(baseAgent, agentRegistry, {
+            idSuffix: 'perspective-gen',
+            maxTokens: 2048,
+          });
+          perspectives = await generatePerspectives(input.topic, agentIds.length, lightAgent);
+        }
+      } else if (input.perspectives) {
+        // Normalize user-provided perspectives
+        perspectives = normalizePerspectives(input.perspectives as Array<string | Perspective>, []);
+      }
+    }
+
+    // Create session with perspectives
+    const session = await sessionManager.createSession(config, perspectives);
 
     // Get agents
     const agents = agentRegistry.getAgents(agentIds);
