@@ -191,13 +191,7 @@ describe('executeAndSaveRounds', () => {
   });
 
   it('should always execute exactly one round', async () => {
-    await executeAndSaveRounds(
-      mockDebateEngine,
-      mockSessionManager,
-      mockSession,
-      mockAgents,
-      null
-    );
+    await executeAndSaveRounds(mockDebateEngine, mockSessionManager, mockSession, mockAgents, null);
 
     // Verify that executeRounds is always called with 1 round
     expect(mockDebateEngine.executeRounds).toHaveBeenCalledWith(
