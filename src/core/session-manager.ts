@@ -5,7 +5,13 @@
 import { randomUUID } from 'crypto';
 import { SessionError } from '../errors/index.js';
 import { SQLiteStorage, type Storage } from '../storage/index.js';
-import type { Session, AgentResponse, SessionStatus, DebateConfig } from '../types/index.js';
+import type {
+  Session,
+  AgentResponse,
+  SessionStatus,
+  DebateConfig,
+  GeneratedPerspective,
+} from '../types/index.js';
 
 export interface SessionManagerOptions {
   /** Provide a custom storage implementation */
@@ -28,8 +34,13 @@ export class SessionManager {
 
   /**
    * Create a new debate session
+   * @param config - Debate configuration
+   * @param perspectives - Optional generated perspectives (for expert-panel mode)
    */
-  async createSession(config: DebateConfig): Promise<Session> {
+  async createSession(
+    config: DebateConfig,
+    perspectives?: GeneratedPerspective[]
+  ): Promise<Session> {
     const now = new Date();
     const session: Session = {
       id: randomUUID(),
@@ -40,12 +51,24 @@ export class SessionManager {
       currentRound: 0,
       totalRounds: config.rounds || 3,
       responses: [],
+      perspectives,
       createdAt: now,
       updatedAt: now,
     };
 
     await this.storage.createSession(session);
     return session;
+  }
+
+  /**
+   * Update session perspectives
+   * Used when perspectives are generated after session creation
+   */
+  async updateSessionPerspectives(
+    sessionId: string,
+    perspectives: GeneratedPerspective[]
+  ): Promise<void> {
+    await this.storage.updateSession(sessionId, { perspectives });
   }
 
   /**

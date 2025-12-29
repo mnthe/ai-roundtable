@@ -316,6 +316,139 @@ describe('handleStartRoundtable', () => {
     expect(parsed).toHaveProperty('error');
     expect(parsed.error).toContain('No round results available');
   });
+
+  describe('perspectives parameter for expert-panel mode', () => {
+    it('should accept string array perspectives', async () => {
+      const session = createMockSession({ mode: 'expert-panel', currentRound: 0 });
+      const roundResult = createMockRoundResult();
+
+      mockSessionManager.createSession.mockResolvedValue(session);
+      mockAgentRegistry.hasAgent.mockReturnValue(true);
+      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
+      mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
+      mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
+
+      const result = await handleStartRoundtable(
+        {
+          topic: 'AI Ethics',
+          mode: 'expert-panel',
+          agents: ['agent-1', 'agent-2'],
+          perspectives: ['Technical', 'Economic'],
+        },
+        mockDebateEngine as unknown as DebateEngine,
+        mockSessionManager as unknown as SessionManager,
+        mockAgentRegistry as unknown as AgentRegistry,
+        mockKeyPointsExtractor as unknown as KeyPointsExtractor
+      );
+
+      const parsed = parseResponseContent(result);
+      expect(parsed).toHaveProperty('sessionId');
+      // createSession is called with (config, normalizedPerspectives)
+      expect(mockSessionManager.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'expert-panel' }),
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'Technical' }),
+          expect.objectContaining({ name: 'Economic' }),
+        ])
+      );
+    });
+
+    it('should accept perspective objects with descriptions', async () => {
+      const session = createMockSession({ mode: 'expert-panel', currentRound: 0 });
+      const roundResult = createMockRoundResult();
+
+      mockSessionManager.createSession.mockResolvedValue(session);
+      mockAgentRegistry.hasAgent.mockReturnValue(true);
+      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }]);
+      mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
+      mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
+
+      const result = await handleStartRoundtable(
+        {
+          topic: 'AI Ethics',
+          mode: 'expert-panel',
+          agents: ['agent-1'],
+          perspectives: [{ name: 'Technical', description: 'Focus on implementation feasibility' }],
+        },
+        mockDebateEngine as unknown as DebateEngine,
+        mockSessionManager as unknown as SessionManager,
+        mockAgentRegistry as unknown as AgentRegistry,
+        mockKeyPointsExtractor as unknown as KeyPointsExtractor
+      );
+
+      const parsed = parseResponseContent(result);
+      expect(parsed).toHaveProperty('sessionId');
+      // createSession is called with (config, normalizedPerspectives)
+      expect(mockSessionManager.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'expert-panel' }),
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Technical',
+            description: 'Focus on implementation feasibility',
+          }),
+        ])
+      );
+    });
+
+    it('should accept mixed string and object perspectives', async () => {
+      const session = createMockSession({ mode: 'expert-panel', currentRound: 0 });
+      const roundResult = createMockRoundResult();
+
+      mockSessionManager.createSession.mockResolvedValue(session);
+      mockAgentRegistry.hasAgent.mockReturnValue(true);
+      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
+      mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
+      mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
+
+      const result = await handleStartRoundtable(
+        {
+          topic: 'AI Ethics',
+          mode: 'expert-panel',
+          agents: ['agent-1', 'agent-2'],
+          perspectives: ['Technical', { name: 'Economic', description: 'Cost analysis' }],
+        },
+        mockDebateEngine as unknown as DebateEngine,
+        mockSessionManager as unknown as SessionManager,
+        mockAgentRegistry as unknown as AgentRegistry,
+        mockKeyPointsExtractor as unknown as KeyPointsExtractor
+      );
+
+      const parsed = parseResponseContent(result);
+      expect(parsed).toHaveProperty('sessionId');
+    });
+
+    it('should not normalize perspectives for non-expert-panel modes', async () => {
+      const session = createMockSession({ mode: 'collaborative', currentRound: 0 });
+      const roundResult = createMockRoundResult();
+
+      mockSessionManager.createSession.mockResolvedValue(session);
+      mockAgentRegistry.hasAgent.mockReturnValue(true);
+      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }]);
+      mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
+      mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
+
+      const result = await handleStartRoundtable(
+        {
+          topic: 'AI Ethics',
+          mode: 'collaborative',
+          agents: ['agent-1'],
+          perspectives: ['Technical'], // Passed but not normalized for non-expert-panel
+        },
+        mockDebateEngine as unknown as DebateEngine,
+        mockSessionManager as unknown as SessionManager,
+        mockAgentRegistry as unknown as AgentRegistry,
+        mockKeyPointsExtractor as unknown as KeyPointsExtractor
+      );
+
+      const parsed = parseResponseContent(result);
+      expect(parsed).toHaveProperty('sessionId');
+      // For non-expert-panel modes, perspectives are NOT normalized (second arg undefined)
+      expect(mockSessionManager.createSession).toHaveBeenCalledWith(
+        expect.objectContaining({ mode: 'collaborative' }),
+        undefined // perspectives not normalized for non-expert-panel modes
+      );
+    });
+  });
 });
 
 describe('handleContinueRoundtable', () => {
