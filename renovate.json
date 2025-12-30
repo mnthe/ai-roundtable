@@ -1,0 +1,45 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": ["dependencies"],
+  "rangeStrategy": "pin",
+  "packageRules": [
+    {
+      "description": "AI SDK packages",
+      "matchPackagePatterns": ["^@anthropic-ai", "^openai", "^@google/genai"],
+      "groupName": "AI SDK packages"
+    },
+    {
+      "description": "MCP SDK",
+      "matchPackagePatterns": ["^@modelcontextprotocol"],
+      "groupName": "MCP SDK"
+    },
+    {
+      "description": "Development dependencies",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Type definitions",
+      "matchPackagePatterns": ["^@types/"],
+      "groupName": "type definitions",
+      "automerge": true
+    },
+    {
+      "description": "Linting and formatting",
+      "matchPackagePatterns": ["eslint", "prettier"],
+      "groupName": "linting tools"
+    },
+    {
+      "description": "Testing",
+      "matchPackagePatterns": ["vitest"],
+      "groupName": "testing tools"
+    }
+  ],
+  "schedule": ["every weekend"],
+  "prHourlyLimit": 3,
+  "prConcurrentLimit": 5
+}
