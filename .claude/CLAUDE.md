@@ -165,7 +165,7 @@ RoundtableError           // Base error (code, retryable, provider, cause)
 | ---------- | ---------------------- |
 | Anthropic  | claude-sonnet-4-5      |
 | OpenAI     | gpt-5.2                |
-| Google     | gemini-3-flash-preview |
+| Google     | gemini-3.0-flash |
 | Perplexity | sonar-pro              |
 
 ### Light Models (Consensus Analysis)

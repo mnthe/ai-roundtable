@@ -229,7 +229,7 @@ import { MyAgent } from './my-agent.js';
 const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-5.2',
-  google: 'gemini-3-flash-preview',
+  google: 'gemini-3.0-flash',
   perplexity: 'sonar-pro',
   'my-provider': 'my-model-v1',  // Add here
 };

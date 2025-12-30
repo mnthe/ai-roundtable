@@ -99,9 +99,9 @@ describe('Light Model Factory', () => {
       );
 
       const mockFactory = vi.fn().mockReturnValue(createdAgent);
-      registry.registerProvider('google', mockFactory, 'gemini-3-flash-preview');
+      registry.registerProvider('google', mockFactory, 'gemini-3.0-flash');
 
-      const baseAgent = createMockAgent('gemini-1', 'Gemini', 'google', 'gemini-3-flash-preview');
+      const baseAgent = createMockAgent('gemini-1', 'Gemini', 'google', 'gemini-3.0-flash');
 
       const lightAgent = createLightModelAgent(baseAgent, registry, {
         idSuffix: 'keypoints',
@@ -290,7 +290,7 @@ describe('Light Model Factory', () => {
       const heavyModels = {
         anthropic: 'claude-sonnet-4-5',
         openai: 'gpt-5.2',
-        google: 'gemini-3-flash-preview',
+        google: 'gemini-3.0-flash',
         perplexity: 'sonar-pro',
       };
 

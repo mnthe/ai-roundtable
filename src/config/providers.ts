@@ -41,7 +41,7 @@ export interface ProviderAvailability {
 export const DEFAULT_MODELS: Record<AIProvider, string> = {
   anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-5.2',
-  google: 'gemini-3-flash-preview',
+  google: 'gemini-3.0-flash',
   perplexity: 'sonar-pro',
 };
 

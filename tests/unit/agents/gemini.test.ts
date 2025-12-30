@@ -15,7 +15,7 @@ describe('GeminiAgent', () => {
     id: 'gemini-test',
     name: 'Gemini Test',
     provider: 'google',
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.0-flash',
   });
 
   const defaultContext: DebateContext = createMockContext({
@@ -810,7 +810,7 @@ describe('GeminiAgent', () => {
       await agent.generateResponse(defaultContext);
 
       // Phase 1 should use heavy model when disabled
-      expect(capturedModels[0]).toBe('gemini-3-flash-preview');
+      expect(capturedModels[0]).toBe('gemini-3.0-flash');
     });
   });
 });
@@ -822,7 +822,7 @@ describe('createGeminiAgent', () => {
       id: 'factory-agent',
       name: 'Factory Agent',
       provider: 'google',
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.0-flash',
     });
 
     const agent = createGeminiAgent(config, undefined, {

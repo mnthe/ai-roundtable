@@ -406,7 +406,7 @@ AI Roundtable uses different model tiers for different purposes:
 
 | Tier      | Purpose                       | Models                                                                |
 | --------- | ----------------------------- | --------------------------------------------------------------------- |
-| **Heavy** | Debate participation          | `claude-sonnet-4-5`, `gpt-5.2`, `gemini-3-flash-preview`, `sonar-pro` |
+| **Heavy** | Debate participation          | `claude-sonnet-4-5`, `gpt-5.2`, `gemini-3.0-flash`, `sonar-pro` |
 | **Light** | Consensus analysis, synthesis | `claude-haiku-4-5`, `gpt-5-mini`, `gemini-2.5-flash-lite`, `sonar`    |
 
 Light models are automatically used for `AIConsensusAnalyzer` and `synthesize_debate` to reduce costs and latency.

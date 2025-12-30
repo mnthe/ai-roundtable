@@ -72,7 +72,7 @@ describe('handleGetAgents', () => {
         id: 'gemini',
         name: 'Gemini',
         provider: 'google',
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.0-flash',
       }),
     ];
     mockAgentRegistry.getActiveAgentInfoList.mockReturnValue(agents);
