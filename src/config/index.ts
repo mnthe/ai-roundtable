@@ -25,3 +25,11 @@ export {
 
 // Agent default configuration
 export { AGENT_DEFAULTS } from './agent-defaults.js';
+
+// Agent limits configuration
+export {
+  type AgentLimitsConfig,
+  DEFAULT_MAX_AGENTS,
+  DEFAULT_AGENT_COUNT,
+  loadAgentLimitsConfig,
+} from './agent-limits.js';
