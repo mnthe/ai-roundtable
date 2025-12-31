@@ -269,8 +269,10 @@ export interface SearchOptions {
 export interface StartRoundtableInput {
   topic: string;
   mode?: DebateMode;
-  agents?: string[];
+  agentCount?: number;
   rounds?: number;
+  exitOnConsensus?: boolean;
+  perspectives?: Array<string | Perspective>;
 }
 
 export interface ContinueRoundtableInput {
