@@ -51,21 +51,11 @@ export async function handleStartRoundtable(
     // Validate input
     const input = StartRoundtableInputSchema.parse(args);
 
-    // Determine which agents to use
-    let agentIds = input.agents;
-    if (!agentIds || agentIds.length === 0) {
-      // Use all registered agents if none specified
-      agentIds = agentRegistry.getAllAgentIds();
-      if (agentIds.length === 0) {
-        return createErrorResponse(ERROR_MESSAGES.NO_AGENTS_AVAILABLE);
-      }
-    }
-
-    // Validate agents exist
-    for (const agentId of agentIds) {
-      if (!agentRegistry.hasAgent(agentId)) {
-        return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_FOUND(agentId));
-      }
+    // TODO: Task 5 will implement full persona agent creation logic
+    // For now, use all registered agents
+    const agentIds = agentRegistry.getAllAgentIds();
+    if (agentIds.length === 0) {
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENTS_AVAILABLE);
     }
 
     // Create debate config
