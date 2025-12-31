@@ -23,6 +23,8 @@ import {
   selectPreferredAgent,
   createLightAgentFromBase,
 } from '../../agents/utils/light-agent-selector.js';
+import { createPersonaAgents } from '../../agents/persona-factory.js';
+import { loadAgentLimitsConfig } from '../../config/agent-limits.js';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('SessionHandlers');
@@ -51,15 +53,28 @@ export async function handleStartRoundtable(
     // Validate input
     const input = StartRoundtableInputSchema.parse(args);
 
-    // TODO: Task 5 will implement full persona agent creation logic
-    // For now, use all registered agents
-    const agentIds = agentRegistry.getAllAgentIds();
-    if (agentIds.length === 0) {
+    // Load agent limits configuration
+    const limitsConfig = loadAgentLimitsConfig();
+
+    // Determine agent count (use input.agentCount or default, capped at maxAgents)
+    let agentCount = input.agentCount ?? limitsConfig.defaultCount;
+    agentCount = Math.min(agentCount, limitsConfig.maxAgents);
+
+    // Get available providers from registry
+    const availableProviders = agentRegistry.getRegisteredProviders();
+    if (availableProviders.length === 0) {
       return createErrorResponse(ERROR_MESSAGES.NO_AGENTS_AVAILABLE);
     }
 
-    // Create debate config
+    // Create persona agents using round-robin distribution
     const mode = input.mode || 'collaborative';
+    const agentIds = createPersonaAgents(agentRegistry, {
+      mode,
+      count: agentCount,
+      providers: availableProviders,
+    });
+
+    // Create debate config
     const config: DebateConfig = {
       topic: input.topic,
       mode,

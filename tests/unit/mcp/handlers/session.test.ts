@@ -108,6 +108,10 @@ function createMockAgentRegistry() {
     getAllAgentIds: vi.fn(),
     hasAgent: vi.fn(),
     getAgents: vi.fn(),
+    getRegisteredProviders: vi.fn(),
+    createAgent: vi.fn(),
+    hasProvider: vi.fn(),
+    getDefaultModel: vi.fn(),
   };
 }
 
@@ -148,7 +152,12 @@ describe('handleStartRoundtable', () => {
     const roundResult = createMockRoundResult();
 
     mockSessionManager.createSession.mockResolvedValue(session);
-    mockAgentRegistry.hasAgent.mockReturnValue(true);
+    mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic', 'openai']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
     mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
     mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
     mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
@@ -157,7 +166,7 @@ describe('handleStartRoundtable', () => {
       {
         topic: 'Should AI be regulated?',
         mode: 'collaborative',
-        agents: ['agent-1', 'agent-2'],
+        agentCount: 2,
         rounds: 3,
       },
       mockDebateEngine as unknown as DebateEngine,
@@ -183,9 +192,18 @@ describe('handleStartRoundtable', () => {
     const session = createMockSession({ currentRound: 0 });
     const roundResult = createMockRoundResult();
 
-    mockAgentRegistry.getAllAgentIds.mockReturnValue(['agent-1', 'agent-2']);
-    mockAgentRegistry.hasAgent.mockReturnValue(true);
-    mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
+    mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
+    mockAgentRegistry.getAgents.mockReturnValue([
+      { id: 'agent-1' },
+      { id: 'agent-2' },
+      { id: 'agent-3' },
+      { id: 'agent-4' },
+    ]);
     mockSessionManager.createSession.mockResolvedValue(session);
     mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
     mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
@@ -200,11 +218,15 @@ describe('handleStartRoundtable', () => {
 
     const parsed = parseResponseContent(result);
     expect(parsed).toHaveProperty('sessionId');
-    expect(mockAgentRegistry.getAllAgentIds).toHaveBeenCalled();
+    expect(mockAgentRegistry.getRegisteredProviders).toHaveBeenCalled();
+    // Should create default count of agents (4)
+    expect(mockAgentRegistry.createAgent).toHaveBeenCalledTimes(4);
   });
 
   it('should return error when no agents available', async () => {
-    mockAgentRegistry.getAllAgentIds.mockReturnValue([]);
+    mockAgentRegistry.getRegisteredProviders.mockReturnValue([]);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
 
     const result = await handleStartRoundtable(
       { topic: 'Test topic' },
@@ -220,20 +242,34 @@ describe('handleStartRoundtable', () => {
   });
 
   it('should return error when specified agent not found', async () => {
-    mockAgentRegistry.hasAgent.mockReturnValue(false);
+    const session = createMockSession({ currentRound: 0 });
+    const roundResult = createMockRoundResult();
 
+    mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
+    // Return 5 agents to match the capped count (DEFAULT_MAX_AGENTS = 5)
+    mockAgentRegistry.getAgents.mockReturnValue(
+      Array.from({ length: 5 }, (_, i) => ({ id: `agent-${i + 1}` }))
+    );
+    mockSessionManager.createSession.mockResolvedValue(session);
+    mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
+    mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
+
+    // Request more than config max (5) but within schema max (10)
     const result = await handleStartRoundtable(
-      { topic: 'Test topic', agents: ['non-existent-agent'] },
+      { topic: 'Test topic', agentCount: 8 },
       mockDebateEngine as unknown as DebateEngine,
       mockSessionManager as unknown as SessionManager,
       mockAgentRegistry as unknown as AgentRegistry,
       mockKeyPointsExtractor as unknown as KeyPointsExtractor
     );
 
-    const parsed = parseResponseContent(result) as { error: string };
-    expect(parsed).toHaveProperty('error');
-    expect(parsed.error).toContain('non-existent-agent');
-    expect(parsed.error).toContain('not found');
+    const parsed = parseResponseContent(result);
+    expect(parsed).toHaveProperty('sessionId');
+    // Should be capped at config max (5), not 8
+    expect(mockAgentRegistry.createAgent).toHaveBeenCalledTimes(5);
   });
 
   it('should reject invalid input (missing topic)', async () => {
@@ -280,12 +316,15 @@ describe('handleStartRoundtable', () => {
     const roundResult = createMockRoundResult();
 
     mockSessionManager.createSession.mockResolvedValue(session);
-    mockAgentRegistry.hasAgent.mockReturnValue(true);
-    mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }]);
+    mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
+    mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
     mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
 
     const result = await handleStartRoundtable(
-      { topic: 'Test topic', agents: ['agent-1'] },
+      { topic: 'Test topic', agentCount: 2 },
       mockDebateEngine as unknown as DebateEngine,
       mockSessionManager as unknown as SessionManager,
       mockAgentRegistry as unknown as AgentRegistry,
@@ -300,12 +339,15 @@ describe('handleStartRoundtable', () => {
     const session = createMockSession({ currentRound: 0 });
 
     mockSessionManager.createSession.mockResolvedValue(session);
-    mockAgentRegistry.hasAgent.mockReturnValue(true);
-    mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }]);
+    mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+    mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
+    mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
     mockDebateEngine.executeRounds.mockResolvedValue([]);
 
     const result = await handleStartRoundtable(
-      { topic: 'Test topic', agents: ['agent-1'] },
+      { topic: 'Test topic', agentCount: 2 },
       mockDebateEngine as unknown as DebateEngine,
       mockSessionManager as unknown as SessionManager,
       mockAgentRegistry as unknown as AgentRegistry,
@@ -323,7 +365,10 @@ describe('handleStartRoundtable', () => {
       const roundResult = createMockRoundResult();
 
       mockSessionManager.createSession.mockResolvedValue(session);
-      mockAgentRegistry.hasAgent.mockReturnValue(true);
+      mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
       mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
       mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
@@ -332,7 +377,7 @@ describe('handleStartRoundtable', () => {
         {
           topic: 'AI Ethics',
           mode: 'expert-panel',
-          agents: ['agent-1', 'agent-2'],
+          agentCount: 2,
           perspectives: ['Technical', 'Economic'],
         },
         mockDebateEngine as unknown as DebateEngine,
@@ -358,8 +403,11 @@ describe('handleStartRoundtable', () => {
       const roundResult = createMockRoundResult();
 
       mockSessionManager.createSession.mockResolvedValue(session);
-      mockAgentRegistry.hasAgent.mockReturnValue(true);
-      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }]);
+      mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
+      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
       mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
 
@@ -367,7 +415,7 @@ describe('handleStartRoundtable', () => {
         {
           topic: 'AI Ethics',
           mode: 'expert-panel',
-          agents: ['agent-1'],
+          agentCount: 2,
           perspectives: [{ name: 'Technical', description: 'Focus on implementation feasibility' }],
         },
         mockDebateEngine as unknown as DebateEngine,
@@ -395,7 +443,10 @@ describe('handleStartRoundtable', () => {
       const roundResult = createMockRoundResult();
 
       mockSessionManager.createSession.mockResolvedValue(session);
-      mockAgentRegistry.hasAgent.mockReturnValue(true);
+      mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
       mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
       mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
@@ -404,7 +455,7 @@ describe('handleStartRoundtable', () => {
         {
           topic: 'AI Ethics',
           mode: 'expert-panel',
-          agents: ['agent-1', 'agent-2'],
+          agentCount: 2,
           perspectives: ['Technical', { name: 'Economic', description: 'Cost analysis' }],
         },
         mockDebateEngine as unknown as DebateEngine,
@@ -422,8 +473,11 @@ describe('handleStartRoundtable', () => {
       const roundResult = createMockRoundResult();
 
       mockSessionManager.createSession.mockResolvedValue(session);
-      mockAgentRegistry.hasAgent.mockReturnValue(true);
-      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }]);
+      mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
+    mockAgentRegistry.hasProvider.mockReturnValue(true);
+    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
+      mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
       mockKeyPointsExtractor.extractKeyPointsBatch.mockResolvedValue(new Map());
 
@@ -431,7 +485,7 @@ describe('handleStartRoundtable', () => {
         {
           topic: 'AI Ethics',
           mode: 'collaborative',
-          agents: ['agent-1'],
+          agentCount: 2,
           perspectives: ['Technical'], // Passed but not normalized for non-expert-panel
         },
         mockDebateEngine as unknown as DebateEngine,
