@@ -43,8 +43,38 @@ function toMcpJsonSchema(schema: z.ZodType): McpInputSchema {
  */
 const START_ROUNDTABLE_TOOL: Tool = {
   name: 'start_roundtable',
-  description:
-    'Start a new AI debate roundtable on a given topic. Agents will discuss the topic across multiple rounds, each providing their perspectives, reasoning, and citations.',
+  description: `Start a new AI debate roundtable on a given topic. Agents will discuss the topic across multiple rounds, each providing their perspectives, reasoning, and citations.
+
+## How It Works
+
+Creates multiple "persona agents" with distinct perspectives based on the debate mode.
+Each persona has a unique viewpoint and system prompt to ensure diverse discussion.
+
+## Agent Distribution
+
+- **Single API key**: All personas use the same provider
+- **Multiple API keys**: Personas are distributed round-robin across providers
+
+## Mode-Specific Personas
+
+| Mode | Personas |
+|------|----------|
+| collaborative | Synthesizer, Analyst, Creative, Pragmatist |
+| adversarial | Proponent, Opponent (alternating) |
+| socratic | Questioner, Respondent |
+| expert-panel | Domain Expert, Generalist, Skeptic, Innovator |
+| devils-advocate | Advocate, Challenger, Evaluator |
+| delphi | Participant 1, 2, 3... (anonymized) |
+| red-team-blue-team | Red Team, Blue Team (alternating) |
+
+## Parameters
+
+- **topic** (required): The debate topic (max 2000 chars)
+- **mode** (optional): Debate mode (default: collaborative)
+- **agentCount** (optional): Number of persona agents (default: 4, max: 5)
+- **rounds** (optional): Number of debate rounds (default: 3)
+- **exitOnConsensus** (optional): Exit early when consensus reached
+- **perspectives** (optional): Custom perspectives for expert-panel mode`,
   inputSchema: toMcpJsonSchema(StartRoundtableInputSchema),
 };
 
