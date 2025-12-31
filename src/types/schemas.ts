@@ -160,7 +160,9 @@ export const StartRoundtableInputSchema = z.object({
     .min(2, 'At least 2 agents required')
     .max(10, 'Maximum 10 agents allowed')
     .optional()
-    .describe('Number of persona agents to create (default: 4, max determined by ROUNDTABLE_MAX_AGENTS)'),
+    .describe(
+      'Number of persona agents to create (default: 4, max determined by ROUNDTABLE_MAX_AGENTS)'
+    ),
   rounds: z.number().int().positive().optional().default(3),
   exitOnConsensus: z
     .boolean()

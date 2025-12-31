@@ -32,10 +32,7 @@ export interface AgentLimitsConfig {
  * - ROUNDTABLE_DEFAULT_AGENT_COUNT: Default count (default: 4)
  */
 export function loadAgentLimitsConfig(): AgentLimitsConfig {
-  const maxAgents = parseIntOrDefault(
-    process.env.ROUNDTABLE_MAX_AGENTS,
-    DEFAULT_MAX_AGENTS
-  );
+  const maxAgents = parseIntOrDefault(process.env.ROUNDTABLE_MAX_AGENTS, DEFAULT_MAX_AGENTS);
 
   const rawDefaultCount = parseIntOrDefault(
     process.env.ROUNDTABLE_DEFAULT_AGENT_COUNT,

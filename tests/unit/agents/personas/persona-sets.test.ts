@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  getPersonasForMode,
-  type PersonaTemplate,
-} from '../../../../src/agents/personas/index.js';
+import { getPersonasForMode, type PersonaTemplate } from '../../../../src/agents/personas/index.js';
 import type { DebateMode } from '../../../../src/types/index.js';
 
 describe('getPersonasForMode', () => {

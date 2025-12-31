@@ -366,8 +366,8 @@ describe('handleStartRoundtable', () => {
 
       mockSessionManager.createSession.mockResolvedValue(session);
       mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
-    mockAgentRegistry.hasProvider.mockReturnValue(true);
-    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.hasProvider.mockReturnValue(true);
+      mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
       mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
       mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
@@ -404,8 +404,8 @@ describe('handleStartRoundtable', () => {
 
       mockSessionManager.createSession.mockResolvedValue(session);
       mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
-    mockAgentRegistry.hasProvider.mockReturnValue(true);
-    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.hasProvider.mockReturnValue(true);
+      mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
       mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
       mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
@@ -444,8 +444,8 @@ describe('handleStartRoundtable', () => {
 
       mockSessionManager.createSession.mockResolvedValue(session);
       mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
-    mockAgentRegistry.hasProvider.mockReturnValue(true);
-    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.hasProvider.mockReturnValue(true);
+      mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
       mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
       mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);
@@ -474,8 +474,8 @@ describe('handleStartRoundtable', () => {
 
       mockSessionManager.createSession.mockResolvedValue(session);
       mockAgentRegistry.getRegisteredProviders.mockReturnValue(['anthropic']);
-    mockAgentRegistry.hasProvider.mockReturnValue(true);
-    mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
+      mockAgentRegistry.hasProvider.mockReturnValue(true);
+      mockAgentRegistry.getDefaultModel.mockReturnValue('claude-sonnet-4-5');
       mockAgentRegistry.createAgent.mockImplementation((config) => config.id);
       mockAgentRegistry.getAgents.mockReturnValue([{ id: 'agent-1' }, { id: 'agent-2' }]);
       mockDebateEngine.executeRounds.mockResolvedValue([roundResult]);

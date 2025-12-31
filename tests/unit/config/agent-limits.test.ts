@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { loadAgentLimitsConfig, DEFAULT_MAX_AGENTS, DEFAULT_AGENT_COUNT } from '../../../src/config/agent-limits.js';
+import {
+  loadAgentLimitsConfig,
+  DEFAULT_MAX_AGENTS,
+  DEFAULT_AGENT_COUNT,
+} from '../../../src/config/agent-limits.js';
 
 describe('Agent Limits Configuration', () => {
   const originalEnv = process.env;

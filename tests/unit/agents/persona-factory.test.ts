@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createPersonaAgents, type PersonaAgentOptions } from '../../../src/agents/persona-factory.js';
+import {
+  createPersonaAgents,
+  type PersonaAgentOptions,
+} from '../../../src/agents/persona-factory.js';
 import { AgentRegistry } from '../../../src/agents/registry.js';
 import type { AgentConfig } from '../../../src/types/index.js';
 
@@ -125,7 +128,9 @@ describe('createPersonaAgents', () => {
         providers: ['perplexity'], // Not registered
       };
 
-      expect(() => createPersonaAgents(registry, options)).toThrow('Provider "perplexity" is not registered');
+      expect(() => createPersonaAgents(registry, options)).toThrow(
+        'Provider "perplexity" is not registered'
+      );
     });
   });
 });
