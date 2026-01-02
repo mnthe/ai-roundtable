@@ -154,7 +154,15 @@ export const SearchOptionsSchema = z.object({
 export const StartRoundtableInputSchema = z.object({
   topic: z.string().min(1, 'Topic is required').max(2000, 'Topic cannot exceed 2000 characters'),
   mode: DebateModeSchema.optional().default('collaborative'),
-  agents: z.array(z.string().min(1)).optional(),
+  agentCount: z
+    .number()
+    .int()
+    .min(2, 'At least 2 agents required')
+    .max(10, 'Maximum 10 agents allowed')
+    .optional()
+    .describe(
+      'Number of persona agents to create (default: 4, max determined by ROUNDTABLE_MAX_AGENTS)'
+    ),
   rounds: z.number().int().positive().optional().default(3),
   exitOnConsensus: z
     .boolean()

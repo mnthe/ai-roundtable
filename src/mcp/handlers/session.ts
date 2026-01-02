@@ -23,6 +23,8 @@ import {
   selectPreferredAgent,
   createLightAgentFromBase,
 } from '../../agents/utils/light-agent-selector.js';
+import { createPersonaAgents } from '../../agents/persona-factory.js';
+import { loadAgentLimitsConfig } from '../../config/agent-limits.js';
 import { createLogger } from '../../utils/logger.js';
 
 const logger = createLogger('SessionHandlers');
@@ -51,25 +53,28 @@ export async function handleStartRoundtable(
     // Validate input
     const input = StartRoundtableInputSchema.parse(args);
 
-    // Determine which agents to use
-    let agentIds = input.agents;
-    if (!agentIds || agentIds.length === 0) {
-      // Use all registered agents if none specified
-      agentIds = agentRegistry.getAllAgentIds();
-      if (agentIds.length === 0) {
-        return createErrorResponse(ERROR_MESSAGES.NO_AGENTS_AVAILABLE);
-      }
+    // Load agent limits configuration
+    const limitsConfig = loadAgentLimitsConfig();
+
+    // Determine agent count (use input.agentCount or default, capped at maxAgents)
+    let agentCount = input.agentCount ?? limitsConfig.defaultCount;
+    agentCount = Math.min(agentCount, limitsConfig.maxAgents);
+
+    // Get available providers from registry
+    const availableProviders = agentRegistry.getRegisteredProviders();
+    if (availableProviders.length === 0) {
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENTS_AVAILABLE);
     }
 
-    // Validate agents exist
-    for (const agentId of agentIds) {
-      if (!agentRegistry.hasAgent(agentId)) {
-        return createErrorResponse(ERROR_MESSAGES.AGENT_NOT_FOUND(agentId));
-      }
-    }
+    // Create persona agents using round-robin distribution
+    const mode = input.mode || 'collaborative';
+    const agentIds = createPersonaAgents(agentRegistry, {
+      mode,
+      count: agentCount,
+      providers: availableProviders,
+    });
 
     // Create debate config
-    const mode = input.mode || 'collaborative';
     const config: DebateConfig = {
       topic: input.topic,
       mode,

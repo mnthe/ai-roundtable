@@ -56,3 +56,7 @@ export {
   createLightModelAgent,
   type LightModelAgentOptions,
 } from './utils/index.js';
+
+// Persona system
+export { createPersonaAgents, type PersonaAgentOptions } from './persona-factory.js';
+export { getPersonasForMode, type PersonaTemplate } from './personas/index.js';

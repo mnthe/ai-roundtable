@@ -377,7 +377,7 @@ describe('MCP Tools', () => {
     it('should reject start_roundtable with empty agents array element', () => {
       const invalidInput = {
         topic: 'Test topic',
-        agents: ['agent-1', ''], // Empty string in array
+        agentCount: 0, // Invalid: must be positive
       };
 
       const result = StartRoundtableInputSchema.safeParse(invalidInput);
