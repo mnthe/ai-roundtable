@@ -1,68 +1,48 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
-  "labels": [
-    "dependencies"
-  ],
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
   "rangeStrategy": "pin",
   "packageRules": [
     {
       "description": "AI SDK packages",
       "groupName": "AI SDK packages",
-      "matchPackagePatterns": [
-        "/^@anthropic-ai/",
-        "/^openai/",
-        "/^@perplexity-ai/",
-        "/@google/genai/"
+      "matchPackageNames": [
+        "//^@anthropic-ai//",
+        "//^openai//",
+        "//^@perplexity-ai//",
+        "//@google/genai//"
       ]
     },
     {
       "description": "MCP SDK",
       "groupName": "MCP SDK",
-      "matchPackagePatterns": [
-        "^@modelcontextprotocol/"
-      ]
+      "matchPackageNames": ["/^@modelcontextprotocol//"]
     },
     {
       "description": "Development dependencies",
-      "matchDepTypes": [
-        "devDependencies"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
       "automerge": true
     },
     {
       "description": "Type definitions",
       "groupName": "type definitions",
       "automerge": true,
-      "matchPackagePatterns": [
-        "^@types/"
-      ]
+      "matchPackageNames": ["/^@types//"]
     },
     {
       "description": "Linting and formatting",
       "groupName": "linting tools",
-      "matchPackagePatterns": [
-        "/eslint/",
-        "/prettier/"
-      ]
+      "matchPackageNames": ["//eslint//", "//prettier//"]
     },
     {
       "description": "Testing",
       "groupName": "testing tools",
-      "matchPackagePatterns": [
-        "/vitest/"
-      ]
+      "matchPackageNames": ["//vitest//"]
     }
   ],
-  "schedule": [
-    "every weekend"
-  ],
+  "schedule": ["every weekend"],
   "prHourlyLimit": 3,
   "prConcurrentLimit": 5
 }
