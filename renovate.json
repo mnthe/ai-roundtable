@@ -3,43 +3,66 @@
   "extends": [
     "config:recommended"
   ],
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "rangeStrategy": "pin",
   "packageRules": [
     {
       "description": "AI SDK packages",
-      "matchPackagePatterns": ["^@anthropic-ai", "^openai", "^@google/genai"],
-      "groupName": "AI SDK packages"
+      "groupName": "AI SDK packages",
+      "matchPackagePatterns": [
+        "/^@anthropic-ai/",
+        "/^openai/",
+        "/^@perplexity-ai/",
+        "/@google/genai/"
+      ]
     },
     {
       "description": "MCP SDK",
-      "matchPackagePatterns": ["^@modelcontextprotocol"],
-      "groupName": "MCP SDK"
+      "groupName": "MCP SDK",
+      "matchPackagePatterns": [
+        "^@modelcontextprotocol/"
+      ]
     },
     {
       "description": "Development dependencies",
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     },
     {
       "description": "Type definitions",
-      "matchPackagePatterns": ["^@types/"],
       "groupName": "type definitions",
-      "automerge": true
+      "automerge": true,
+      "matchPackagePatterns": [
+        "^@types/"
+      ]
     },
     {
       "description": "Linting and formatting",
-      "matchPackagePatterns": ["eslint", "prettier"],
-      "groupName": "linting tools"
+      "groupName": "linting tools",
+      "matchPackagePatterns": [
+        "/eslint/",
+        "/prettier/"
+      ]
     },
     {
       "description": "Testing",
-      "matchPackagePatterns": ["vitest"],
-      "groupName": "testing tools"
+      "groupName": "testing tools",
+      "matchPackagePatterns": [
+        "/vitest/"
+      ]
     }
   ],
-  "schedule": ["every weekend"],
+  "schedule": [
+    "every weekend"
+  ],
   "prHourlyLimit": 3,
   "prConcurrentLimit": 5
 }
