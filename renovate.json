@@ -1,20 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended"],
   "labels": ["dependencies"],
   "rangeStrategy": "pin",
   "packageRules": [
     {
       "description": "AI SDK packages",
-      "matchPackagePatterns": ["^@anthropic-ai", "^openai", "^@google/genai"],
-      "groupName": "AI SDK packages"
+      "groupName": "AI SDK packages",
+      "matchPackageNames": ["/^@anthropic-ai/", "/^openai/", "/^@google/genai/"]
     },
     {
       "description": "MCP SDK",
-      "matchPackagePatterns": ["^@modelcontextprotocol"],
-      "groupName": "MCP SDK"
+      "groupName": "MCP SDK",
+      "matchPackageNames": ["/^@modelcontextprotocol/"]
     },
     {
       "description": "Development dependencies",
@@ -24,19 +22,19 @@
     },
     {
       "description": "Type definitions",
-      "matchPackagePatterns": ["^@types/"],
       "groupName": "type definitions",
-      "automerge": true
+      "automerge": true,
+      "matchPackageNames": ["/^@types//"]
     },
     {
       "description": "Linting and formatting",
-      "matchPackagePatterns": ["eslint", "prettier"],
-      "groupName": "linting tools"
+      "groupName": "linting tools",
+      "matchPackageNames": ["/eslint/", "/prettier/"]
     },
     {
       "description": "Testing",
-      "matchPackagePatterns": ["vitest"],
-      "groupName": "testing tools"
+      "groupName": "testing tools",
+      "matchPackageNames": ["/vitest/"]
     }
   ],
   "schedule": ["every weekend"],
