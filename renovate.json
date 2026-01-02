@@ -11,18 +11,18 @@
     {
       "description": "AI SDK packages",
       "groupName": "AI SDK packages",
-      "matchPackagePatterns": [
-        "/^@anthropic-ai/",
-        "/^openai/",
-        "/^@perplexity-ai/",
-        "/@google/genai/"
+      "matchPackageNames": [
+        "@anthropic-ai/sdk",
+        "openai",
+        "@perplexity-ai/perplexity_ai",
+        "@google/genai"
       ]
     },
     {
       "description": "MCP SDK",
       "groupName": "MCP SDK",
-      "matchPackagePatterns": [
-        "^@modelcontextprotocol/"
+      "matchPackageNames": [
+        "@modelcontextprotocol/sdk"
       ]
     },
     {
@@ -40,23 +40,23 @@
       "description": "Type definitions",
       "groupName": "type definitions",
       "automerge": true,
-      "matchPackagePatterns": [
-        "^@types/"
+      "matchPackageNames": [
+        "@types/*"
       ]
     },
     {
       "description": "Linting and formatting",
       "groupName": "linting tools",
-      "matchPackagePatterns": [
-        "/eslint/",
-        "/prettier/"
+      "matchPackageNames": [
+        "eslint",
+        "prettier"
       ]
     },
     {
       "description": "Testing",
       "groupName": "testing tools",
-      "matchPackagePatterns": [
-        "/vitest/"
+      "matchPackageNames": [
+        "vitest"
       ]
     }
   ],
