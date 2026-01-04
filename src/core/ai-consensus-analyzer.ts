@@ -196,7 +196,10 @@ export class AIConsensusAnalyzer {
     }
 
     if (responses.length === 1) {
-      const response = responses[0]!;
+      const response = responses[0];
+      if (!response) {
+        return this.createEmptyResult('No responses to analyze');
+      }
       return {
         agreementLevel: 1,
         commonGround: [response.position],

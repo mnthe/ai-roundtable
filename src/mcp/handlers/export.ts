@@ -211,15 +211,14 @@ export async function handleSynthesizeDebate(
       return createErrorResponse(ERROR_MESSAGES.SESSION_NO_RESPONSES);
     }
 
-    // Determine synthesizer agent
     let synthesizerId = input.synthesizer;
     if (!synthesizerId) {
-      // Use first active agent as default
       const activeAgentIds = agentRegistry.getActiveAgentIds();
-      if (activeAgentIds.length === 0) {
+      const firstActiveAgent = activeAgentIds[0];
+      if (!firstActiveAgent) {
         return createErrorResponse(ERROR_MESSAGES.NO_ACTIVE_AGENTS);
       }
-      synthesizerId = activeAgentIds[0]!;
+      synthesizerId = firstActiveAgent;
     }
 
     // Verify synthesizer exists
