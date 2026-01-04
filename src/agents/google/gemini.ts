@@ -29,6 +29,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { Chat } from '@google/genai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { withRetry } from '../../utils/retry.js';
+import { withRateLimit } from '../../utils/rate-limiter.js';
 import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
 import { convertSDKError } from '../utils/error-converter.js';
@@ -125,9 +126,10 @@ export class GeminiAgent extends BaseAgent {
         history: [],
       });
 
-      phase1Response = await withRetry(() => phase1Chat.sendMessage({ message: userMessage }), {
-        maxRetries: 3,
-      });
+      phase1Response = await withRetry(
+        () => withRateLimit('google', () => phase1Chat.sendMessage({ message: userMessage })),
+        { maxRetries: 3 }
+      );
 
       phase1Text = phase1Response.text ?? '';
 
@@ -165,9 +167,10 @@ export class GeminiAgent extends BaseAgent {
         history: [],
       });
 
-      let response = await withRetry(() => phase2Chat.sendMessage({ message: phase2UserMessage }), {
-        maxRetries: 3,
-      });
+      let response = await withRetry(
+        () => withRateLimit('google', () => phase2Chat.sendMessage({ message: phase2UserMessage })),
+        { maxRetries: 3 }
+      );
 
       // Handle function calling loop
       let toolIterations = 0;
@@ -211,15 +214,17 @@ export class GeminiAgent extends BaseAgent {
         // Send function responses back
         response = await withRetry(
           () =>
-            phase2Chat.sendMessage({
-              message: functionResponses.map((fr) => ({
-                functionResponse: {
-                  id: fr.id,
-                  name: fr.name,
-                  response: fr.response,
-                },
-              })),
-            }),
+            withRateLimit('google', () =>
+              phase2Chat.sendMessage({
+                message: functionResponses.map((fr) => ({
+                  functionResponse: {
+                    id: fr.id,
+                    name: fr.name,
+                    response: fr.response,
+                  },
+                })),
+              })
+            ),
           { maxRetries: 3 }
         );
       }
@@ -261,15 +266,17 @@ export class GeminiAgent extends BaseAgent {
     try {
       const response = await withRetry(
         () =>
-          this.client.models.generateContent({
-            model: this.model,
-            contents: prompt,
-            config: {
-              systemInstruction: effectiveSystemPrompt,
-              temperature: this.temperature,
-              maxOutputTokens: this.maxTokens,
-            },
-          }),
+          withRateLimit('google', () =>
+            this.client.models.generateContent({
+              model: this.model,
+              contents: prompt,
+              config: {
+                systemInstruction: effectiveSystemPrompt,
+                temperature: this.temperature,
+                maxOutputTokens: this.maxTokens,
+              },
+            })
+          ),
         { maxRetries: 3 }
       );
 
@@ -287,18 +294,20 @@ export class GeminiAgent extends BaseAgent {
   protected override async performHealthCheck(): Promise<void> {
     const response = await withRetry(
       () =>
-        this.client.models.generateContent({
-          model: this.model,
-          contents: 'test',
-          config: {
-            maxOutputTokens: 10,
-            // Disable thinking for health check to get standard text response
-            // Gemini 3 models have thinking enabled by default which changes response structure
-            thinkingConfig: {
-              thinkingBudget: 0,
+        withRateLimit('google', () =>
+          this.client.models.generateContent({
+            model: this.model,
+            contents: 'test',
+            config: {
+              maxOutputTokens: 10,
+              // Disable thinking for health check to get standard text response
+              // Gemini 3 models have thinking enabled by default which changes response structure
+              thinkingConfig: {
+                thinkingBudget: 0,
+              },
             },
-          },
-        }),
+          })
+        ),
       { maxRetries: 3 }
     );
     // Check if we got a valid response
