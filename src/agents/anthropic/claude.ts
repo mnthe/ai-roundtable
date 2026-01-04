@@ -89,7 +89,7 @@ export class ClaudeAgent extends BaseAgent {
             temperature: this.temperature,
           })
         ),
-      { maxRetries: 3 }
+      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
     );
 
     // Handle tool use loop (both regular tools and server tools like web_search)
@@ -164,7 +164,7 @@ export class ClaudeAgent extends BaseAgent {
             tools: tools.length > 0 ? tools : undefined,
             temperature: this.temperature,
           }),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
     }
 
@@ -220,7 +220,7 @@ export class ClaudeAgent extends BaseAgent {
             messages: [{ role: 'user', content: prompt }],
             temperature: this.temperature,
           }),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
 
       return extractTextFromResponse(response);
@@ -242,7 +242,7 @@ export class ClaudeAgent extends BaseAgent {
           max_tokens: 10,
           messages: [{ role: 'user', content: 'test' }],
         }),
-      { maxRetries: 3 }
+      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
     );
   }
 

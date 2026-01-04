@@ -128,7 +128,7 @@ export class GeminiAgent extends BaseAgent {
 
       phase1Response = await withRetry(
         () => withRateLimit('google', () => phase1Chat.sendMessage({ message: userMessage })),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
 
       phase1Text = phase1Response.text ?? '';
@@ -169,7 +169,7 @@ export class GeminiAgent extends BaseAgent {
 
       let response = await withRetry(
         () => withRateLimit('google', () => phase2Chat.sendMessage({ message: phase2UserMessage })),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
 
       // Handle function calling loop
@@ -225,7 +225,7 @@ export class GeminiAgent extends BaseAgent {
                 })),
               })
             ),
-          { maxRetries: 3 }
+          { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
         );
       }
 
@@ -277,7 +277,7 @@ export class GeminiAgent extends BaseAgent {
               },
             })
           ),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
 
       return response.text ?? '';
@@ -308,7 +308,7 @@ export class GeminiAgent extends BaseAgent {
             },
           })
         ),
-      { maxRetries: 3 }
+      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
     );
     // Check if we got a valid response
     if (response.text === undefined) {

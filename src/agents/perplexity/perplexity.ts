@@ -15,6 +15,7 @@ import type {
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { withRetry } from '../../utils/retry.js';
 import { withRateLimit } from '../../utils/rate-limiter.js';
+import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
 import { convertSDKError } from '../utils/index.js';
 import { buildPerplexityTools } from './utils.js';
@@ -97,7 +98,7 @@ export class PerplexityAgent extends BaseAgent {
         withRateLimit('perplexity', () =>
           this.client.chat.completions.create(this.buildCompletionParams(messages, tools))
         ),
-      { maxRetries: 3 }
+      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
     );
 
     let choice = response.choices[0];
@@ -142,7 +143,7 @@ export class PerplexityAgent extends BaseAgent {
           withRateLimit('perplexity', () =>
             this.client.chat.completions.create(this.buildCompletionParams(messages, tools))
           ),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
 
       choice = response.choices[0];
@@ -219,7 +220,7 @@ export class PerplexityAgent extends BaseAgent {
               temperature: this.temperature,
             })
           ),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
 
       return extractContentText(response.choices[0]?.message);
@@ -243,7 +244,7 @@ export class PerplexityAgent extends BaseAgent {
             messages: [{ role: 'user', content: 'test' }],
           })
         ),
-      { maxRetries: 3 }
+      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
     );
   }
 

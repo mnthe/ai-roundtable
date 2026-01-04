@@ -1,4 +1,5 @@
 import { APIRateLimitError } from '../errors/index.js';
+import { AGENT_DEFAULTS } from '../config/agent-defaults.js';
 import type { AIProvider } from '../types/index.js';
 
 export interface RateLimiterConfig {
@@ -72,7 +73,7 @@ class RateLimiter {
     const intervalsNeeded = Math.ceil(tokensNeeded / bucket.config.refillRate);
     const waitTimeMs = intervalsNeeded * bucket.config.refillIntervalMs;
 
-    if (waitTimeMs > 60000) {
+    if (waitTimeMs > AGENT_DEFAULTS.RATE_LIMIT_WAIT_THRESHOLD_MS) {
       throw new APIRateLimitError(
         `Rate limit exceeded for ${provider}. Would need to wait ${Math.round(waitTimeMs / 1000)}s`,
         {

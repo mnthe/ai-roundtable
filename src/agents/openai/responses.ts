@@ -20,6 +20,7 @@ import type {
 } from 'openai/resources/responses/responses';
 import { withRetry } from '../../utils/retry.js';
 import { withRateLimit } from '../../utils/rate-limiter.js';
+import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
 import type { Citation, ToolCallRecord } from '../../types/index.js';
 import type {
@@ -28,9 +29,6 @@ import type {
   ResponsesCompletionResult,
   SimpleResponsesCompletionParams,
 } from './types.js';
-
-/** Maximum number of function call iterations to prevent infinite loops */
-const MAX_FUNCTION_CALL_ITERATIONS = 10;
 
 const logger = createLogger('OpenAIResponses');
 
@@ -218,12 +216,12 @@ export async function executeResponsesCompletion(
           tools: tools.length > 0 ? tools : undefined,
         })
       ),
-    { maxRetries: 3 }
+    { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
   );
 
   // Function call loop: handle tool calls and continue conversation
   let iterations = 0;
-  while (hasFunctionCalls(response) && iterations < MAX_FUNCTION_CALL_ITERATIONS) {
+  while (hasFunctionCalls(response) && iterations < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
     iterations++;
     logger.debug({ iteration: iterations }, 'Processing function calls');
 
@@ -282,14 +280,14 @@ export async function executeResponsesCompletion(
             // Include previous response to maintain context
             previous_response_id: response.id,
           }),
-        { maxRetries: 3 }
+        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
       );
     } else {
       break;
     }
   }
 
-  if (iterations >= MAX_FUNCTION_CALL_ITERATIONS) {
+  if (iterations >= AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
     logger.warn('Max function call iterations reached');
   }
 
@@ -347,7 +345,7 @@ export async function executeSimpleResponsesCompletion(
           max_output_tokens: maxTokens,
           temperature,
         }),
-      { maxRetries: 3 }
+      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
     );
 
     return extractTextFromResponse(response);
