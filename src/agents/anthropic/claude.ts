@@ -12,6 +12,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 import { createLogger } from '../../utils/logger.js';
 import { withRetry } from '../../utils/retry.js';
+import { withRateLimit } from '../../utils/rate-limiter.js';
 import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
 import { convertSDKError } from '../utils/error-converter.js';
@@ -76,17 +77,18 @@ export class ClaudeAgent extends BaseAgent {
     // Build tools: toolkit tools + native web search
     const tools = this.buildAllTools();
 
-    // Make the API call with retry logic
     let response = await withRetry(
       () =>
-        this.client.messages.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
-          system: systemPrompt,
-          messages,
-          tools: tools.length > 0 ? tools : undefined,
-          temperature: this.temperature,
-        }),
+        withRateLimit('anthropic', () =>
+          this.client.messages.create({
+            model: this.model,
+            max_tokens: this.maxTokens,
+            system: systemPrompt,
+            messages,
+            tools: tools.length > 0 ? tools : undefined,
+            temperature: this.temperature,
+          })
+        ),
       { maxRetries: 3 }
     );
 

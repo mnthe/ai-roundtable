@@ -19,6 +19,7 @@ import type {
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
 import { withRetry } from '../../utils/retry.js';
+import { withRateLimit } from '../../utils/rate-limiter.js';
 import { createLogger } from '../../utils/logger.js';
 import type { Citation, ToolCallRecord } from '../../types/index.js';
 import type {
@@ -205,17 +206,18 @@ export async function executeResponsesCompletion(
     'Executing Responses API call'
   );
 
-  // Make the initial API call with retry logic
   let response = await withRetry(
     () =>
-      client.responses.create({
-        model,
-        instructions,
-        input,
-        max_output_tokens: maxTokens,
-        temperature,
-        tools: tools.length > 0 ? tools : undefined,
-      }),
+      withRateLimit('openai', () =>
+        client.responses.create({
+          model,
+          instructions,
+          input,
+          max_output_tokens: maxTokens,
+          temperature,
+          tools: tools.length > 0 ? tools : undefined,
+        })
+      ),
     { maxRetries: 3 }
   );
 
