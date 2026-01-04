@@ -525,3 +525,361 @@ All changes are backward compatible:
 - Planning: Human + AI collaboration
 - Implementation: TBD
 
+
+---
+
+## 🐛 Critical Bug Fix: Persona Agent ID Collision
+
+### Issue
+
+**Error**: `Agent with ID "anthropic-persona-1" already exists`
+
+**Root Cause**: 
+`createPersonaAgents()` uses **static ID generation** (`${provider}-persona-${index}`), causing collisions when multiple roundtables are created in the same session.
+
+**Current Code** (`src/agents/persona-factory.ts:105`):
+```typescript
+const agentId = `${provider}-persona-${i + 1}`;  // ❌ Static ID
+```
+
+**Problem Flow**:
+1. First roundtable: Creates `anthropic-persona-1`, `anthropic-persona-2`, etc.
+2. Second roundtable: Tries to create `anthropic-persona-1` again → **Error**
+
+**Impact**: Users cannot run multiple debates in the same MCP session.
+
+---
+
+### Solution Options
+
+#### Option A: Session-Scoped IDs (Recommended)
+
+Add session ID to persona agent IDs to ensure uniqueness:
+
+```typescript
+export function createPersonaAgents(
+  registry: AgentRegistry,
+  options: PersonaAgentOptions,
+  sessionId: string  // NEW: require session ID
+): string[] {
+  // ...
+  for (let i = 0; i < count; i++) {
+    const agentId = `${provider}-persona-${sessionId.substring(0, 8)}-${i + 1}`;
+    // e.g., "anthropic-persona-abc12345-1"
+    
+    const config: AgentConfig = {
+      id: agentId,
+      // ...
+    };
+    
+    registry.createAgent(config);
+    agentIds.push(agentId);
+  }
+}
+```
+
+**Pros**:
+- ✅ Guarantees uniqueness across sessions
+- ✅ Traceable to specific session
+- ✅ Minimal changes required
+
+**Cons**:
+- ⚠️ Longer agent IDs (adds ~9 chars)
+- ⚠️ Requires passing sessionId through createPersonaAgents
+
+---
+
+#### Option B: Auto-Increment Counter
+
+Use a global counter for persona agents:
+
+```typescript
+let personaCounter = 0;
+
+export function createPersonaAgents(
+  registry: AgentRegistry,
+  options: PersonaAgentOptions
+): string[] {
+  // ...
+  for (let i = 0; i < count; i++) {
+    personaCounter++;
+    const agentId = `${provider}-persona-${personaCounter}`;
+    // e.g., "anthropic-persona-1", "anthropic-persona-2", ..., "anthropic-persona-15"
+    
+    registry.createAgent(config);
+    agentIds.push(agentId);
+  }
+}
+```
+
+**Pros**:
+- ✅ Simple implementation
+- ✅ Short agent IDs
+
+**Cons**:
+- ⚠️ Counter grows indefinitely (not a real issue)
+- ⚠️ IDs not tied to sessions (harder to debug)
+- ⚠️ Requires module-level state
+
+---
+
+#### Option C: UUID-Based IDs
+
+Use random UUIDs for absolute uniqueness:
+
+```typescript
+import { randomUUID } from 'crypto';
+
+export function createPersonaAgents(
+  registry: AgentRegistry,
+  options: PersonaAgentOptions
+): string[] {
+  // ...
+  for (let i = 0; i < count; i++) {
+    const shortId = randomUUID().split('-')[0];  // First 8 chars
+    const agentId = `${provider}-persona-${shortId}`;
+    // e.g., "anthropic-persona-3f4a9b2c"
+    
+    registry.createAgent(config);
+    agentIds.push(agentId);
+  }
+}
+```
+
+**Pros**:
+- ✅ Guaranteed uniqueness
+- ✅ No coordination needed
+
+**Cons**:
+- ⚠️ Non-sequential IDs (harder to read in order)
+- ⚠️ Slightly longer IDs
+
+---
+
+#### Option D: Check-and-Reuse Existing Agents
+
+Reuse persona agents if they already exist:
+
+```typescript
+export function createPersonaAgents(
+  registry: AgentRegistry,
+  options: PersonaAgentOptions
+): string[] {
+  // ...
+  for (let i = 0; i < count; i++) {
+    const agentId = `${provider}-persona-${i + 1}`;
+    
+    // Check if agent already exists
+    if (registry.hasAgent(agentId)) {
+      agentIds.push(agentId);  // Reuse existing
+      continue;
+    }
+    
+    registry.createAgent(config);
+    agentIds.push(agentId);
+  }
+}
+```
+
+**Pros**:
+- ✅ Minimal changes
+- ✅ Avoids duplicate creation
+
+**Cons**:
+- ❌ Agents retain state from previous debates
+- ❌ System prompt might not match new persona needs
+- ❌ Potential memory leaks (agents never cleaned up)
+- ❌ **Not recommended** for multi-session scenarios
+
+---
+
+### Recommended Solution: **Option A + Cleanup**
+
+**Implementation Plan**:
+
+1. **Add session ID to persona factory**:
+```typescript
+export function createPersonaAgents(
+  registry: AgentRegistry,
+  options: PersonaAgentOptions,
+  sessionId: string
+): string[] {
+  const agentIds: string[] = [];
+  const sessionPrefix = sessionId.substring(0, 8);
+  
+  for (let i = 0; i < count; i++) {
+    const agentId = `${provider}-persona-${sessionPrefix}-${i + 1}`;
+    
+    const config: AgentConfig = {
+      id: agentId,
+      name: `${displayName} (${persona.name})`,
+      provider,
+      model: defaultModel,
+      systemPrompt: buildPersonaSystemPrompt(persona),
+    };
+    
+    registry.createAgent(config);
+    agentIds.push(agentId);
+  }
+  
+  return agentIds;
+}
+```
+
+2. **Update handler to pass session ID**:
+```typescript
+// src/mcp/handlers/session.ts
+const agentIds = createPersonaAgents(agentRegistry, {
+  mode,
+  count: agentCount,
+  providers: availableProviders,
+}, session.id);  // Pass session ID
+```
+
+3. **Add cleanup mechanism** (optional but recommended):
+```typescript
+// src/agents/registry.ts
+export class AgentRegistry {
+  /**
+   * Remove persona agents for a specific session
+   * Call this when a session is completed/stopped
+   */
+  cleanupSessionAgents(sessionId: string): void {
+    const sessionPrefix = sessionId.substring(0, 8);
+    const toRemove: string[] = [];
+    
+    for (const [agentId] of this.agents) {
+      if (agentId.includes(`-persona-${sessionPrefix}-`)) {
+        toRemove.push(agentId);
+      }
+    }
+    
+    for (const agentId of toRemove) {
+      this.agents.delete(agentId);
+    }
+  }
+}
+```
+
+4. **Call cleanup on session completion**:
+```typescript
+// src/mcp/handlers/session.ts - handleControlSession
+case 'stop':
+  // ... existing logic ...
+  agentRegistry.cleanupSessionAgents(input.sessionId);
+  break;
+```
+
+---
+
+### Testing Plan
+
+**New test file**: `tests/unit/agents/persona-factory-id-collision.test.ts`
+
+```typescript
+describe('Persona Agent ID Collision', () => {
+  it('should create unique agent IDs for different sessions', () => {
+    const registry = new AgentRegistry();
+    // Register mock provider
+    
+    const session1Id = 'session-123';
+    const session2Id = 'session-456';
+    
+    const agents1 = createPersonaAgents(registry, options, session1Id);
+    const agents2 = createPersonaAgents(registry, options, session2Id);
+    
+    // Should not throw "already exists" error
+    expect(agents1[0]).toBe('anthropic-persona-session-1-1');
+    expect(agents2[0]).toBe('anthropic-persona-session-4-1');
+  });
+  
+  it('should allow cleanup of session-specific agents', () => {
+    const registry = new AgentRegistry();
+    const sessionId = 'session-123';
+    
+    createPersonaAgents(registry, options, sessionId);
+    expect(registry.hasAgent('anthropic-persona-session-1-1')).toBe(true);
+    
+    registry.cleanupSessionAgents(sessionId);
+    expect(registry.hasAgent('anthropic-persona-session-1-1')).toBe(false);
+  });
+});
+```
+
+**Update existing tests**:
+- `tests/unit/agents/persona-factory.test.ts`: Add sessionId parameter
+- `tests/unit/mcp/handlers/session-personas.test.ts`: Test multiple sessions
+
+---
+
+### Implementation Priority
+
+**Priority**: 🔴 **CRITICAL** (Blocks multi-session usage)
+
+**Timeline**:
+- [ ] Day 1: Implement Option A (session-scoped IDs)
+- [ ] Day 2: Add cleanup mechanism
+- [ ] Day 3: Update tests
+- [ ] Day 4: Integration testing
+- [ ] Day 5: Document and merge
+
+**Add to Phase 1 tasks** (before Debug Mode implementation).
+
+---
+
+### Alternative Quick Fix (Temporary)
+
+If immediate fix is needed before full implementation:
+
+```typescript
+// src/agents/persona-factory.ts
+let globalPersonaCounter = 0;  // Module-level counter
+
+export function createPersonaAgents(
+  registry: AgentRegistry,
+  options: PersonaAgentOptions
+): string[] {
+  // ... existing code ...
+  
+  for (let i = 0; i < count; i++) {
+    globalPersonaCounter++;
+    const agentId = `${provider}-persona-${globalPersonaCounter}`;  // Use global counter
+    
+    // ... rest of code unchanged
+  }
+}
+```
+
+**This is a temporary workaround** - implement Option A for production.
+
+---
+
+## Updated Implementation Timeline
+
+### Week 1: Critical Bug Fix + Phase 1 (Debug Mode)
+- [ ] **Day 1**: Fix persona agent ID collision (Option A)
+- [ ] Day 2: Add agent cleanup mechanism
+- [ ] Day 3: Config system + response builder updates (Debug Mode)
+- [ ] Day 4: Type updates + response mapper
+- [ ] Day 5: Unit tests for both fixes
+
+### Week 2: Phase 2 (exitOnConsensus)
+- [ ] Day 1: Type system updates
+- [ ] Day 2: Storage updates + migration
+- [ ] Day 3: Handler + debate engine updates
+- [ ] Day 4: Unit tests
+- [ ] Day 5: Integration tests + documentation
+
+### Week 3: Phase 3 (Enhanced Prompts)
+- [ ] Day 1-2: Output quality layer design
+- [ ] Day 3: Prompt builder updates
+- [ ] Day 4: Response validator
+- [ ] Day 5: Testing + documentation
+
+### Week 4: Polish & Release
+- [ ] Day 1: End-to-end testing
+- [ ] Day 2: Performance testing
+- [ ] Day 3: Documentation review
+- [ ] Day 4: Code review + fixes
+- [ ] Day 5: Merge to main
+
