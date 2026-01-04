@@ -74,13 +74,13 @@ export async function handleStartRoundtable(
       providers: availableProviders,
     });
 
-    // Create debate config
     const config: DebateConfig = {
       topic: input.topic,
       mode,
       agents: agentIds,
       rounds: input.rounds || 3,
       perspectives: input.perspectives,
+      exitOnConsensus: input.exitOnConsensus,
     };
 
     // Handle perspectives for expert-panel mode

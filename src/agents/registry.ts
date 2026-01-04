@@ -182,6 +182,22 @@ export class AgentRegistry {
   }
 
   /**
+   * Remove all agents matching a prefix pattern (e.g., persona agents for a session)
+   */
+  removeAgentsByPrefix(prefix: string): number {
+    const toRemove: string[] = [];
+    for (const agentId of this.agents.keys()) {
+      if (agentId.includes(prefix)) {
+        toRemove.push(agentId);
+      }
+    }
+    for (const agentId of toRemove) {
+      this.agents.delete(agentId);
+    }
+    return toRemove.length;
+  }
+
+  /**
    * Get all registered agent IDs
    */
   getAllAgentIds(): string[] {

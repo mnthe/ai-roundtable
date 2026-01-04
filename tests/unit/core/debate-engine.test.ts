@@ -561,4 +561,122 @@ describe('DebateEngine', () => {
       expect(receivedContexts[0].contextResults).toBeUndefined();
     });
   });
+
+  describe('exitOnConsensus behavior', () => {
+    const createTestAgent = (id: string) => {
+      const agent = new MockAgent({
+        id,
+        name: `Agent ${id}`,
+        provider: 'anthropic',
+        model: 'test-model',
+      });
+      agent.setMockResponse({
+        agentId: id,
+        agentName: `Agent ${id}`,
+        position: `Position from ${id}`,
+        reasoning: `Reasoning from ${id}`,
+        confidence: 0.95,
+        timestamp: new Date(),
+      });
+      return agent;
+    };
+
+    it('should not check exit criteria when exitOnConsensus is false', async () => {
+      const highConsensusAnalyzer: AIConsensusAnalyzer = {
+        analyzeConsensus: vi.fn().mockResolvedValue({
+          agreementLevel: 0.99,
+          commonGround: ['Everyone agrees'],
+          disagreementPoints: [],
+          summary: 'Full consensus reached',
+        } as ConsensusResult),
+        getDiagnostics: vi.fn().mockReturnValue({
+          available: true,
+          registeredProviders: 1,
+          providerNames: ['anthropic'],
+          totalAgents: 1,
+          activeAgents: 1,
+          inactiveAgents: [],
+        }),
+      } as unknown as AIConsensusAnalyzer;
+
+      const engineWithExitCriteria = new DebateEngine({
+        toolkit: mockToolkit,
+        aiConsensusAnalyzer: highConsensusAnalyzer,
+        exitCriteriaConfig: {
+          enabled: true,
+          consensusThreshold: 0.8,
+          convergenceRounds: 2,
+          confidenceThreshold: 0.85,
+        },
+      });
+
+      const agents = [createTestAgent('1'), createTestAgent('2')];
+      const session: Session = {
+        id: 'test-session',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['1', '2'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 5,
+        responses: [],
+        exitOnConsensus: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const results = await engineWithExitCriteria.executeRounds(agents, session, 3);
+
+      expect(results).toHaveLength(3);
+    });
+
+    it('should check exit criteria when exitOnConsensus is true', async () => {
+      const highConsensusAnalyzer: AIConsensusAnalyzer = {
+        analyzeConsensus: vi.fn().mockResolvedValue({
+          agreementLevel: 0.99,
+          commonGround: ['Everyone agrees'],
+          disagreementPoints: [],
+          summary: 'Full consensus reached',
+        } as ConsensusResult),
+        getDiagnostics: vi.fn().mockReturnValue({
+          available: true,
+          registeredProviders: 1,
+          providerNames: ['anthropic'],
+          totalAgents: 1,
+          activeAgents: 1,
+          inactiveAgents: [],
+        }),
+      } as unknown as AIConsensusAnalyzer;
+
+      const engineWithExitCriteria = new DebateEngine({
+        toolkit: mockToolkit,
+        aiConsensusAnalyzer: highConsensusAnalyzer,
+        exitCriteriaConfig: {
+          enabled: true,
+          consensusThreshold: 0.8,
+          convergenceRounds: 2,
+          confidenceThreshold: 0.85,
+        },
+      });
+
+      const agents = [createTestAgent('1'), createTestAgent('2')];
+      const session: Session = {
+        id: 'test-session',
+        topic: 'Test topic',
+        mode: 'collaborative',
+        agentIds: ['1', '2'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 5,
+        responses: [],
+        exitOnConsensus: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const results = await engineWithExitCriteria.executeRounds(agents, session, 5);
+
+      expect(results.length).toBeLessThan(5);
+    });
+  });
 });

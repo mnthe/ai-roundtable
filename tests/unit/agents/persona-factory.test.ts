@@ -133,4 +133,64 @@ describe('createPersonaAgents', () => {
       );
     });
   });
+
+  describe('unique ID generation (multi-session support)', () => {
+    it('should generate unique agent IDs across multiple calls', () => {
+      const options: PersonaAgentOptions = {
+        mode: 'collaborative',
+        count: 2,
+        providers: ['anthropic'],
+      };
+
+      const firstBatch = createPersonaAgents(registry, options);
+      const secondBatch = createPersonaAgents(registry, options);
+
+      expect(firstBatch).toHaveLength(2);
+      expect(secondBatch).toHaveLength(2);
+
+      const allIds = [...firstBatch, ...secondBatch];
+      expect(new Set(allIds).size).toBe(4);
+    });
+
+    it('should use sessionPrefix when provided', () => {
+      const options: PersonaAgentOptions = {
+        mode: 'collaborative',
+        count: 2,
+        providers: ['anthropic'],
+        sessionPrefix: 'test-sess',
+      };
+
+      const agentIds = createPersonaAgents(registry, options);
+
+      expect(agentIds[0]).toContain('test-sess');
+      expect(agentIds[1]).toContain('test-sess');
+    });
+
+    it('should allow cleanup by prefix', () => {
+      const options1: PersonaAgentOptions = {
+        mode: 'collaborative',
+        count: 2,
+        providers: ['anthropic'],
+        sessionPrefix: 'session-a',
+      };
+      const options2: PersonaAgentOptions = {
+        mode: 'collaborative',
+        count: 2,
+        providers: ['anthropic'],
+        sessionPrefix: 'session-b',
+      };
+
+      createPersonaAgents(registry, options1);
+      createPersonaAgents(registry, options2);
+
+      expect(registry.getAllAgentIds()).toHaveLength(4);
+
+      const removed = registry.removeAgentsByPrefix('session-a');
+      expect(removed).toBe(2);
+      expect(registry.getAllAgentIds()).toHaveLength(2);
+
+      const remaining = registry.getAllAgentIds();
+      expect(remaining.every((id) => id.includes('session-b'))).toBe(true);
+    });
+  });
 });

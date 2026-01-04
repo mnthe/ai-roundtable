@@ -61,13 +61,14 @@ export interface StoredSession {
   id: string;
   topic: string;
   mode: DebateMode;
-  agent_ids: string; // JSON array
+  agent_ids: string;
   status: SessionStatus;
   current_round: number;
   total_rounds: number;
-  perspectives: string | null; // JSON array of GeneratedPerspective or null
-  created_at: number; // Unix timestamp
-  updated_at: number; // Unix timestamp
+  perspectives: string | null;
+  exit_on_consensus: number;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface StoredResponse {
@@ -129,7 +130,6 @@ export class SQLiteStorage implements Storage {
   private initializeSchema(): void {
     const db = this.getDb();
 
-    // Create sessions table
     db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
@@ -140,6 +140,7 @@ export class SQLiteStorage implements Storage {
         current_round INTEGER NOT NULL DEFAULT 0,
         total_rounds INTEGER NOT NULL,
         perspectives TEXT,
+        exit_on_consensus INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -192,8 +193,8 @@ export class SQLiteStorage implements Storage {
     );
 
     db.run(
-      `INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, perspectives, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sessions (id, topic, mode, agent_ids, status, current_round, total_rounds, perspectives, exit_on_consensus, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         session.id,
         session.topic,
@@ -203,6 +204,7 @@ export class SQLiteStorage implements Storage {
         session.currentRound,
         session.totalRounds,
         session.perspectives ? JSON.stringify(session.perspectives) : null,
+        session.exitOnConsensus ? 1 : 0,
         session.createdAt.getTime(),
         session.updatedAt.getTime(),
       ]
@@ -651,6 +653,7 @@ export class SQLiteStorage implements Storage {
       totalRounds: stored.total_rounds,
       responses,
       perspectives,
+      exitOnConsensus: stored.exit_on_consensus === 1,
       createdAt: new Date(stored.created_at),
       updatedAt: new Date(stored.updated_at),
     };

@@ -5,6 +5,7 @@
  * Uses round-robin distribution when multiple providers are available.
  */
 
+import { randomUUID } from 'crypto';
 import type { AgentConfig, AIProvider, DebateMode } from '../types/index.js';
 import type { AgentRegistry } from './registry.js';
 import { getPersonasForMode, type PersonaTemplate } from './personas/index.js';
@@ -19,6 +20,8 @@ export interface PersonaAgentOptions {
   count: number;
   /** Available providers (in priority order) */
   providers: AIProvider[];
+  /** Optional session ID prefix for unique agent IDs (auto-generated if not provided) */
+  sessionPrefix?: string;
 }
 
 /**
@@ -58,7 +61,8 @@ export function createPersonaAgents(
   registry: AgentRegistry,
   options: PersonaAgentOptions
 ): string[] {
-  const { mode, count, providers } = options;
+  const { mode, count, providers, sessionPrefix } = options;
+  const uniquePrefix = sessionPrefix ?? randomUUID().substring(0, 8);
 
   if (providers.length === 0) {
     throw new Error('No providers available for creating persona agents');
@@ -102,7 +106,7 @@ export function createPersonaAgents(
       throw new Error(`No display name for provider "${provider}"`);
     }
 
-    const agentId = `${provider}-persona-${i + 1}`;
+    const agentId = `${provider}-persona-${uniquePrefix}-${i + 1}`;
 
     const config: AgentConfig = {
       id: agentId,

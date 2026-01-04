@@ -199,8 +199,10 @@ export class DebateEngine {
       // Track this round's responses for exit criteria
       responsesByRound.push(result.responses);
 
-      // Check exit criteria if enabled (and not on the last planned round)
-      if (this.exitCriteriaConfig.enabled && i < numRounds - 1) {
+      const shouldCheckExitCriteria =
+        this.exitCriteriaConfig.enabled && session.exitOnConsensus && i < numRounds - 1;
+
+      if (shouldCheckExitCriteria) {
         const exitCriteria: ExitCriteria = {
           maxRounds: session.totalRounds,
           consensusThreshold: this.exitCriteriaConfig.consensusThreshold,

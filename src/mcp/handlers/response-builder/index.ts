@@ -5,6 +5,7 @@
  * that orchestrates the 4-layer response building process.
  */
 
+import { truncateIfNeeded } from '../../../config/response.js';
 import type {
   AgentResponse,
   RoundResult,
@@ -147,10 +148,7 @@ export function buildRoundtableResponse(
     evidence: {
       totalCitations,
       conflicts,
-      consensusSummary:
-        consensus.summary.length > 200
-          ? consensus.summary.substring(0, 200) + '...'
-          : consensus.summary,
+      consensusSummary: truncateIfNeeded(consensus.summary),
     },
 
     // Layer 4: Metadata

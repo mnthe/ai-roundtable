@@ -52,6 +52,7 @@ export class SessionManager {
       totalRounds: config.rounds || 3,
       responses: [],
       perspectives,
+      exitOnConsensus: config.exitOnConsensus,
       createdAt: now,
       updatedAt: now,
     };
