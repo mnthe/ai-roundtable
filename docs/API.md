@@ -30,13 +30,13 @@ Configuration for creating an AI agent.
 
 ```typescript
 interface AgentConfig {
-  id: string;           // Unique identifier
-  name: string;         // Display name
+  id: string; // Unique identifier
+  name: string; // Display name
   provider: AIProvider; // AI provider
-  model: string;        // Model name (e.g., 'claude-sonnet-4-5')
+  model: string; // Model name (e.g., 'claude-sonnet-4-5')
   systemPrompt?: string; // Custom system prompt
-  temperature?: number;  // 0.0-1.0 (default: 0.7)
-  maxTokens?: number;    // Max response tokens (default: 4096)
+  temperature?: number; // 0.0-1.0 (default: 0.7)
+  maxTokens?: number; // Max response tokens (default: 4096)
 }
 ```
 
@@ -48,13 +48,13 @@ Response from an AI agent.
 interface AgentResponse {
   agentId: string;
   agentName: string;
-  position: string;           // Agent's position on the topic
-  reasoning: string;          // Supporting reasoning
-  confidence: number;         // 0.0-1.0
-  stance?: 'YES' | 'NO' | 'NEUTRAL';  // For devils-advocate mode
-  citations?: Citation[];     // Source citations
+  position: string; // Agent's position on the topic
+  reasoning: string; // Supporting reasoning
+  confidence: number; // 0.0-1.0
+  stance?: 'YES' | 'NO' | 'NEUTRAL'; // For devils-advocate mode
+  citations?: Citation[]; // Source citations
   toolCalls?: ToolCallRecord[]; // Tools used
-  images?: ImageResult[];     // Images (Perplexity)
+  images?: ImageResult[]; // Images (Perplexity)
   relatedQuestions?: string[]; // Related questions (Perplexity)
   timestamp: Date;
 }
@@ -66,12 +66,12 @@ Available debate modes.
 
 ```typescript
 type DebateMode =
-  | 'collaborative'      // Parallel - Find common ground, build consensus
-  | 'adversarial'        // Sequential - Challenge opposing viewpoints
-  | 'socratic'           // Sequential - Explore through questioning
-  | 'expert-panel'       // Parallel - Independent expert assessments
-  | 'devils-advocate'    // Sequential - Structured opposition and challenge
-  | 'delphi'             // Parallel - Anonymized iterative consensus building
+  | 'collaborative' // Parallel - Find common ground, build consensus
+  | 'adversarial' // Sequential - Challenge opposing viewpoints
+  | 'socratic' // Sequential - Explore through questioning
+  | 'expert-panel' // Parallel - Independent expert assessments
+  | 'devils-advocate' // Sequential - Structured opposition and challenge
+  | 'delphi' // Parallel - Anonymized iterative consensus building
   | 'red-team-blue-team'; // Parallel (teams) - Attack/defense team analysis
 ```
 
@@ -81,10 +81,10 @@ Configuration for starting a debate.
 
 ```typescript
 interface DebateConfig {
-  topic: string;        // Debate topic
-  mode: DebateMode;     // Debate mode
-  agents: string[];     // Agent IDs to participate
-  rounds?: number;      // Number of rounds (default: 3)
+  topic: string; // Debate topic
+  mode: DebateMode; // Debate mode
+  agents: string[]; // Agent IDs to participate
+  rounds?: number; // Number of rounds (default: 3)
   focusQuestion?: string; // Optional focus question
 }
 ```
@@ -102,8 +102,8 @@ interface DebateContext {
   totalRounds: number;
   previousResponses: AgentResponse[];
   focusQuestion?: string;
-  modePrompt?: string;    // Mode-specific prompt additions (set by mode strategy)
-  contextResults?: ContextResult[];  // Results from previous context requests
+  modePrompt?: string; // Mode-specific prompt additions (set by mode strategy)
+  contextResults?: ContextResult[]; // Results from previous context requests
 }
 ```
 
@@ -117,7 +117,7 @@ interface Session {
   topic: string;
   mode: DebateMode;
   agentIds: string[];
-  status: SessionStatus;  // 'active' | 'paused' | 'completed' | 'error'
+  status: SessionStatus; // 'active' | 'paused' | 'completed' | 'error'
   currentRound: number;
   totalRounds: number;
   responses: AgentResponse[];
@@ -168,11 +168,11 @@ Analysis of agreement/disagreement.
 
 ```typescript
 interface ConsensusResult {
-  agreementLevel: number;     // 0.0-1.0
-  commonGround: string[];     // Points of agreement
+  agreementLevel: number; // 0.0-1.0
+  commonGround: string[]; // Points of agreement
   disagreementPoints: string[]; // Points of disagreement
-  summary: string;            // Overall summary
-  groupthinkWarning?: GroupthinkWarning;  // Optional groupthink detection
+  summary: string; // Overall summary
+  groupthinkWarning?: GroupthinkWarning; // Optional groupthink detection
 }
 
 interface GroupthinkWarning {
@@ -286,12 +286,12 @@ interface RoundtableResponse {
   roundNumber: number;
   totalRounds: number;
 
-  status: RoundtableStatus;          // Response status ('completed' | 'needs_context' | 'in_progress')
-  decision: DecisionLayer;           // Layer 1: Quick decision info
-  agentResponses: AgentResponseSummary[];  // Layer 2: Per-agent summaries
-  evidence: EvidenceLayer;           // Layer 3: Aggregated evidence
-  metadata: MetadataLayer;           // Layer 4: Deep dive references
-  contextRequests?: ContextRequest[];  // Present when status is 'needs_context'
+  status: RoundtableStatus; // Response status ('completed' | 'needs_context' | 'in_progress')
+  decision: DecisionLayer; // Layer 1: Quick decision info
+  agentResponses: AgentResponseSummary[]; // Layer 2: Per-agent summaries
+  evidence: EvidenceLayer; // Layer 3: Aggregated evidence
+  metadata: MetadataLayer; // Layer 4: Deep dive references
+  contextRequests?: ContextRequest[]; // Present when status is 'needs_context'
 }
 ```
 
@@ -302,7 +302,7 @@ Quick decision-making information.
 ```typescript
 interface DecisionLayer {
   consensusLevel: ConsensusLevel;
-  agreementScore: number;           // 0.0-1.0
+  agreementScore: number; // 0.0-1.0
   actionRecommendation: {
     type: ActionRecommendationType;
     reason: string;
@@ -318,9 +318,9 @@ Per-agent reasoning information.
 interface AgentResponseSummary {
   agentId: string;
   agentName: string;
-  stance?: 'YES' | 'NO' | 'NEUTRAL';  // Logical stance in structured debate modes
+  stance?: 'YES' | 'NO' | 'NEUTRAL'; // Logical stance in structured debate modes
   position: string;
-  keyPoints: string[];              // 2-3 key reasoning points
+  keyPoints: string[]; // 2-3 key reasoning points
   confidence: number;
   confidenceChange?: {
     delta: number;
@@ -416,8 +416,8 @@ abstract class BaseAgent {
 
 interface ProviderApiResult {
   rawText: string;
-  toolCalls: ToolCallRecord[];   // Required (empty array if no tool calls)
-  citations: Citation[];         // Required (empty array if no citations)
+  toolCalls: ToolCallRecord[]; // Required (empty array if no tool calls)
+  citations: Citation[]; // Required (empty array if no citations)
 }
 
 interface HealthCheckResult {
@@ -436,8 +436,8 @@ class ClaudeAgent extends BaseAgent {
 }
 
 interface ClaudeAgentOptions {
-  apiKey?: string;        // Default: ANTHROPIC_API_KEY env
-  client?: Anthropic;     // Custom client (testing)
+  apiKey?: string; // Default: ANTHROPIC_API_KEY env
+  client?: Anthropic; // Custom client (testing)
 }
 
 // Factory function
@@ -458,8 +458,8 @@ class ChatGPTAgent extends BaseAgent {
 }
 
 interface ChatGPTAgentOptions {
-  apiKey?: string;        // Default: OPENAI_API_KEY env
-  client?: OpenAI;        // Custom client (testing)
+  apiKey?: string; // Default: OPENAI_API_KEY env
+  client?: OpenAI; // Custom client (testing)
 }
 
 function createChatGPTAgent(
@@ -479,8 +479,8 @@ class GeminiAgent extends BaseAgent {
 }
 
 interface GeminiAgentOptions {
-  apiKey?: string;        // Default: GOOGLE_API_KEY env
-  client?: GoogleGenAI;   // Custom client (testing)
+  apiKey?: string; // Default: GOOGLE_API_KEY env
+  client?: GoogleGenAI; // Custom client (testing)
 }
 
 function createGeminiAgent(
@@ -504,14 +504,14 @@ class PerplexityAgent extends BaseAgent {
 }
 
 interface PerplexityAgentOptions {
-  apiKey?: string;                    // Default: PERPLEXITY_API_KEY env
-  client?: OpenAI;                    // Custom client (testing)
+  apiKey?: string; // Default: PERPLEXITY_API_KEY env
+  client?: OpenAI; // Custom client (testing)
   searchOptions?: PerplexitySearchOptions;
 }
 
 interface PerplexitySearchOptions {
   recencyFilter?: 'hour' | 'day' | 'week' | 'month';
-  domainFilter?: string[];    // Max 3 domains
+  domainFilter?: string[]; // Max 3 domains
   returnImages?: boolean;
   returnRelatedQuestions?: boolean;
 }
@@ -530,11 +530,7 @@ Registry for managing agent providers and instances.
 ```typescript
 class AgentRegistry {
   // Register a provider
-  registerProvider(
-    provider: AIProvider,
-    factory: AgentFactory,
-    defaultModel: string
-  ): void;
+  registerProvider(provider: AIProvider, factory: AgentFactory, defaultModel: string): void;
 
   // Create an agent
   createAgent(config: AgentConfig): BaseAgent;
@@ -671,10 +667,7 @@ interface StanceValidator {
 
 // Clamp confidence to specified range
 interface ConfidenceRangeValidator {
-  validate(
-    response: AgentResponse,
-    options: { min: number; max: number }
-  ): AgentResponse;
+  validate(response: AgentResponse, options: { min: number; max: number }): AgentResponse;
 }
 
 // Ensure required fields are non-empty
@@ -773,9 +766,7 @@ Default implementation with standard tools.
 
 ```typescript
 class DefaultAgentToolkit implements AgentToolkit {
-  constructor(
-    sessionDataProvider?: SessionDataProvider
-  );
+  constructor(sessionDataProvider?: SessionDataProvider);
 
   setContext(context: DebateContext): void;
   registerTool(definition: ToolDefinition): void;
@@ -783,9 +774,7 @@ class DefaultAgentToolkit implements AgentToolkit {
   executeTool(name: string, input: unknown): Promise<unknown>;
 }
 
-function createDefaultToolkit(
-  sessionDataProvider?: SessionDataProvider
-): DefaultAgentToolkit;
+function createDefaultToolkit(sessionDataProvider?: SessionDataProvider): DefaultAgentToolkit;
 ```
 
 ### Toolkit Tools (All Agents)
@@ -849,12 +838,12 @@ See [CONTEXT_REQUEST_PATTERN.md](./CONTEXT_REQUEST_PATTERN.md) for detailed usag
 
 Each agent uses its provider's native web search capability:
 
-| Agent      | Web Search Method              | Citation Format     |
-| ---------- | ------------------------------ | ------------------- |
-| Claude     | Anthropic `web_search` tool    | URL citations       |
-| ChatGPT    | OpenAI Responses API           | URL annotations     |
-| Gemini     | Google Search grounding        | Grounding metadata  |
-| Perplexity | Built-in search (always on)    | search_results      |
+| Agent      | Web Search Method           | Citation Format    |
+| ---------- | --------------------------- | ------------------ |
+| Claude     | Anthropic `web_search` tool | URL citations      |
+| ChatGPT    | OpenAI Responses API        | URL annotations    |
+| Gemini     | Google Search grounding     | Grounding metadata |
+| Perplexity | Built-in search (always on) | search_results     |
 
 ### Provider Interfaces
 
@@ -875,8 +864,8 @@ Core engine that orchestrates debates between AI agents.
 
 ```typescript
 interface DebateEngineOptions {
-  toolkit: AgentToolkit;            // Required - throws ConfigurationError if not provided
-  aiConsensusAnalyzer?: AIConsensusAnalyzer;  // Optional - enables AI-based consensus
+  toolkit: AgentToolkit; // Required - throws ConfigurationError if not provided
+  aiConsensusAnalyzer?: AIConsensusAnalyzer; // Optional - enables AI-based consensus
 }
 
 class DebateEngine {
@@ -912,7 +901,7 @@ interface RoundResult {
   roundNumber: number;
   responses: AgentResponse[];
   consensus: ConsensusResult;
-  contextRequests?: ContextRequest[];  // Context requests made by agents during this round
+  contextRequests?: ContextRequest[]; // Context requests made by agents during this round
 }
 ```
 
@@ -924,8 +913,8 @@ Manages debate sessions.
 
 ```typescript
 interface SessionManagerOptions {
-  storage?: Storage;           // Custom storage implementation
-  storageFilename?: string;    // Filename for SQLite (ignored if storage provided)
+  storage?: Storage; // Custom storage implementation
+  storageFilename?: string; // Filename for SQLite (ignored if storage provided)
 }
 
 class SessionManager {
@@ -998,12 +987,12 @@ Options for filtering session lists.
 
 ```typescript
 interface SessionFilter {
-  topic?: string;           // Search by topic keyword
-  mode?: DebateMode;        // Filter by debate mode
-  status?: SessionStatus;   // Filter by session status
-  fromDate?: Date;          // Sessions created after this date
-  toDate?: Date;            // Sessions created before this date
-  limit?: number;           // Maximum number of results
+  topic?: string; // Search by topic keyword
+  mode?: DebateMode; // Filter by debate mode
+  status?: SessionStatus; // Filter by session status
+  fromDate?: Date; // Sessions created after this date
+  toDate?: Date; // Sessions created before this date
+  limit?: number; // Maximum number of results
 }
 ```
 
@@ -1013,11 +1002,11 @@ Default SQLite implementation using sql.js (WebAssembly).
 
 ```typescript
 class SQLiteStorage implements Storage {
-  constructor(options?: SQLiteStorageOptions);  // Default: ':memory:' (in-memory database)
+  constructor(options?: SQLiteStorageOptions); // Default: ':memory:' (in-memory database)
 }
 
 interface SQLiteStorageOptions {
-  filename?: string;  // Use ':memory:' for in-memory database (default)
+  filename?: string; // Use ':memory:' for in-memory database (default)
 }
 ```
 
@@ -1041,6 +1030,7 @@ Start a new AI debate roundtable.
   agents?: string[];    // Default: all available
   rounds?: number;      // Default: 3, min: 1
   perspectives?: Array<string | Perspective>;  // For expert-panel mode only
+  exitOnConsensus?: boolean;  // Enable early exit when high consensus reached (default: false)
 }
 
 // Perspective type (for expert-panel mode)
@@ -1058,19 +1048,22 @@ When using `expert-panel` mode, you can optionally specify custom perspectives:
 
 ```typescript
 // Simple string format
-{ perspectives: ["Technical", "Economic", "Ethical"] }
+{
+  perspectives: ['Technical', 'Economic', 'Ethical'];
+}
 
 // Detailed format with descriptions
 {
   perspectives: [
-    { name: "Technical", description: "Focus on implementation feasibility" },
-    { name: "Economic", description: "Analyze cost-benefit and ROI" },
-    { name: "Ethical", description: "Consider moral implications" }
-  ]
+    { name: 'Technical', description: 'Focus on implementation feasibility' },
+    { name: 'Economic', description: 'Analyze cost-benefit and ROI' },
+    { name: 'Ethical', description: 'Consider moral implications' },
+  ];
 }
 ```
 
 If perspectives are not provided for expert-panel mode, the system automatically generates relevant perspectives using a Light Model based on the topic. Generated perspectives include:
+
 - **focusAreas**: Specific areas the perspective should examine
 - **evidenceTypes**: Types of evidence to consider
 - **keyQuestions**: Important questions to address
@@ -1147,8 +1140,8 @@ Get detailed reasoning and confidence evolution for a specific agent.
 ```typescript
 // Input schema
 {
-  sessionId: string;    // Required
-  agentId: string;      // Required
+  sessionId: string; // Required
+  agentId: string; // Required
 }
 
 // Returns: Array of AgentResponse for the agent across all rounds
@@ -1175,8 +1168,8 @@ Control the execution state of a debate session.
 ```typescript
 // Input schema
 {
-  sessionId: string;    // Required
-  action: 'pause' | 'resume' | 'stop';  // Required
+  sessionId: string; // Required
+  action: 'pause' | 'resume' | 'stop'; // Required
 }
 
 // Returns: Updated session status
@@ -1189,8 +1182,8 @@ Get detailed responses for a specific round.
 ```typescript
 // Input schema
 {
-  sessionId: string;    // Required
-  roundNumber: number;  // Required (1-based index)
+  sessionId: string; // Required
+  roundNumber: number; // Required (1-based index)
 }
 
 // Returns: All responses and consensus for the round
@@ -1258,12 +1251,45 @@ await server.start();
 
 ## Environment Variables
 
-| Variable             | Description                  | Required                             |
-| -------------------- | ---------------------------- | ------------------------------------ |
-| `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents                    |
-| `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents                   |
-| `GOOGLE_API_KEY`     | Google AI API key for Gemini | For Gemini agents                    |
-| `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents                |
+### API Keys
+
+| Variable             | Description                  | Required              |
+| -------------------- | ---------------------------- | --------------------- |
+| `ANTHROPIC_API_KEY`  | Anthropic API key for Claude | For Claude agents     |
+| `OPENAI_API_KEY`     | OpenAI API key for ChatGPT   | For ChatGPT agents    |
+| `GOOGLE_API_KEY`     | Google AI API key for Gemini | For Gemini agents     |
+| `PERPLEXITY_API_KEY` | Perplexity API key           | For Perplexity agents |
+
+### Debug Mode
+
+Enable verbose responses for development and debugging.
+
+| Variable                      | Default | Description                             |
+| ----------------------------- | ------- | --------------------------------------- |
+| `ROUNDTABLE_DEBUG_MODE`       | `false` | Enable verbose MCP responses            |
+| `ROUNDTABLE_DEBUG_TOOL_CALLS` | `false` | Include full tool call details in debug |
+
+When debug mode is enabled:
+
+- Full untruncated consensus summaries
+- Complete tool call input/output
+- Internal debugging metadata
+
+### Response Quality Thresholds
+
+Configure thresholds for consensus classification and action recommendations.
+
+| Variable                                          | Default | Description                                      |
+| ------------------------------------------------- | ------- | ------------------------------------------------ |
+| `ROUNDTABLE_CONSENSUS_SUMMARY_MAX_LENGTH`         | `200`   | Max length for consensus summary (0 = unlimited) |
+| `ROUNDTABLE_HIGH_CONSENSUS_THRESHOLD`             | `0.7`   | Threshold for "high" consensus level             |
+| `ROUNDTABLE_MEDIUM_CONSENSUS_THRESHOLD`           | `0.4`   | Threshold for "medium" consensus level           |
+| `ROUNDTABLE_LOW_CONFIDENCE_THRESHOLD`             | `0.6`   | Low confidence threshold for hints               |
+| `ROUNDTABLE_CONFIDENCE_VARIANCE_THRESHOLD`        | `0.04`  | Variance threshold for conflict detection        |
+| `ROUNDTABLE_MIN_REASONING_LENGTH_RATIO`           | `0.5`   | Min reasoning length ratio for depth check       |
+| `ROUNDTABLE_HIGH_CONFIDENCE_ACTION_THRESHOLD`     | `0.8`   | High confidence for "proceed" action             |
+| `ROUNDTABLE_LOW_CONFIDENCE_ACTION_THRESHOLD`      | `0.6`   | Low confidence for "verify" action               |
+| `ROUNDTABLE_VERY_LOW_CONFIDENCE_ACTION_THRESHOLD` | `0.5`   | Very low confidence for "query_detail"           |
 
 **Note:** Storage is in-memory using sql.js (WebAssembly SQLite). Sessions persist only during server runtime.
 
@@ -1295,13 +1321,13 @@ All errors extend `RoundtableError` and provide consistent JSON serialization:
 
 ```typescript
 interface ErrorResponse {
-  name: string;           // Error class name
-  message: string;        // Human-readable error message
-  code: string;           // Machine-readable error code
-  provider?: string;      // AI provider that caused the error (if applicable)
-  retryable: boolean;     // Whether the operation can be retried
-  stack?: string;         // Stack trace (debug only)
-  cause?: string;         // Original error message (if wrapped)
+  name: string; // Error class name
+  message: string; // Human-readable error message
+  code: string; // Machine-readable error code
+  provider?: string; // AI provider that caused the error (if applicable)
+  retryable: boolean; // Whether the operation can be retried
+  stack?: string; // Stack trace (debug only)
+  cause?: string; // Original error message (if wrapped)
 }
 ```
 
@@ -1325,24 +1351,27 @@ RoundtableError (base)
 
 API provider rate limit exceeded.
 
-| Property   | Value                      |
-| ---------- | -------------------------- |
-| Code       | `API_RATE_LIMIT`           |
-| Retryable  | `true`                     |
+| Property        | Value                     |
+| --------------- | ------------------------- |
+| Code            | `API_RATE_LIMIT`          |
+| Retryable       | `true`                    |
 | Default Message | `API rate limit exceeded` |
 
 **When it occurs:**
+
 - Too many requests sent to AI provider within time window
 - Token quota exceeded
 - Concurrent request limit reached
 
 **Client handling:**
+
 1. Implement exponential backoff (recommended: 1s, 2s, 4s, 8s...)
 2. Check provider's `Retry-After` header if available
 3. Consider reducing concurrent agent count
 4. Cache responses where applicable
 
 **Example response:**
+
 ```json
 {
   "name": "APIRateLimitError",
@@ -1359,24 +1388,27 @@ API provider rate limit exceeded.
 
 API authentication or authorization failure.
 
-| Property   | Value                       |
-| ---------- | --------------------------- |
-| Code       | `API_AUTH_FAILED`           |
-| Retryable  | `false`                     |
+| Property        | Value                       |
+| --------------- | --------------------------- |
+| Code            | `API_AUTH_FAILED`           |
+| Retryable       | `false`                     |
 | Default Message | `API authentication failed` |
 
 **When it occurs:**
+
 - Invalid or expired API key
 - API key lacks required permissions
 - Account suspended or deactivated
 
 **Client handling:**
+
 1. Verify API key is correctly set in environment variables
 2. Check API key permissions in provider dashboard
 3. Regenerate API key if compromised
 4. Do NOT retry - manual intervention required
 
 **Example response:**
+
 ```json
 {
   "name": "APIAuthError",
@@ -1393,25 +1425,28 @@ API authentication or authorization failure.
 
 Network connectivity issue with AI provider.
 
-| Property   | Value                      |
-| ---------- | -------------------------- |
-| Code       | `API_NETWORK_ERROR`        |
-| Retryable  | `true`                     |
+| Property        | Value                    |
+| --------------- | ------------------------ |
+| Code            | `API_NETWORK_ERROR`      |
+| Retryable       | `true`                   |
 | Default Message | `Network error occurred` |
 
 **When it occurs:**
+
 - DNS resolution failure
 - Connection refused or reset
 - SSL/TLS handshake failure
 - Network timeout during connection establishment
 
 **Client handling:**
+
 1. Check network connectivity
 2. Verify provider's service status page
 3. Retry with exponential backoff
 4. Consider fallback to alternative provider
 
 **Example response:**
+
 ```json
 {
   "name": "APINetworkError",
@@ -1428,25 +1463,28 @@ Network connectivity issue with AI provider.
 
 API request exceeded time limit.
 
-| Property   | Value                       |
-| ---------- | --------------------------- |
-| Code       | `API_TIMEOUT`               |
-| Retryable  | `true`                      |
+| Property        | Value                   |
+| --------------- | ----------------------- |
+| Code            | `API_TIMEOUT`           |
+| Retryable       | `true`                  |
 | Default Message | `API request timed out` |
 
 **When it occurs:**
+
 - Request processing exceeded timeout threshold
 - Provider under heavy load
 - Complex request requiring extended processing
 - Large response generation
 
 **Client handling:**
+
 1. Retry with same parameters
 2. Consider increasing `maxTokens` if response was truncated
 3. Simplify request (shorter context, fewer agents)
 4. Retry during off-peak hours
 
 **Example response:**
+
 ```json
 {
   "name": "APITimeoutError",
@@ -1463,25 +1501,28 @@ API request exceeded time limit.
 
 Error during agent execution or response generation.
 
-| Property   | Value            |
-| ---------- | ---------------- |
-| Code       | `AGENT_ERROR`    |
-| Retryable  | `false`          |
-| Default Message | (custom)     |
+| Property        | Value         |
+| --------------- | ------------- |
+| Code            | `AGENT_ERROR` |
+| Retryable       | `false`       |
+| Default Message | (custom)      |
 
 **When it occurs:**
+
 - Agent failed to parse response from provider
 - Invalid tool call attempted
 - Response validation failed
 - Agent-specific processing error
 
 **Client handling:**
+
 1. Check agent configuration (model, temperature, maxTokens)
 2. Verify toolkit is properly configured
 3. Review previous responses for context issues
 4. Try different agent or provider
 
 **Example response:**
+
 ```json
 {
   "name": "AgentError",
@@ -1499,25 +1540,28 @@ Error during agent execution or response generation.
 
 Error related to session management.
 
-| Property   | Value             |
-| ---------- | ----------------- |
-| Code       | `SESSION_ERROR`   |
-| Retryable  | `false`           |
-| Default Message | (custom)      |
+| Property        | Value           |
+| --------------- | --------------- |
+| Code            | `SESSION_ERROR` |
+| Retryable       | `false`         |
+| Default Message | (custom)        |
 
 **When it occurs:**
+
 - Session not found (invalid sessionId)
 - Session in incompatible state (e.g., already completed)
 - Session data corruption
 - Storage operation failed
 
 **Client handling:**
+
 1. Verify sessionId is valid (use `list_sessions` to confirm)
 2. Check session status before operations
 3. Create new session if current one is corrupted
 4. Check storage permissions and disk space
 
 **Example response:**
+
 ```json
 {
   "name": "SessionError",
@@ -1533,24 +1577,27 @@ Error related to session management.
 
 Error related to storage operations.
 
-| Property   | Value             |
-| ---------- | ----------------- |
-| Code       | `STORAGE_ERROR`   |
-| Retryable  | `false`           |
-| Default Message | (custom)      |
+| Property        | Value           |
+| --------------- | --------------- |
+| Code            | `STORAGE_ERROR` |
+| Retryable       | `false`         |
+| Default Message | (custom)        |
 
 **When it occurs:**
+
 - Database initialization failed
 - Data serialization/deserialization error
 - Storage query failed
 - Data integrity violation
 
 **Client handling:**
+
 1. Restart the server to reinitialize storage
 2. Check for data corruption
 3. Clear storage and start fresh if necessary
 
 **Example response:**
+
 ```json
 {
   "name": "StorageError",
@@ -1566,25 +1613,28 @@ Error related to storage operations.
 
 Error related to invalid configuration.
 
-| Property   | Value                  |
-| ---------- | ---------------------- |
-| Code       | `CONFIGURATION_ERROR`  |
-| Retryable  | `false`                |
-| Default Message | (custom)           |
+| Property        | Value                 |
+| --------------- | --------------------- |
+| Code            | `CONFIGURATION_ERROR` |
+| Retryable       | `false`               |
+| Default Message | (custom)              |
 
 **When it occurs:**
+
 - Required configuration missing (e.g., toolkit not provided to DebateEngine)
 - Invalid configuration values
 - Incompatible configuration combinations
 - Environment variable missing or invalid
 
 **Client handling:**
+
 1. Check required configuration parameters
 2. Verify environment variables are set
 3. Review configuration against documentation
 4. Fix configuration before retrying
 
 **Example response:**
+
 ```json
 {
   "name": "ConfigurationError",
@@ -1614,7 +1664,7 @@ async function retryWithBackoff<T>(
         throw error;
       }
       const delay = baseDelay * Math.pow(2, attempt);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw new Error('Retry limit exceeded');
@@ -1623,13 +1673,13 @@ async function retryWithBackoff<T>(
 
 ### Error Code Summary
 
-| Error Code            | Retryable | Typical Cause                  |
-| --------------------- | --------- | ------------------------------ |
-| `API_RATE_LIMIT`      | Yes       | Too many requests              |
-| `API_AUTH_FAILED`     | No        | Invalid/expired API key        |
-| `API_NETWORK_ERROR`   | Yes       | Network connectivity issues    |
-| `API_TIMEOUT`         | Yes       | Request processing too slow    |
-| `AGENT_ERROR`         | No        | Agent execution failure        |
-| `SESSION_ERROR`       | No        | Invalid session state/ID       |
+| Error Code            | Retryable | Typical Cause                      |
+| --------------------- | --------- | ---------------------------------- |
+| `API_RATE_LIMIT`      | Yes       | Too many requests                  |
+| `API_AUTH_FAILED`     | No        | Invalid/expired API key            |
+| `API_NETWORK_ERROR`   | Yes       | Network connectivity issues        |
+| `API_TIMEOUT`         | Yes       | Request processing too slow        |
+| `AGENT_ERROR`         | No        | Agent execution failure            |
+| `SESSION_ERROR`       | No        | Invalid session state/ID           |
 | `STORAGE_ERROR`       | No        | Database/storage operation failure |
-| `CONFIGURATION_ERROR` | No        | Missing/invalid configuration  |
+| `CONFIGURATION_ERROR` | No        | Missing/invalid configuration      |
