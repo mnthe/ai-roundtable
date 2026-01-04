@@ -11,11 +11,9 @@ import type {
   ToolUnion,
 } from '@anthropic-ai/sdk/resources/messages';
 import { createLogger } from '../../utils/logger.js';
-import { withRetry } from '../../utils/retry.js';
-import { withRateLimit } from '../../utils/rate-limiter.js';
 import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
-import { convertSDKError } from '../utils/error-converter.js';
+import { callWithResilience, convertSDKError } from '../utils/index.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import type { WebSearchConfig, ClaudeAgentOptions } from './types.js';
 import { buildAnthropicTools } from './utils.js';
@@ -77,19 +75,15 @@ export class ClaudeAgent extends BaseAgent {
     // Build tools: toolkit tools + native web search
     const tools = this.buildAllTools();
 
-    let response = await withRetry(
-      () =>
-        withRateLimit('anthropic', () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: systemPrompt,
-            messages,
-            tools: tools.length > 0 ? tools : undefined,
-            temperature: this.temperature,
-          })
-        ),
-      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+    let response = await callWithResilience('anthropic', () =>
+      this.client.messages.create({
+        model: this.model,
+        max_tokens: this.maxTokens,
+        system: systemPrompt,
+        messages,
+        tools: tools.length > 0 ? tools : undefined,
+        temperature: this.temperature,
+      })
     );
 
     // Handle tool use loop (both regular tools and server tools like web_search)
@@ -154,17 +148,15 @@ export class ClaudeAgent extends BaseAgent {
         messages.push({ role: 'user', content: toolResults });
       }
 
-      response = await withRetry(
-        () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: systemPrompt,
-            messages,
-            tools: tools.length > 0 ? tools : undefined,
-            temperature: this.temperature,
-          }),
-        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+      response = await callWithResilience('anthropic', () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: systemPrompt,
+          messages,
+          tools: tools.length > 0 ? tools : undefined,
+          temperature: this.temperature,
+        })
       );
     }
 
@@ -211,16 +203,14 @@ export class ClaudeAgent extends BaseAgent {
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
     try {
-      const response = await withRetry(
-        () =>
-          this.client.messages.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            system: effectiveSystemPrompt,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: this.temperature,
-          }),
-        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+      const response = await callWithResilience('anthropic', () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          system: effectiveSystemPrompt,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: this.temperature,
+        })
       );
 
       return extractTextFromResponse(response);
@@ -235,14 +225,12 @@ export class ClaudeAgent extends BaseAgent {
    * Perform minimal API call to verify connectivity
    */
   protected override async performHealthCheck(): Promise<void> {
-    await withRetry(
-      () =>
-        this.client.messages.create({
-          model: this.model,
-          max_tokens: 10,
-          messages: [{ role: 'user', content: 'test' }],
-        }),
-      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+    await callWithResilience('anthropic', () =>
+      this.client.messages.create({
+        model: this.model,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }],
+      })
     );
   }
 

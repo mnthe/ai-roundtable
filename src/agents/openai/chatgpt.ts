@@ -13,9 +13,8 @@
 
 import OpenAI from 'openai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
-import { withRetry } from '../../utils/retry.js';
 import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
-import { convertSDKError } from '../utils/index.js';
+import { callWithResilience, convertSDKError } from '../utils/index.js';
 import { buildResponsesFunctionTools } from './utils.js';
 import { executeResponsesCompletion, executeSimpleResponsesCompletion } from './responses.js';
 import type { AgentConfig, DebateContext } from '../../types/index.js';
@@ -157,14 +156,12 @@ export class ChatGPTAgent extends BaseAgent {
    * Perform minimal API call to verify connectivity
    */
   protected override async performHealthCheck(): Promise<void> {
-    await withRetry(
-      () =>
-        this.client.responses.create({
-          model: this.model,
-          max_output_tokens: 16,
-          input: 'test',
-        }),
-      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+    await callWithResilience('openai', () =>
+      this.client.responses.create({
+        model: this.model,
+        max_output_tokens: 16,
+        input: 'test',
+      })
     );
   }
 }

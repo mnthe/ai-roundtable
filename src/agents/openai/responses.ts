@@ -18,10 +18,9 @@ import type {
   FunctionTool,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
-import { withRetry } from '../../utils/retry.js';
-import { withRateLimit } from '../../utils/rate-limiter.js';
 import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
+import { callWithResilience } from '../utils/index.js';
 import type { Citation, ToolCallRecord } from '../../types/index.js';
 import type {
   ResponsesWebSearchConfig,
@@ -204,19 +203,15 @@ export async function executeResponsesCompletion(
     'Executing Responses API call'
   );
 
-  let response = await withRetry(
-    () =>
-      withRateLimit('openai', () =>
-        client.responses.create({
-          model,
-          instructions,
-          input,
-          max_output_tokens: maxTokens,
-          temperature,
-          tools: tools.length > 0 ? tools : undefined,
-        })
-      ),
-    { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+  let response = await callWithResilience('openai', () =>
+    client.responses.create({
+      model,
+      instructions,
+      input,
+      max_output_tokens: maxTokens,
+      temperature,
+      tools: tools.length > 0 ? tools : undefined,
+    })
   );
 
   // Function call loop: handle tool calls and continue conversation
@@ -268,19 +263,17 @@ export async function executeResponsesCompletion(
         'Sending function outputs back to API'
       );
 
-      response = await withRetry(
-        () =>
-          client.responses.create({
-            model,
-            instructions,
-            input: functionOutputs,
-            max_output_tokens: maxTokens,
-            temperature,
-            tools: tools.length > 0 ? tools : undefined,
-            // Include previous response to maintain context
-            previous_response_id: response.id,
-          }),
-        { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+      response = await callWithResilience('openai', () =>
+        client.responses.create({
+          model,
+          instructions,
+          input: functionOutputs,
+          max_output_tokens: maxTokens,
+          temperature,
+          tools: tools.length > 0 ? tools : undefined,
+          // Include previous response to maintain context
+          previous_response_id: response.id,
+        })
       );
     } else {
       break;
@@ -336,16 +329,14 @@ export async function executeSimpleResponsesCompletion(
   logger.debug({ agentId }, params.debugMessage ?? 'Executing simple Responses API completion');
 
   try {
-    const response = await withRetry(
-      () =>
-        client.responses.create({
-          model,
-          instructions,
-          input,
-          max_output_tokens: maxTokens,
-          temperature,
-        }),
-      { maxRetries: AGENT_DEFAULTS.MAX_RETRIES }
+    const response = await callWithResilience('openai', () =>
+      client.responses.create({
+        model,
+        instructions,
+        input,
+        max_output_tokens: maxTokens,
+        temperature,
+      })
     );
 
     return extractTextFromResponse(response);
