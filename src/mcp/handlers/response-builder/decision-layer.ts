@@ -5,50 +5,43 @@
  * based on response quality metrics.
  */
 
+import { RESPONSE_CONFIG } from '../../../config/response.js';
 import type { ConsensusLevel, ActionRecommendationType } from '../../../types/index.js';
 
-/**
- * Classify consensus level from numeric score
- */
+const { thresholds } = RESPONSE_CONFIG;
+
 export function classifyConsensusLevel(score: number): ConsensusLevel {
-  if (score >= 0.7) return 'high';
-  if (score >= 0.4) return 'medium';
+  if (score >= thresholds.highConsensus) return 'high';
+  if (score >= thresholds.mediumConsensus) return 'medium';
   return 'low';
 }
 
-/**
- * Determine action recommendation based on confidence and conflicts
- */
 export function determineActionRecommendation(
   consensusLevel: ConsensusLevel,
   avgConfidence: number,
   conflictCount: number
 ): { type: ActionRecommendationType; reason: string } {
-  // High confidence + high consensus = proceed
-  if (avgConfidence >= 0.8 && consensusLevel === 'high') {
+  if (avgConfidence >= thresholds.highConfidenceAction && consensusLevel === 'high') {
     return {
       type: 'proceed',
       reason: 'High consensus and confidence across agents',
     };
   }
 
-  // Multiple conflicts or high impact uncertainties = verify
-  if (conflictCount > 1 || (avgConfidence < 0.6 && conflictCount > 0)) {
+  if (conflictCount > 1 || (avgConfidence < thresholds.lowConfidenceAction && conflictCount > 0)) {
     return {
       type: 'verify',
       reason: `${conflictCount} conflict(s) detected, verification recommended`,
     };
   }
 
-  // Low confidence or consensus = query for more details
-  if (avgConfidence < 0.5 || consensusLevel === 'low') {
+  if (avgConfidence < thresholds.veryLowConfidenceAction || consensusLevel === 'low') {
     return {
       type: 'query_detail',
       reason: 'Low confidence or consensus, detailed analysis recommended',
     };
   }
 
-  // Default: proceed with caution
   return {
     type: 'proceed',
     reason: 'Moderate consensus achieved',

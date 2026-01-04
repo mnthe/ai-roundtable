@@ -5,7 +5,10 @@
  * from agent responses.
  */
 
+import { RESPONSE_CONFIG } from '../../../config/response.js';
 import type { AgentResponse } from '../../../types/index.js';
+
+const { thresholds } = RESPONSE_CONFIG;
 
 /**
  * Extract 2-3 key points from full reasoning
@@ -70,8 +73,7 @@ export function detectConflicts(
   const confidenceVariance =
     confidences.reduce((sum, c) => sum + Math.pow(c - avgConfidence, 2), 0) / confidences.length;
 
-  if (confidenceVariance > 0.04) {
-    // Significant confidence variance
+  if (confidenceVariance > thresholds.confidenceVariance) {
     conflicts.push({
       issue: 'Confidence levels',
       positions: responses.map((r) => ({

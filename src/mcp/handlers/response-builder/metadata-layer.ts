@@ -5,19 +5,18 @@
  * for quality assessment.
  */
 
+import { RESPONSE_CONFIG } from '../../../config/response.js';
 import type { AgentResponse } from '../../../types/index.js';
 
-/**
- * Build verification hints based on response quality
- */
+const { thresholds } = RESPONSE_CONFIG;
+
 export function buildVerificationHints(
   responses: AgentResponse[],
   _sessionId: string
 ): { field: string; reason: string; suggestedTool: string }[] {
   const hints: { field: string; reason: string; suggestedTool: string }[] = [];
 
-  // Check for low confidence agents
-  const lowConfidenceAgents = responses.filter((r) => r.confidence < 0.6);
+  const lowConfidenceAgents = responses.filter((r) => r.confidence < thresholds.lowConfidence);
   if (lowConfidenceAgents.length > 0) {
     hints.push({
       field: 'Agent confidence',
@@ -26,7 +25,6 @@ export function buildVerificationHints(
     });
   }
 
-  // Check for agents without citations
   const noCitationAgents = responses.filter((r) => !r.citations || r.citations.length === 0);
   if (noCitationAgents.length > 0 && noCitationAgents.length < responses.length) {
     hints.push({
@@ -36,10 +34,11 @@ export function buildVerificationHints(
     });
   }
 
-  // Check for significant reasoning length variance
   const reasoningLengths = responses.map((r) => r.reasoning.length);
   const avgLength = reasoningLengths.reduce((a, b) => a + b, 0) / reasoningLengths.length;
-  const shortReasoningAgents = responses.filter((r) => r.reasoning.length < avgLength * 0.5);
+  const shortReasoningAgents = responses.filter(
+    (r) => r.reasoning.length < avgLength * thresholds.minReasoningLengthRatio
+  );
   if (shortReasoningAgents.length > 0) {
     hints.push({
       field: 'Reasoning depth',
