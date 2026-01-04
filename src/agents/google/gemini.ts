@@ -28,10 +28,9 @@
 import { GoogleGenAI } from '@google/genai';
 import type { Chat } from '@google/genai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
-import { withRetry } from '../../utils/retry.js';
 import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
-import { convertSDKError } from '../utils/error-converter.js';
+import { callWithResilience, convertSDKError } from '../utils/index.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import { LIGHT_MODELS } from '../../config/index.js';
 import type { GoogleSearchConfig, GeminiAgentOptions } from './types.js';
@@ -125,9 +124,9 @@ export class GeminiAgent extends BaseAgent {
         history: [],
       });
 
-      phase1Response = await withRetry(() => phase1Chat.sendMessage({ message: userMessage }), {
-        maxRetries: 3,
-      });
+      phase1Response = await callWithResilience('google', () =>
+        phase1Chat.sendMessage({ message: userMessage })
+      );
 
       phase1Text = phase1Response.text ?? '';
 
@@ -165,9 +164,9 @@ export class GeminiAgent extends BaseAgent {
         history: [],
       });
 
-      let response = await withRetry(() => phase2Chat.sendMessage({ message: phase2UserMessage }), {
-        maxRetries: 3,
-      });
+      let response = await callWithResilience('google', () =>
+        phase2Chat.sendMessage({ message: phase2UserMessage })
+      );
 
       // Handle function calling loop
       let toolIterations = 0;
@@ -209,18 +208,16 @@ export class GeminiAgent extends BaseAgent {
         }
 
         // Send function responses back
-        response = await withRetry(
-          () =>
-            phase2Chat.sendMessage({
-              message: functionResponses.map((fr) => ({
-                functionResponse: {
-                  id: fr.id,
-                  name: fr.name,
-                  response: fr.response,
-                },
-              })),
-            }),
-          { maxRetries: 3 }
+        response = await callWithResilience('google', () =>
+          phase2Chat.sendMessage({
+            message: functionResponses.map((fr) => ({
+              functionResponse: {
+                id: fr.id,
+                name: fr.name,
+                response: fr.response,
+              },
+            })),
+          })
         );
       }
 
@@ -259,18 +256,16 @@ export class GeminiAgent extends BaseAgent {
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
     try {
-      const response = await withRetry(
-        () =>
-          this.client.models.generateContent({
-            model: this.model,
-            contents: prompt,
-            config: {
-              systemInstruction: effectiveSystemPrompt,
-              temperature: this.temperature,
-              maxOutputTokens: this.maxTokens,
-            },
-          }),
-        { maxRetries: 3 }
+      const response = await callWithResilience('google', () =>
+        this.client.models.generateContent({
+          model: this.model,
+          contents: prompt,
+          config: {
+            systemInstruction: effectiveSystemPrompt,
+            temperature: this.temperature,
+            maxOutputTokens: this.maxTokens,
+          },
+        })
       );
 
       return response.text ?? '';
@@ -285,21 +280,19 @@ export class GeminiAgent extends BaseAgent {
    * Perform minimal API call to verify connectivity
    */
   protected override async performHealthCheck(): Promise<void> {
-    const response = await withRetry(
-      () =>
-        this.client.models.generateContent({
-          model: this.model,
-          contents: 'test',
-          config: {
-            maxOutputTokens: 10,
-            // Disable thinking for health check to get standard text response
-            // Gemini 3 models have thinking enabled by default which changes response structure
-            thinkingConfig: {
-              thinkingBudget: 0,
-            },
+    const response = await callWithResilience('google', () =>
+      this.client.models.generateContent({
+        model: this.model,
+        contents: 'test',
+        config: {
+          maxOutputTokens: 10,
+          // Disable thinking for health check to get standard text response
+          // Gemini 3 models have thinking enabled by default which changes response structure
+          thinkingConfig: {
+            thinkingBudget: 0,
           },
-        }),
-      { maxRetries: 3 }
+        },
+      })
     );
     // Check if we got a valid response
     if (response.text === undefined) {

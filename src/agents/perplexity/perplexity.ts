@@ -13,9 +13,8 @@ import type {
   CompletionCreateParamsNonStreaming,
 } from '@perplexity-ai/perplexity_ai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
-import { withRetry } from '../../utils/retry.js';
 import { createLogger } from '../../utils/logger.js';
-import { convertSDKError } from '../utils/index.js';
+import { callWithResilience, convertSDKError } from '../utils/index.js';
 import { buildPerplexityTools } from './utils.js';
 import type { AgentConfig, DebateContext, ToolCallRecord, Citation } from '../../types/index.js';
 import type { PerplexitySearchOptions, PerplexityAgentOptions } from './types.js';
@@ -91,9 +90,8 @@ export class PerplexityAgent extends BaseAgent {
     const tools = buildPerplexityTools(this.toolkit);
 
     // Make the API call with Perplexity-specific search options and retry logic
-    let response: StreamChunk = await withRetry(
-      () => this.client.chat.completions.create(this.buildCompletionParams(messages, tools)),
-      { maxRetries: 3 }
+    let response: StreamChunk = await callWithResilience('perplexity', () =>
+      this.client.chat.completions.create(this.buildCompletionParams(messages, tools))
     );
 
     let choice = response.choices[0];
@@ -133,9 +131,8 @@ export class PerplexityAgent extends BaseAgent {
       }
 
       // Continue the conversation with tool results
-      response = await withRetry(
-        () => this.client.chat.completions.create(this.buildCompletionParams(messages, tools)),
-        { maxRetries: 3 }
+      response = await callWithResilience('perplexity', () =>
+        this.client.chat.completions.create(this.buildCompletionParams(messages, tools))
       );
 
       choice = response.choices[0];
@@ -199,18 +196,16 @@ export class PerplexityAgent extends BaseAgent {
     logger.debug({ agentId: this.id }, 'Generating raw completion');
 
     try {
-      const response = await withRetry(
-        () =>
-          this.client.chat.completions.create({
-            model: this.model,
-            max_tokens: this.maxTokens,
-            messages: [
-              { role: 'system', content: effectiveSystemPrompt },
-              { role: 'user', content: prompt },
-            ],
-            temperature: this.temperature,
-          }),
-        { maxRetries: 3 }
+      const response = await callWithResilience('perplexity', () =>
+        this.client.chat.completions.create({
+          model: this.model,
+          max_tokens: this.maxTokens,
+          messages: [
+            { role: 'system', content: effectiveSystemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          temperature: this.temperature,
+        })
       );
 
       return extractContentText(response.choices[0]?.message);
@@ -225,14 +220,12 @@ export class PerplexityAgent extends BaseAgent {
    * Perform minimal API call to verify connectivity
    */
   protected override async performHealthCheck(): Promise<void> {
-    await withRetry(
-      () =>
-        this.client.chat.completions.create({
-          model: this.model,
-          max_tokens: 10,
-          messages: [{ role: 'user', content: 'test' }],
-        }),
-      { maxRetries: 3 }
+    await callWithResilience('perplexity', () =>
+      this.client.chat.completions.create({
+        model: this.model,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }],
+      })
     );
   }
 

@@ -18,7 +18,8 @@ import type {
   Citation,
   ToolCallRecord,
 } from '../../src/types/index.js';
-import type { AgentToolkit, ToolDefinition } from '../../src/tools/types.js';
+import type { AgentTool, AgentToolkit, ToolDefinition } from '../../src/tools/types.js';
+import { MockAgent } from '../../src/agents/index.js';
 
 // =============================================================================
 // Mock Anthropic Client
@@ -486,14 +487,17 @@ export function createMockResponse(
  * Creates a mock agent toolkit
  */
 export function createMockToolkit(overrides?: {
-  tools?: ToolDefinition[];
-  executeTool?: ReturnType<typeof vi.fn>;
-  setContext?: ReturnType<typeof vi.fn>;
+  tools?: AgentTool[];
+  executeTool?: (name: string, input: unknown, agentId?: string) => Promise<unknown>;
+  setContext?: (context: DebateContext) => void;
 }): AgentToolkit {
   return {
     getTools: () => overrides?.tools ?? [],
-    executeTool: overrides?.executeTool ?? vi.fn(),
+    executeTool: overrides?.executeTool ?? vi.fn().mockResolvedValue({}),
     setContext: overrides?.setContext ?? vi.fn(),
+    getPendingContextRequests: () => [],
+    clearPendingRequests: vi.fn(),
+    hasPendingRequests: () => false,
   };
 }
 
@@ -519,6 +523,10 @@ export function createMockToolkitWithSearch(
         ],
       },
     }),
+    setContext: vi.fn(),
+    getPendingContextRequests: () => [],
+    clearPendingRequests: vi.fn(),
+    hasPendingRequests: () => false,
   };
 }
 
@@ -545,6 +553,10 @@ export function createMockToolkitWithPerplexitySearch(
         ],
       },
     }),
+    setContext: vi.fn(),
+    getPendingContextRequests: () => [],
+    clearPendingRequests: vi.fn(),
+    hasPendingRequests: () => false,
   };
 }
 
@@ -576,6 +588,10 @@ export function createMockToolkitWithSubmitResponse(responseData?: {
         confidence: responseData?.confidence ?? 0.85,
       },
     }),
+    setContext: vi.fn(),
+    getPendingContextRequests: () => [],
+    clearPendingRequests: vi.fn(),
+    hasPendingRequests: () => false,
   };
 }
 
@@ -592,6 +608,10 @@ export function createMockToolkitWithError(errorMessage = 'Tool failed'): AgentT
       },
     ],
     executeTool: vi.fn().mockRejectedValue(new Error(errorMessage)),
+    setContext: vi.fn(),
+    getPendingContextRequests: () => [],
+    clearPendingRequests: vi.fn(),
+    hasPendingRequests: () => false,
   };
 }
 
@@ -644,4 +664,89 @@ export function createJsonResponse(data: {
     reasoning: data.reasoning ?? 'Test reasoning',
     confidence: data.confidence ?? 0.8,
   });
+}
+
+// =============================================================================
+// Mock BaseAgent Factory
+// =============================================================================
+
+/**
+ * Creates a MockAgent instance for testing with registries.
+ * Use this instead of ad-hoc mock objects to get proper type safety.
+ *
+ * @example
+ * ```typescript
+ * const agent = createMockBaseAgent('test-agent', 'anthropic');
+ * registry.registerProvider('anthropic', () => agent, 'test-model');
+ * ```
+ */
+export function createMockBaseAgent(
+  id: string,
+  provider: AIProvider,
+  options?: {
+    mockResponse?: Partial<AgentResponse>;
+    responseDelay?: number;
+    model?: string;
+  }
+): MockAgent {
+  const config: AgentConfig = {
+    id,
+    name: `Test ${provider}`,
+    provider,
+    model: options?.model ?? 'test-model',
+  };
+
+  const mockResponse: AgentResponse | undefined = options?.mockResponse
+    ? {
+        agentId: id,
+        agentName: `Test ${provider}`,
+        position: options.mockResponse.position ?? 'Mock position',
+        reasoning: options.mockResponse.reasoning ?? 'Mock reasoning',
+        confidence: options.mockResponse.confidence ?? 0.8,
+        timestamp: options.mockResponse.timestamp ?? new Date(),
+        ...options.mockResponse,
+      }
+    : undefined;
+
+  return new MockAgent(config, {
+    mockResponse,
+    responseDelay: options?.responseDelay,
+  });
+}
+
+/**
+ * Creates a factory function that returns a MockAgent, suitable for registry.registerProvider.
+ *
+ * @example
+ * ```typescript
+ * registry.registerProvider('anthropic', createMockAgentFactory('anthropic'), 'test-model');
+ * ```
+ */
+export function createMockAgentFactory(
+  provider: AIProvider,
+  options?: {
+    mockResponse?: Partial<AgentResponse>;
+    responseDelay?: number;
+  }
+): (config: AgentConfig, toolkit?: AgentToolkit) => MockAgent {
+  return (config: AgentConfig, toolkit?: AgentToolkit) => {
+    const agent = new MockAgent(config, {
+      mockResponse: options?.mockResponse
+        ? {
+            agentId: config.id,
+            agentName: config.name,
+            position: options.mockResponse.position ?? 'Mock position',
+            reasoning: options.mockResponse.reasoning ?? 'Mock reasoning',
+            confidence: options.mockResponse.confidence ?? 0.8,
+            timestamp: options.mockResponse.timestamp ?? new Date(),
+            ...options.mockResponse,
+          }
+        : undefined,
+      responseDelay: options?.responseDelay,
+    });
+    if (toolkit) {
+      agent.setToolkit(toolkit);
+    }
+    return agent;
+  };
 }

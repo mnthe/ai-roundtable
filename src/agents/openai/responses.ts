@@ -18,8 +18,9 @@ import type {
   FunctionTool,
   ResponseInputItem,
 } from 'openai/resources/responses/responses';
-import { withRetry } from '../../utils/retry.js';
+import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
+import { callWithResilience } from '../utils/index.js';
 import type { Citation, ToolCallRecord } from '../../types/index.js';
 import type {
   ResponsesWebSearchConfig,
@@ -27,9 +28,6 @@ import type {
   ResponsesCompletionResult,
   SimpleResponsesCompletionParams,
 } from './types.js';
-
-/** Maximum number of function call iterations to prevent infinite loops */
-const MAX_FUNCTION_CALL_ITERATIONS = 10;
 
 const logger = createLogger('OpenAIResponses');
 
@@ -205,23 +203,20 @@ export async function executeResponsesCompletion(
     'Executing Responses API call'
   );
 
-  // Make the initial API call with retry logic
-  let response = await withRetry(
-    () =>
-      client.responses.create({
-        model,
-        instructions,
-        input,
-        max_output_tokens: maxTokens,
-        temperature,
-        tools: tools.length > 0 ? tools : undefined,
-      }),
-    { maxRetries: 3 }
+  let response = await callWithResilience('openai', () =>
+    client.responses.create({
+      model,
+      instructions,
+      input,
+      max_output_tokens: maxTokens,
+      temperature,
+      tools: tools.length > 0 ? tools : undefined,
+    })
   );
 
   // Function call loop: handle tool calls and continue conversation
   let iterations = 0;
-  while (hasFunctionCalls(response) && iterations < MAX_FUNCTION_CALL_ITERATIONS) {
+  while (hasFunctionCalls(response) && iterations < AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
     iterations++;
     logger.debug({ iteration: iterations }, 'Processing function calls');
 
@@ -268,26 +263,24 @@ export async function executeResponsesCompletion(
         'Sending function outputs back to API'
       );
 
-      response = await withRetry(
-        () =>
-          client.responses.create({
-            model,
-            instructions,
-            input: functionOutputs,
-            max_output_tokens: maxTokens,
-            temperature,
-            tools: tools.length > 0 ? tools : undefined,
-            // Include previous response to maintain context
-            previous_response_id: response.id,
-          }),
-        { maxRetries: 3 }
+      response = await callWithResilience('openai', () =>
+        client.responses.create({
+          model,
+          instructions,
+          input: functionOutputs,
+          max_output_tokens: maxTokens,
+          temperature,
+          tools: tools.length > 0 ? tools : undefined,
+          // Include previous response to maintain context
+          previous_response_id: response.id,
+        })
       );
     } else {
       break;
     }
   }
 
-  if (iterations >= MAX_FUNCTION_CALL_ITERATIONS) {
+  if (iterations >= AGENT_DEFAULTS.MAX_TOOL_ITERATIONS) {
     logger.warn('Max function call iterations reached');
   }
 
@@ -336,16 +329,14 @@ export async function executeSimpleResponsesCompletion(
   logger.debug({ agentId }, params.debugMessage ?? 'Executing simple Responses API completion');
 
   try {
-    const response = await withRetry(
-      () =>
-        client.responses.create({
-          model,
-          instructions,
-          input,
-          max_output_tokens: maxTokens,
-          temperature,
-        }),
-      { maxRetries: 3 }
+    const response = await callWithResilience('openai', () =>
+      client.responses.create({
+        model,
+        instructions,
+        input,
+        max_output_tokens: maxTokens,
+        temperature,
+      })
     );
 
     return extractTextFromResponse(response);

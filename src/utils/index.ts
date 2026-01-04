@@ -14,3 +14,5 @@ export {
   getEnvBoolean,
   getEnvNumber,
 } from './env.js';
+
+export { rateLimiter, withRateLimit, type RateLimiterConfig } from './rate-limiter.js';

@@ -195,10 +195,15 @@ export async function handleGetResponseDetail(
       }
     }
 
+    const firstResponse = agentResponses[0];
+    if (!firstResponse) {
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
+    }
+
     return createSuccessResponse({
       sessionId: input.sessionId,
       agentId: input.agentId,
-      agentName: agentResponses[0]!.agentName,
+      agentName: firstResponse.agentName,
       roundNumber: input.roundNumber,
       responses: agentResponses.map(mapResponseForOutput),
     });
@@ -308,13 +313,17 @@ export async function handleGetThoughts(
       return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
     }
 
-    // Group responses by round
     const responsesByRound = groupResponsesByRound(agentResponses, session.agentIds.length);
+
+    const firstAgentResponse = agentResponses[0];
+    if (!firstAgentResponse) {
+      return createErrorResponse(ERROR_MESSAGES.NO_AGENT_RESPONSES_IN_SESSION(input.agentId));
+    }
 
     return createSuccessResponse({
       sessionId: input.sessionId,
       agentId: input.agentId,
-      agentName: agentResponses[0]!.agentName,
+      agentName: firstAgentResponse.agentName,
       totalResponses: agentResponses.length,
       rounds: responsesByRound.size,
       responses: agentResponses.map(mapResponseForOutput),

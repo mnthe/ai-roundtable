@@ -8,6 +8,7 @@
  * - Perplexity: agents/perplexity/utils.ts (buildPerplexityTools)
  */
 
+export { callWithResilience } from './api-call.js';
 export { convertSDKError, isRetryableError } from './error-converter.js';
 export { createLightModelAgent, type LightModelAgentOptions } from './light-model-factory.js';
 export {
