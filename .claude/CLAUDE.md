@@ -57,6 +57,27 @@ AI Roundtable is an MCP server that enables structured debates between multiple 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Mandatory Requirements (NON-NEGOTIABLE)
+
+**Every code change MUST include:**
+
+1. **Tests**: New/modified code requires corresponding unit tests
+   - No merging without passing tests (`pnpm test`)
+   - Bug fixes MUST include regression tests
+   - Edge cases and error scenarios covered
+
+2. **Documentation**: Behavioral changes require doc updates
+   - `docs/API.md` for API changes, new parameters, environment variables
+   - `docs/ARCHITECTURE.md` for architectural changes
+   - `.env.example` for new environment variables
+   - JSDoc for public APIs
+
+3. **Type Safety**: Zero tolerance for type suppressions
+   - `pnpm typecheck` must pass
+   - No `as any`, `@ts-ignore`, `@ts-expect-error`
+
+**Failure to follow these requirements = incomplete work.**
+
 ## Rules Reference
 
 Detailed implementation guides are in `.claude/rules/`:
@@ -74,7 +95,7 @@ Detailed implementation guides are in `.claude/rules/`:
 - **All documentation must be written in English**
 - Code comments: English
 - Commit messages: English (Korean body allowed for detailed explanation)
-- README, docs/*, and inline documentation: English only
+- README, docs/\*, and inline documentation: English only
 
 ## Directory Structure
 
@@ -121,8 +142,8 @@ interface AgentResponse {
   agentName: string;
   position: string;
   reasoning: string;
-  confidence: number;        // 0.0-1.0
-  stance?: 'YES' | 'NO' | 'NEUTRAL';  // For structured debate modes
+  confidence: number; // 0.0-1.0
+  stance?: 'YES' | 'NO' | 'NEUTRAL'; // For structured debate modes
   citations?: Citation[];
   toolCalls?: ToolCallRecord[];
   timestamp: Date;
@@ -136,8 +157,8 @@ interface DebateContext {
   totalRounds: number;
   previousResponses: AgentResponse[];
   focusQuestion?: string;
-  modePrompt?: string;    // Mode-specific prompt (set by mode strategy)
-  contextResults?: ContextResult[];  // Results from previous context requests
+  modePrompt?: string; // Mode-specific prompt (set by mode strategy)
+  contextResults?: ContextResult[]; // Results from previous context requests
 }
 ```
 
@@ -189,6 +210,7 @@ Automatic debate termination based on configurable criteria:
 | Max Rounds  | varies   | Fallback termination             |
 
 **Environment Variables:**
+
 ```bash
 ROUNDTABLE_EXIT_ENABLED=true
 ROUNDTABLE_EXIT_CONSENSUS_THRESHOLD=0.9
@@ -222,6 +244,7 @@ ROUNDTABLE_EXIT_CONVERGENCE_ROUNDS=2
 | `request_context` | Request additional context from caller (SOTA AI) |
 
 Note: `get_context` and `submit_response` were removed as redundant:
+
 - Context is already in system prompt via `buildSystemPrompt()` and `buildUserMessage()`
 - Response parsing is handled by `BaseAgent.extractResponseFromToolCallsOrText()`
 
@@ -254,6 +277,7 @@ resulting in more accurate citations and better search results.
 ## Dependencies
 
 ### Production
+
 - `@anthropic-ai/sdk` - Claude API
 - `openai` - ChatGPT and Perplexity APIs
 - `@google/genai` - Gemini API
@@ -264,9 +288,45 @@ resulting in more accurate citations and better search results.
 - `jsonrepair` - Fix malformed JSON from AI responses
 
 ### Development
+
 - `vitest` - Testing
 - `typescript` - Type checking
 - `eslint` + `prettier` - Code quality
+
+## Code Change Checklist
+
+When making code changes, always verify the following before considering work complete:
+
+### Tests
+
+- [ ] Run `pnpm test` to ensure all existing tests pass
+- [ ] Add/update unit tests for new or modified functionality
+- [ ] Cover edge cases and error scenarios
+- [ ] Mock external dependencies (API calls, file system, etc.)
+
+### Documentation
+
+- [ ] Update relevant documentation if behavior changes:
+  - `docs/API.md` - API changes, new parameters, new environment variables
+  - `docs/ARCHITECTURE.md` - Architectural changes
+  - `README.md` - User-facing changes
+  - `.env.example` - New environment variables
+- [ ] Keep code comments up to date
+- [ ] Update JSDoc for public APIs
+
+### Type Safety
+
+- [ ] Run `pnpm typecheck` - no TypeScript errors
+- [ ] Avoid `as any`, `@ts-ignore`, `@ts-expect-error`
+- [ ] Use proper Zod schemas for validation
+
+### Code Quality
+
+- [ ] Run `pnpm lint` - no linting errors
+- [ ] Follow existing patterns in the codebase
+- [ ] Handle errors appropriately (use custom error types)
+
+---
 
 ## Known Issues / Future Improvements
 
