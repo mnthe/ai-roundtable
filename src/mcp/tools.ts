@@ -45,36 +45,46 @@ const START_ROUNDTABLE_TOOL: Tool = {
   name: 'start_roundtable',
   description: `Start a new AI debate roundtable on a given topic. Agents will discuss the topic across multiple rounds, each providing their perspectives, reasoning, and citations.
 
-## How It Works
+## IMPORTANT: Topic Quality Guidelines
 
-Creates multiple "persona agents" with distinct perspectives based on the debate mode.
-Each persona has a unique viewpoint and system prompt to ensure diverse discussion.
+The quality of the debate depends heavily on topic specificity. Always provide detailed, focused topics.
 
-## Agent Distribution
+**BAD topics** (too vague, produce shallow debates):
+- "AI regulation"
+- "Climate change solutions"
+- "Healthcare AI"
 
-- **Single API key**: All personas use the same provider
-- **Multiple API keys**: Personas are distributed round-robin across providers
+**GOOD topics** (specific, produce insightful debates):
+- "Should the EU AI Act require mandatory human oversight for AI systems making employment decisions, specifically in automated resume screening for Fortune 500 companies?"
+- "What are the most effective policy mechanisms to reduce carbon emissions in the shipping industry by 2030, considering IMO regulations and available green fuel technologies?"
+- "How should hospitals balance the diagnostic accuracy benefits of AI radiology tools against concerns about liability, physician deskilling, and patient consent?"
 
-## Mode-Specific Personas
+Include when relevant: specific stakeholders, timeframes, geographic scope, constraints, or decision criteria.
 
-| Mode | Personas |
+## Mode Selection Guide
+
+| Mode | Best For |
 |------|----------|
-| collaborative | Synthesizer, Analyst, Creative, Pragmatist |
-| adversarial | Proponent, Opponent (alternating) |
-| socratic | Questioner, Respondent |
-| expert-panel | Domain Expert, Generalist, Skeptic, Innovator |
-| devils-advocate | Advocate, Challenger, Evaluator |
-| delphi | Participant 1, 2, 3... (anonymized) |
-| red-team-blue-team | Red Team, Blue Team (alternating) |
+| collaborative | Building consensus, exploring solutions |
+| adversarial | Debating controversial topics with clear sides |
+| socratic | Deep understanding through questioning |
+| expert-panel | Multi-stakeholder analysis (use with custom perspectives) |
+| devils-advocate | Stress-testing ideas, finding weaknesses |
+| delphi | Forecasting, reducing bias through anonymity |
+| red-team-blue-team | Security analysis, attack/defense scenarios |
 
-## Parameters
+## Custom Perspectives (expert-panel mode)
 
-- **topic** (required): The debate topic (max 2000 chars)
-- **mode** (optional): Debate mode (default: collaborative)
-- **agentCount** (optional): Number of persona agents (default: 4, max: 5)
-- **rounds** (optional): Number of debate rounds (default: 3)
-- **exitOnConsensus** (optional): Exit early when consensus reached
-- **perspectives** (optional): Custom perspectives for expert-panel mode`,
+For domain-specific debates, provide custom perspectives with descriptions:
+\`\`\`json
+{
+  "perspectives": [
+    {"name": "Healthcare Policy Expert", "description": "Focus on patient safety, regulatory compliance, HIPAA"},
+    {"name": "Hospital Administrator", "description": "Focus on costs, workflow integration, staff training"},
+    {"name": "Patient Advocate", "description": "Focus on informed consent, accessibility, equity"}
+  ]
+}
+\`\`\``,
   inputSchema: toMcpJsonSchema(StartRoundtableInputSchema),
 };
 

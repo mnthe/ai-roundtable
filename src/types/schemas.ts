@@ -152,8 +152,24 @@ export const SearchOptionsSchema = z.object({
 // ============================================
 
 export const StartRoundtableInputSchema = z.object({
-  topic: z.string().min(1, 'Topic is required').max(2000, 'Topic cannot exceed 2000 characters'),
-  mode: DebateModeSchema.optional().default('collaborative'),
+  topic: z
+    .string()
+    .min(1, 'Topic is required')
+    .max(10000, 'Topic cannot exceed 10000 characters')
+    .describe(
+      'The debate topic. Be SPECIFIC and DETAILED for better quality debates. ' +
+        'BAD: "AI regulation" (too vague). ' +
+        'GOOD: "Should the EU AI Act require mandatory human oversight for AI systems making employment decisions, specifically in automated resume screening?" ' +
+        'Include: specific context, stakeholders, constraints, or scenarios when relevant.'
+    ),
+  mode: DebateModeSchema.optional()
+    .default('collaborative')
+    .describe(
+      'Debate mode: collaborative (build consensus), adversarial (pro/con debate), ' +
+        'socratic (questioning dialogue), expert-panel (multi-perspective analysis), ' +
+        'devils-advocate (challenge assumptions), delphi (anonymous forecasting), ' +
+        'red-team-blue-team (attack/defense analysis)'
+    ),
   agentCount: z
     .number()
     .int()
@@ -161,17 +177,32 @@ export const StartRoundtableInputSchema = z.object({
     .max(10, 'Maximum 10 agents allowed')
     .optional()
     .describe(
-      'Number of persona agents to create (default: 4, max determined by ROUNDTABLE_MAX_AGENTS)'
+      'Number of AI agents (default: 4). More agents = more diverse perspectives but longer debates.'
     ),
-  rounds: z.number().int().positive().optional().default(3),
+  rounds: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .default(3)
+    .describe(
+      'Number of debate rounds (default: 3). More rounds allow deeper exploration but take longer.'
+    ),
   exitOnConsensus: z
     .boolean()
     .optional()
-    .describe('Whether to exit early when consensus is reached'),
+    .describe(
+      'Exit early when agents reach consensus (agreementLevel > 0.9). Saves time on clear-cut topics.'
+    ),
   perspectives: z
     .array(PerspectiveSchema)
     .optional()
-    .describe('Custom perspectives for expert-panel mode (overrides auto-generation)'),
+    .describe(
+      'Custom expert perspectives for expert-panel mode. Each perspective should have a name and optional description. ' +
+        'Example: [{"name": "Healthcare Policy Expert", "description": "Focus on patient safety, regulatory compliance, HIPAA implications"}, ' +
+        '{"name": "AI Ethics Researcher", "description": "Focus on bias, fairness, transparency, accountability"}]. ' +
+        'If not provided, perspectives are auto-generated based on the topic.'
+    ),
 });
 
 /**
@@ -186,8 +217,21 @@ const ContextResultSchema = z.object({
 
 export const ContinueRoundtableInputSchema = z.object({
   sessionId: z.string().min(1, 'Session ID is required'),
-  focusQuestion: z.string().optional(),
-  contextResults: z.array(ContextResultSchema).optional(),
+  focusQuestion: z
+    .string()
+    .optional()
+    .describe(
+      'Guide the next round with a specific question. Use to drill deeper into interesting points or redirect discussion. ' +
+        'Example: "Given the privacy concerns raised, how would you balance data collection needs with GDPR compliance?" ' +
+        'Or: "What specific implementation challenges would arise in the first 6 months of deployment?"'
+    ),
+  contextResults: z
+    .array(ContextResultSchema)
+    .optional()
+    .describe(
+      'Provide results for context requests from previous round. Required when status was "needs_context". ' +
+        'Each result should include requestId (from contextRequests), success boolean, and result string or error message.'
+    ),
 });
 
 export const GetConsensusInputSchema = z.object({
