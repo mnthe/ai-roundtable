@@ -109,11 +109,11 @@ export type DebateMode =
 export interface DebateConfig {
   topic: string;
   mode: DebateMode;
-  agents: string[]; // Agent IDs
+  agents: string[];
   rounds?: number;
   focusQuestion?: string;
-  /** Custom perspectives for expert-panel mode (string or Perspective object) */
   perspectives?: Array<string | Perspective>;
+  exitOnConsensus?: boolean;
 }
 
 export interface DebateContext {
@@ -148,8 +148,8 @@ export interface Session {
   totalRounds: number;
   responses: AgentResponse[];
   consensus?: ConsensusResult;
-  /** Generated perspectives for expert-panel mode */
   perspectives?: GeneratedPerspective[];
+  exitOnConsensus?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -272,6 +272,7 @@ export const StoredSessionRowSchema = z.object({
   current_round: z.number(),
   total_rounds: z.number(),
   perspectives: z.string().nullable(), // JSON array of GeneratedPerspective or null
+  exit_on_consensus: z.number(), // SQLite stores boolean as 0/1
   created_at: z.number(), // Unix timestamp
   updated_at: z.number(), // Unix timestamp
 });

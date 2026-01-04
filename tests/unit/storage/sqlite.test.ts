@@ -47,6 +47,49 @@ describe('SQLiteStorage', () => {
       expect(retrieved).toBeNull();
     });
 
+    it('should store and retrieve exitOnConsensus flag', async () => {
+      const sessionWithExitOnConsensus: Session = {
+        id: 'session-exit-consensus',
+        topic: 'Test exit on consensus',
+        mode: 'collaborative',
+        agentIds: ['agent-1', 'agent-2'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        exitOnConsensus: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(sessionWithExitOnConsensus);
+
+      const retrieved = await storage.getSession('session-exit-consensus');
+      expect(retrieved).not.toBeNull();
+      expect(retrieved?.exitOnConsensus).toBe(true);
+    });
+
+    it('should default exitOnConsensus to false when not set', async () => {
+      const sessionWithoutExitOnConsensus: Session = {
+        id: 'session-no-exit-consensus',
+        topic: 'Test without exit on consensus',
+        mode: 'collaborative',
+        agentIds: ['agent-1'],
+        status: 'active',
+        currentRound: 0,
+        totalRounds: 3,
+        responses: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await storage.createSession(sessionWithoutExitOnConsensus);
+
+      const retrieved = await storage.getSession('session-no-exit-consensus');
+      expect(retrieved).not.toBeNull();
+      expect(retrieved?.exitOnConsensus).toBe(false);
+    });
+
     it('should update a session', async () => {
       const session: Session = {
         id: 'session-1',
