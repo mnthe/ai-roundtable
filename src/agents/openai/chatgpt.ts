@@ -13,7 +13,6 @@
 
 import OpenAI from 'openai';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
-import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { callWithResilience, convertSDKError } from '../utils/index.js';
 import { buildResponsesFunctionTools } from './utils.js';
 import { executeResponsesCompletion, executeSimpleResponsesCompletion } from './responses.js';

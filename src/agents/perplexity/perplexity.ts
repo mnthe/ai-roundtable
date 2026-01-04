@@ -13,7 +13,6 @@ import type {
   CompletionCreateParamsNonStreaming,
 } from '@perplexity-ai/perplexity_ai/resources/chat/completions';
 import { BaseAgent, type AgentToolkit, type ProviderApiResult } from '../base.js';
-import { AGENT_DEFAULTS } from '../../config/agent-defaults.js';
 import { createLogger } from '../../utils/logger.js';
 import { callWithResilience, convertSDKError } from '../utils/index.js';
 import { buildPerplexityTools } from './utils.js';
