@@ -109,6 +109,7 @@ class RateLimiter {
       this.buckets.delete(provider);
     } else {
       this.buckets.clear();
+      this.customConfigs.clear();
     }
   }
 }
