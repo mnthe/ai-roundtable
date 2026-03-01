@@ -15,7 +15,7 @@ importers:
         specifier: ^1.34.0
         version: 1.34.0(@modelcontextprotocol/sdk@1.25.1(hono@4.11.1)(zod@4.2.1))
       '@modelcontextprotocol/sdk':
-        specifier: ^1.25.1
+        specifier: 1.25.1
         version: 1.25.1(hono@4.11.1)(zod@4.2.1)
       '@perplexity-ai/perplexity_ai':
         specifier: ^0.18.1
